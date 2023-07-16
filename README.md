@@ -10,7 +10,7 @@ OpenAI bills on tokens at different price points and depends on context. Prices 
 Now that we know what a token is, you are charged based on the length of the input and the length of the output per query. 
 
 |                  | Input                | Output             |
-| ---------------- |:--------------------:| ------------------:|
+| ---------------- | -------------------- | ------------------ |
 | 4K context       | $0.0015 / 1K tokens  | $0.002 / 1K tokens |
 | 16K context      | $0.003 / 1K tokens   | $0.004 / 1K tokens |
 
@@ -18,7 +18,7 @@ The context is how many tokens of information you feed into the query before you
 For the Google Text-to-Speech API it depends on which voice you choose and how capable it is. There is an amount that you can use for free before it starts billing. The cost is either provided per character, or per byte which is generally the same as 1 character. 
 
 | Voice Type                   | Pricing                                                  |
-| ---------------------------- |---------------------------------------------------------:|
+| ---------------------------- | -------------------------------------------------------- |
 | Neural2 voices US            | $0.000016 per byte (US$16 per 1 million bytes)           |
 | Polyglot (Preview) voices US | $0.000016 per byte (US$16 per 1 million bytes)           |
 | Studio (Preview) voices US   | $0.00016 per byte (US$160 per 1 million bytes)           |
