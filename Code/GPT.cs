@@ -10,6 +10,7 @@ using Newtonsoft.Json;
 public class CPHInline
 {
     private string responseVariable; // Variable to store the response value
+
     public bool Execute()
     {
         try
@@ -49,14 +50,16 @@ public class CPHInline
             }
 
             // Set up the prompt with the updated context
-            string combinedContext = keywordMatch ? context : "";
+            string combinedContext = keywordMatch ? context : context;
+
             // Log the combinedContext
             CPH.LogInfo("Combined Context: " + combinedContext);
+
             // Specify the excluded categories for moderation
             string[] excludedCategories =
             {
                 "sexual",
-                "hate"
+                "violence"
             }; // Add the categories you want to exclude
             // Call the moderation endpoint
             List<string> flaggedCategories = CallModerationEndpoint(prompt, excludedCategories);
