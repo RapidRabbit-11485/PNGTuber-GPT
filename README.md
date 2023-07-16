@@ -71,10 +71,10 @@ To utilize Google Cloud for Text-to-Speech services with Speaker.bot, you need t
 13.	Save this file in a safe location, for Speaker.bot to access.
 
 # Create OpenAI Account
-To access ChatGPT 3.5 Turbo, you need to have an active OpenAI account to retrieve an API key to use to send their API prompts from Streamer.bot. Signup for a new account at https://platform.openai.com/signup?launch. Make sure to link a payment method to your account. By default your account has a hard limit of $120 per month, and you must request an increase to this limit if you should need more. 
+To access ChatGPT 3.5 Turbo, you need to have an active OpenAI account to retrieve an API key to use to send their API prompts from Streamer.bot. Signup for a new account at https://platform.openai.com/signup?launch. Make sure to link a payment method to your account and convert to a paid account. By default your account has a hard limit of $120 per month, and you must request an increase to this limit if you should need more. 
 
 # Retrieve OpenAI API Key
-Login at https://platform.openai.com/. Navigate to your user in the top-right corner and click on “View API Keys.” Create a new secret key, and then save this for later. DO NOT lose this key or give it to anyone you don’t want to be able to charge your account.
+Login at https://platform.openai.com/. Navigate to your user in the top-right corner and click on “View API Keys.” Create a new secret key, and then save this for later. DO NOT lose this key or give it to anyone you don’t want to be able to charge your account. MAKE SURE YOU HAVE CONVERTED TO A PAID ACCOUNT BEFORE GENERATING YOUR API KEY! If not you will receive a (429) Too many requests error in the log file.
 
 # Install Streamer.bot and Speaker.bot
 Download the latest stable version of Streamer.bot and Speaker.bot from Downloads | Streamer.bot. Extract these to a folder on your computer, and then create some shortcuts to their executables on your desktop. These two tools are way more powerful than this document describes. It will help you a lot to review the documentation on the different functions available. They can make for a very interactive stream that is more interesting for your viewers.
@@ -207,15 +207,15 @@ Here are some facts about Bandana:
 You are to respond playfully to questions asked by viewers of my Twitch stream. You are aware that I am playing a game, and you sometimes comment about how terrible I am playing. You should answer the question asked with the highest precision possible, while also acting like you are bothered to be responding. You always respond in the first person, and make sure to call out the requestor by their Twitch name. You MUST respond in less than 510 total characters.
 Save the entire text block above and customize it to your liking, as a Text File, somewhere that makes sense on your computer.
 
-# Import Custom Action for GPT Query in C#
-In this section we will import the GPT custom Action into Streamer.bot. When imported this command will let you trigger the GPT Action from Twitch Chat to test your bot. 
+# Import Solution into Streamer.bot
+In this section we will import all custom actions and commands into Streamer.bot. When imported this command will let you trigger the GPT Action from Twitch Chat to test your bot. 
 1.	Open Streamer.bot
 2.	Click on the Import button on the main menu
-3.	Post the entire contents of the GPT file into the Import String box
-4.	Switch to the commands tab, and make sure that !modgpt is checked
+3.	Post the entire contents of the PNGTuber-GPT.txt file into the Import String box
+4.	Switch to the commands tab, and make sure that !modgpt and !modteach are checked and enabled
 5.	Click the Import button
 
-Now we need to update some variables for the action to work.
+Now we need to update some variables for the GPT action to work.
 
 1.	Update the value of OPENAI_API_KEY to your exact API key you generated in previous steps
 2.	Update the value of CONTEXT_FILE_PATH to the full path to the Context.txt file you have created to give context to your bot.
@@ -235,15 +235,10 @@ https://platform.openai.com/docs/guides/moderation
 
 Make sure that each category in the list ends with a comma except for the last entry when adding additional categories or removing any.
 
-# Import !modgpt Command
-In this section we will import the !modgpt command file into Streamer.bot. When imported this command will let you trigger the GPT Action from Twitch Chat to test your bot. 
+Now we need to update some variables for the Teach action to work.
 
-1.	Open Streamer.bot
-2.	Click on the Import button on the main menu
-3.	Post the entire contents of modgpt_command into the Import String box
-4.	Switch to the commands tab, and make sure that !modgpt is checked
-5.	Click the Import button
-6.	Test the action in Twitch Chat
+1.	Update the value of KEYWORD_FILE_PATH to the full path to your Keywords_Context.json file that contains your keyword database. An example file is provided in the repository.
+2.	Update the Speak action to use the Voice Alias you want it to use in Speaker.bot. This allows you to have the bot use a different voice or the same voice as your other actions in Speaker.bot. 
 
 # How to get the bot to remember things
 This section will cover how to handle the bot remembering things about users, or about certain keywords. Each action being sent to ChatGPT is a brand new action where all of the context is sent each time. If the bot gave a previous answer, it doesn’t remember it right now. Implementing this is challenging, as we are using most of the context we can provide to handle the context and keywords and plan to add portions of Twitch Chat to the context in the future.
@@ -251,29 +246,6 @@ The workaround that I have implemented is to be able to train or “teach” the
 
 You as the admin of the bot, can manually edit the file to teach the bot anything about any keyword. However, I have implemented a custom action for Streamer.bot that will update this file with the username of the viewer that is requesting the bot to remember something, and anything they type will be remembered about themselves. 
 This can also be setup as a redemption instead of a command. I have exampled a !modteach command that you can import to allow the mods to teach the bot something about themselves. This can be expanded for anyone to use just by changing the command and the permissions on it.
-
-# Import Teach Custom Action in C#
-This section will help you import the Custom Action for Teach that will allow users to teach the bot Open Streamer.bot
-
-1.	Click on the Import button on the main menu
-2.	Post the entire contents of the Teach file into the Import String box
-3.	Switch to the commands tab, and make sure that the Teach action is checked
-4.	Click the Import button
-
-Now we need to update some variables for the action to work.
-
-1.	Update the value of KEYWORD_FILE_PATH to the full path to your Keywords_Context.json file that contains your keyword database. An example file is provided in the repository.
-2.	Update the Speak action to use the Voice Alias you want it to use in Speaker.bot. This allows you to have the bot use a different voice or the same voice as your other actions in Speaker.bot. 
-
-# Import !modteach Command
-In this section we will import the !modteach_command command file into Streamer.bot. When imported this command will let you trigger the GPT Action from Twitch Chat to test your bot. 
-
-1.	Open Streamer.bot
-2.	Click on the Import button on the main menu
-3.	Post the entire contents of modteach_command into the Import String box
-4.	Switch to the commands tab, and make sure that !modteach is checked
-5.	Click the Import button
-6.	Test the action in Twitch Chat
 
 # Create PNGTuber and route audio to the PNGTuber
 In this section we will install Veadotube Mini from veadotube. This is very simple software that let’s use animate our PNGTuber on a keyable background that we can capture to OBS and overlay on the stream. You can also run multiple instances of it so that you can appear as a PNGTuber as well. You can edit the actions we imported to display or show the PNGTuber when it is talking; but it is beyond the scope of this getting started document.
@@ -288,3 +260,14 @@ In this section we will install Veadotube Mini from veadotube. This is very simp
 8.	You can also create different states, and link them to hotkeys if you would like
 9.	Clicking display settings will allow you to edit the background, image mode, and hide the interface.
 10.	You can now capture the window via OBS, key out the background, and then overlay it on your stream.
+
+# Diagnosing errors
+In the Streamer.bot directory there is a logs directory that has a daily log file. When submitting issues, please upload your log file as well, and let me know what time exactly the event occurred. Each transaction to GPT logs the following information:
+
+Combined Context: This is the Context File, plus any found keyword data that we have passed along as context before the prompt
+API Key: This is the API key that was used for OpenAI
+Moderation Response: This is the raw JSON response from the Moderation API that lists out the flags and scores per category
+Flagged Categories: These are the categories the content was flagged for
+Response: This is the raw response we received back from ChatGPT
+
+If we receive an invalid response back from GPT, the entire debug error will print instead of the expected data. 
