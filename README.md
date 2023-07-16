@@ -133,19 +133,19 @@ This section documents all of the commands that you can say in chat to control S
 | !tts pause/resume                      | Pause or resume the TTS event queue.                                                                  |
 | !tts clear                             | Clear all pending events in the TTS event queue.                                                      |
 | !tts stop                              | If TTS is currently speaking, stop only the current speech.                                           |
-| !tts mode [all|command]                | Toggle between needing a command to speak and saying everything.                                      |
+| !tts mode (all|command)                | Toggle between needing a command to speak and saying everything.                                      |
 | !tts commands                          | List all available custom commands.                                                                   |
-| !tts [off|disable]                     | Disable the TTS engine.                                                                               |
-| !tts [on|enable]                       | Enable the TTS engine (if it has been disabled).                                                      |
-| !tts ignore [add|del] [username]       | Sets the ignore status of the specified user.                                                         |
+| !tts (off|disable)                     | Disable the TTS engine.                                                                               |
+| !tts (on|enable)                       | Enable the TTS engine (if it has been disabled).                                                      |
+| !tts ignore (add|del) (username)       | Sets the ignore status of the specified user.                                                         |
 | !tts ignored                           | List currently ignored users.                                                                         |
-| !tts reg [add|del] [username]          | Add or remove user from being a regular.                                                              |
-| !tts events [on|off]                   | Toggle speaking of all events (subs, cheer, etc).                                                     |
-| !tts random reset [username]           | Resets a user back to there default voice, typically used if sticky random is enabled.                |
-| !tts set nickname [username] [nickname]| Assigns a nickname to be said when enabled in the bot                                                 |
-| !tts set sticky [on|off]               | Sets the sticky mode, if users are set to random, there first spoken voice will stick for the duration|
-| !tts assign last [username]            | Will assign the last used voice to the user specified.                                                |
-| !tts [about|aboot]                     | Sends to chat the information about your TwitchSpeaker instance.                                      |
+| !tts reg (add|del) (username)          | Add or remove user from being a regular.                                                              |
+| !tts events (on|off)                   | Toggle speaking of all events (subs, cheer, etc).                                                     |
+| !tts random reset (username)           | Resets a user back to there default voice, typically used if sticky random is enabled.                |
+| !tts set nickname (username) (nickname)| Assigns a nickname to be said when enabled in the bot                                                 |
+| !tts set sticky (on|off)               | Sets the sticky mode, if users are set to random, there first spoken voice will stick for the duration|
+| !tts assign last (username)            | Will assign the last used voice to the user specified.                                                |
+| !tts (about|aboot)                     | Sends to chat the information about your TwitchSpeaker instance.                                      |
 
 You will become very familiar with the !tts stop command as your chat spams weird things. You should make sure all of your moderators are aware of the command. 
 
