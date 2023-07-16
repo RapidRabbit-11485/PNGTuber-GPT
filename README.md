@@ -16,11 +16,22 @@ Now that we know what a token is, you are charged based on the length of the inp
 
 The context is how many tokens of information you feed into the query before you ask the actual prompt, it’s charged in batches of either 4,000 tokens or 16,000 tokens.
 For the Google Text-to-Speech API it depends on which voice you choose and how capable it is. There is an amount that you can use for free before it starts billing. The cost is either provided per character, or per byte which is generally the same as 1 character. 
+
+| Voice Type                   | Pricing                                                  |
+| ---------------------------- |---------------------------------------------------------:|
+| Neural2 voices US            | $0.000016 per byte (US$16 per 1 million bytes)           |
+| Polyglot (Preview) voices US | $0.000016 per byte (US$16 per 1 million bytes)           |
+| Studio (Preview) voices US   | $0.00016 per byte (US$160 per 1 million bytes)           |
+| Standard voices US           | I$0.000004 per character (US$4 per 1 million characters) |
+| WaveNet voices US            | $0.000016 per character (US$16 per 1 million characters) |
+
 Neural2 voices US		$0.000016 per byte (US$16 per 1 million bytes)
 Polyglot (Preview) voices US	$0.000016 per byte (US$16 per 1 million bytes)
 Studio (Preview) voices US	$0.00016 per byte (US$160 per 1 million bytes)
 Standard voices US		$0.000004 per character (US$4 per 1 million characters)
 WaveNet voices US	$0.000016 per character (US$16 per 1 million characters)
+
+
 As you can see, we are paying just pennies for the typical GPT transaction. The best advice is to kind of understand it’s not going to be super expensive, deploy it, and see how much it uses with your stream for a day and extrapolate that. You can then adjust the pricing on redemptions until the usage is within line of what you want to spend. Just increase the cost until it slows down. You can also implement cooldowns to make sure they are not overused or abused.
 
 # Purpose
