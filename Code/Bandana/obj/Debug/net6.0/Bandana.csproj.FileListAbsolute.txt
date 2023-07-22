@@ -1,0 +1,17 @@
+C:\Users\chris\source\repos\Bandana\Bandana\bin\Debug\net6.0\Bandana.exe
+C:\Users\chris\source\repos\Bandana\Bandana\bin\Debug\net6.0\Bandana.deps.json
+C:\Users\chris\source\repos\Bandana\Bandana\bin\Debug\net6.0\Bandana.runtimeconfig.json
+C:\Users\chris\source\repos\Bandana\Bandana\bin\Debug\net6.0\Bandana.dll
+C:\Users\chris\source\repos\Bandana\Bandana\bin\Debug\net6.0\Bandana.pdb
+C:\Users\chris\source\repos\Bandana\Bandana\bin\Debug\net6.0\Newtonsoft.Json.dll
+C:\Users\chris\source\repos\Bandana\Bandana\obj\Debug\net6.0\Bandana.csproj.AssemblyReference.cache
+C:\Users\chris\source\repos\Bandana\Bandana\obj\Debug\net6.0\Bandana.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\chris\source\repos\Bandana\Bandana\obj\Debug\net6.0\Bandana.AssemblyInfoInputs.cache
+C:\Users\chris\source\repos\Bandana\Bandana\obj\Debug\net6.0\Bandana.AssemblyInfo.cs
+C:\Users\chris\source\repos\Bandana\Bandana\obj\Debug\net6.0\Bandana.csproj.CoreCompileInputs.cache
+C:\Users\chris\source\repos\Bandana\Bandana\obj\Debug\net6.0\Bandana.csproj.CopyComplete
+C:\Users\chris\source\repos\Bandana\Bandana\obj\Debug\net6.0\Bandana.dll
+C:\Users\chris\source\repos\Bandana\Bandana\obj\Debug\net6.0\refint\Bandana.dll
+C:\Users\chris\source\repos\Bandana\Bandana\obj\Debug\net6.0\Bandana.pdb
+C:\Users\chris\source\repos\Bandana\Bandana\obj\Debug\net6.0\Bandana.genruntimeconfig.cache
+C:\Users\chris\source\repos\Bandana\Bandana\obj\Debug\net6.0\ref\Bandana.dll
