@@ -160,16 +160,7 @@ This section documents all of the commands that you can say in chat to control S
 
 You will become very familiar with the !tts stop command as your chat spams weird things. You should make sure all of your moderators are aware of the command. 
 
-# Create !modtts Command
-In this section I will describe how to create a !modtts command that allows moderators in your chat to speak to you and the stream at any time. This command will be restricted for only mods to use in Streamer.bot.
-
-1.	Open Speaker.bot
-2.	Navigate to the Custom Commands tab.
-3.	Enter the command “!modtts”
-4.	Choose the voice alias it should use.
-5.	Check only the box for Moderators, and uncheck the others.
-6.	Click Add
-7.	Test your new command in Twitch Chat
+Your moderators can trigger the bot to do TTS with the command "!say" followed by what they want to say.
 
 # Create GPT Bot Lore Text File
 Your GPT bot needs to have a personality, backstory, likes, and dislikes. The better you build the deep lore, the more context the bot will respond to. You can “teach” the bot things by changing the wording of your lore file. You are basically digging into the AI’s brain and modifying their personality. Be creative, if you want your bot unhinged, tell them to be unhinged. You can also give negative prompting by telling them not to exhibit certain behaviors. A sample Lore file is provided below. You should save this as a text document. It is important to have a Traits section, Instructions, and a task that you expect them to do. 
@@ -207,6 +198,8 @@ Here are some facts about Bandana:
 You are to respond playfully to questions asked by viewers of my Twitch stream. You are aware that I am playing a game, and you sometimes comment about how terrible I am playing. You should answer the question asked with the highest precision possible, while also acting like you are bothered to be responding. You always respond in the first person, and make sure to call out the requestor by their Twitch name. You MUST respond in less than 510 total characters.
 Save the entire text block above and customize it to your liking, as a Text File, somewhere that makes sense on your computer.
 
+You can also find an AdultContent example in the Example Files folder
+
 # Import Solution into Streamer.bot
 In this section we will import all custom actions and commands into Streamer.bot. When imported this command will let you trigger the GPT Action from Twitch Chat to test your bot. 
 1.	Open Streamer.bot
@@ -218,9 +211,8 @@ In this section we will import all custom actions and commands into Streamer.bot
 Now we need to update some variables for the GPT action to work.
 
 1.	Update the value of OPENAI_API_KEY to your exact API key you generated in previous steps
-2.	Update the value of CONTEXT_FILE_PATH to the full path to the Context.txt file you have created to give context to your bot.
-3.	Update the value of KEYWORD_FILE_PATH to the full path to your Keywords_Context.json file that contains your keyword database. An example file is provided in the repository.
-4.	Update the Speak action to use the Voice Alias you want it to use in Speaker.bot. This allows you to have the bot use a different voice or the same voice as your other actions in Speaker.bot
+2.	Update the value of PROJECT_FILE_PATH to the full path your Content.txt, keyword_contexts.json and TwitchChatRecoder.js file are located in without a trailing "\"
+3.	Update the Speak action to use the Voice Alias you want it to use in Speaker.bot. This allows you to have the bot use a different voice or the same voice as your other actions in Speaker.bot
 
 This step will change in future versions, but right now categories to exclude from moderation are hard coded into the code to ignore violence and sexual requests. If you would like to allow any other categories or remove these exclusions you need to update a certain part of the Execute C# Action in the GPT custom action. Edit the code and update this line:
 
@@ -271,3 +263,15 @@ Flagged Categories: These are the categories the content was flagged for
 Response: This is the raw response we received back from ChatGPT
 
 If we receive an invalid response back from GPT, the entire debug error will print instead of the expected data. 
+
+# Install Node.JS 
+To capture Twitch chat we need to use a JavaScript library called TMI.js. More information can be found at https://tmijs.com/. To use Javascript via the command line we need to install Node.JS from https://nodejs.org/en. Download and install the LTS version, and accept all of the defaults when installing, you don't need to check any additional boxes. Once it is installed do the following:
+
+1. Make sure that TwitchChatRecoder.js is in your Project Folder. 
+2. Open a new PowerShell window and change directory to your Project Folder
+3. Run "npm install tmi.js"
+4. Run "node TwitchChatRecorder.js" to start capturing Twitch Chat for the bot
+
+* It creates a new file called message_log.json that contains all the messages it captures from Twitch
+* It only keeps the last 15 messages, and deletes older ones with each new message
+* The messages are passed into the prompt automatically so that the bot has context of what is being said in chat

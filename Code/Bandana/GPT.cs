@@ -11,22 +11,44 @@ using Newtonsoft.Json;
 public class CPHInline
 {
     private string responseVariable; // Variable to store the response value
+
     public bool Execute()
     {
         try
         {
-            string contextFilePath = args["CONTEXT_FILE_PATH"].ToString();
-            string keywordContextFilePath = args["KEYWORD_FILE_PATH"].ToString();
+            string projectFilePath = args["PROJECT_FILE_PATH"].ToString();
+            string contextFilePath = projectFilePath + "\\Context.txt";
+            string keywordContextFilePath = projectFilePath + "\\keyword_contexts.json";
+            string twitchChatFilePath = projectFilePath + "\\message_log.json";
             string userName = args["userName"].ToString();
             string rawInput = args["rawInput"].ToString();
             bool stripEmojis = args.ContainsKey("stripEmojis") && bool.TryParse(args["stripEmojis"].ToString(), out bool result) ? result : false;
-            string context = File.ReadAllText(contextFilePath);
+
             Dictionary<string, string> keywordContexts = new Dictionary<string, string>();
+
+            // Read keywordContexts from the JSON file
             if (File.Exists(keywordContextFilePath))
             {
                 string jsonContent = File.ReadAllText(keywordContextFilePath);
                 keywordContexts = JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonContent) ?? new Dictionary<string, string>();
             }
+
+            // Parse the Twitch Chat JSON and extract displayName and message for each line
+            string[] twitchChatLines = File.ReadAllLines(twitchChatFilePath);
+            StringBuilder twitchChatBuilder = new StringBuilder();
+            foreach (string line in twitchChatLines)
+            {
+                ChatMessage chatMessage = JsonConvert.DeserializeObject<ChatMessage>(line);
+                string displayName = chatMessage.displayName;
+                string message = chatMessage.message;
+                twitchChatBuilder.AppendLine($"{displayName}: {message}");
+            }
+
+            // Combine the parsed Twitch Chat with the context
+            string parsedTwitchChat = twitchChatBuilder.ToString();
+            string context = File.ReadAllText(contextFilePath);
+
+            string combinedPrompt = $"{context}\n{parsedTwitchChat}";
 
             string prompt = userName + " asks " + rawInput;
             var mentionedKeywords = keywordContexts.Keys;
@@ -38,7 +60,7 @@ public class CPHInline
                     keywordMatch = true;
                     string keywordPhrase = $"something you know about {keyword} is";
                     string keywordValue = keywordContexts[keyword];
-                    context += $"\n{keywordPhrase} {keywordValue}\n";
+                    combinedPrompt += $"\n{keywordPhrase} {keywordValue}\n";
                     break;
                 }
             }
@@ -47,11 +69,11 @@ public class CPHInline
             {
                 string usernamePhrase = $"something you know about {userName} is";
                 string usernameValue = keywordContexts[userName];
-                context += $"\n{usernamePhrase} {usernameValue}\n";
+                combinedPrompt += $"\n{usernamePhrase} {usernameValue}\n";
             }
 
-            string combinedContext = keywordMatch ? context : context;
-            CPH.LogInfo("Combined Context: " + combinedContext);
+            CPH.LogInfo("Combined Prompt: " + combinedPrompt);
+
             string[] excludedCategories =
             {
                 "sexual",
@@ -67,7 +89,7 @@ public class CPHInline
                 return true;
             }
 
-            GenerateChatCompletion(prompt, combinedContext).Wait();
+            GenerateChatCompletion(prompt, combinedPrompt).Wait();
             if (string.IsNullOrEmpty(responseVariable))
             {
                 responseVariable = "ChatGPT did not return a response.";
@@ -90,10 +112,9 @@ public class CPHInline
         }
     }
 
-    public async Task GenerateChatCompletion(string prompt, string combinedContext)
+    public async Task GenerateChatCompletion(string prompt, string combinedPrompt)
     {
         string apiKey = args["OPENAI_API_KEY"].ToString();
-        CPH.LogInfo("API Key: " + apiKey);
         string completionsEndpoint = "https://api.openai.com/v1/chat/completions";
         var completionsRequest = new
         {
@@ -103,7 +124,7 @@ public class CPHInline
                 new Message
                 {
                     role = "system",
-                    content = combinedContext
+                    content = combinedPrompt
                 },
                 new Message
                 {
@@ -187,41 +208,47 @@ public class CPHInline
 
     private string RemoveEmojis(string text)
     {
-        // Regular expression pattern to match non-ASCII characters
+        // Regular expression pattern to match non-ASCII characters (emojis)
         string nonAsciiPattern = @"[^\u0000-\u007F]+";
-        // Regular expression to match and remove non-ASCII characters (emojis and other non-ASCII text)
+        // Regular expression to match and remove emojis (non-ASCII characters) from the 'text' string
         text = Regex.Replace(text, nonAsciiPattern, "");
         // Remove any extra spaces left after removing the emojis
         text = text.Trim();
         return text;
     }
-}
 
-public class Message
-{
-    public string role { get; set; }
-    public string content { get; set; }
-}
+    public class ChatMessage
+    {
+        public string displayName { get; set; }
+        public string message { get; set; }
+    }
 
-public class ChatCompletionsResponse
-{
-    public List<Choice> Choices { get; set; }
-}
+    public class Message
+    {
+        public string role { get; set; }
+        public string content { get; set; }
+    }
 
-public class Choice
-{
-    public string finish_reason { get; set; }
-    public Message Message { get; set; }
-}
+    public class ChatCompletionsResponse
+    {
+        public List<Choice> Choices { get; set; }
+    }
 
-public class ModerationResponse
-{
-    public List<Result> Results { get; set; }
-}
+    public class Choice
+    {
+        public string finish_reason { get; set; }
+        public Message Message { get; set; }
+    }
 
-public class Result
-{
-    public bool Flagged { get; set; }
-    public Dictionary<string, bool> Categories { get; set; }
-    public Dictionary<string, double> Category_scores { get; set; }
+    public class ModerationResponse
+    {
+        public List<Result> Results { get; set; }
+    }
+
+    public class Result
+    {
+        public bool Flagged { get; set; }
+        public Dictionary<string, bool> Categories { get; set; }
+        public Dictionary<string, double> Category_scores { get; set; }
+    }
 }
