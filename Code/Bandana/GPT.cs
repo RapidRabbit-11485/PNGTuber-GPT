@@ -4,13 +4,13 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 
 public class CPHInline
 {
     private string responseVariable; // Variable to store the response value
-
     public bool Execute()
     {
         try
@@ -19,6 +19,7 @@ public class CPHInline
             string keywordContextFilePath = args["KEYWORD_FILE_PATH"].ToString();
             string userName = args["userName"].ToString();
             string rawInput = args["rawInput"].ToString();
+            bool stripEmojis = args.ContainsKey("stripEmojis") && bool.TryParse(args["stripEmojis"].ToString(), out bool result) ? result : false;
             string context = File.ReadAllText(contextFilePath);
             Dictionary<string, string> keywordContexts = new Dictionary<string, string>();
             if (File.Exists(keywordContextFilePath))
@@ -50,9 +51,7 @@ public class CPHInline
             }
 
             string combinedContext = keywordMatch ? context : context;
-
             CPH.LogInfo("Combined Context: " + combinedContext);
-
             string[] excludedCategories =
             {
                 "sexual",
@@ -72,6 +71,12 @@ public class CPHInline
             if (string.IsNullOrEmpty(responseVariable))
             {
                 responseVariable = "ChatGPT did not return a response.";
+            }
+
+            // Remove emojis if stripEmojis is true
+            if (stripEmojis)
+            {
+                responseVariable = RemoveEmojis(responseVariable);
             }
 
             CPH.SetArgument("response", responseVariable);
@@ -172,15 +177,23 @@ public class CPHInline
                     string moderationResponseContent = responseReader.ReadToEnd();
                     CPH.LogInfo("Moderation Response: " + moderationResponseContent);
                     var moderationJsonResponse = JsonConvert.DeserializeObject<ModerationResponse>(moderationResponseContent);
-                    List<string> flaggedCategories = moderationJsonResponse?.Results?[0]?.Categories
-                        ?.Where(category => category.Value && !excludedCategories.Contains(category.Key))
-                        .Select(category => category.Key)
-                        .ToList() ?? new List<string>();
+                    List<string> flaggedCategories = moderationJsonResponse?.Results?[0]?.Categories?.Where(category => category.Value && !excludedCategories.Contains(category.Key)).Select(category => category.Key).ToList() ?? new List<string>();
                     CPH.LogInfo("Flagged Categories: " + string.Join(", ", flaggedCategories));
                     return flaggedCategories;
                 }
             }
         }
+    }
+
+    private string RemoveEmojis(string text)
+    {
+        // Regular expression pattern to match non-ASCII characters
+        string nonAsciiPattern = @"[^\u0000-\u007F]+";
+        // Regular expression to match and remove non-ASCII characters (emojis and other non-ASCII text)
+        text = Regex.Replace(text, nonAsciiPattern, "");
+        // Remove any extra spaces left after removing the emojis
+        text = text.Trim();
+        return text;
     }
 }
 
