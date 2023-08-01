@@ -10,7 +10,7 @@ public class CPHInline
     {
         // Load existing JSON data from file
         string projectFilePath = args["PROJECT_FILE_PATH"].ToString();
-        string filePath = projectFilePath + "`\\keyword_contexts.json";
+        string filePath = projectFilePath + "\\keyword_contexts.json";
         string userName = args["userName"].ToString();
         CPH.LogInfo("Username: " + userName);
         string rawInput = args["rawInput"].ToString();

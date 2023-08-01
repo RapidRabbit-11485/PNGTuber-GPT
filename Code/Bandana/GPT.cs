@@ -11,7 +11,6 @@ using Newtonsoft.Json;
 public class CPHInline
 {
     private string responseVariable; // Variable to store the response value
-
     public bool Execute()
     {
         try
@@ -23,9 +22,7 @@ public class CPHInline
             string userName = args["userName"].ToString();
             string rawInput = args["rawInput"].ToString();
             bool stripEmojis = args.ContainsKey("stripEmojis") && bool.TryParse(args["stripEmojis"].ToString(), out bool result) ? result : false;
-
             Dictionary<string, string> keywordContexts = new Dictionary<string, string>();
-
             // Read keywordContexts from the JSON file
             if (File.Exists(keywordContextFilePath))
             {
@@ -47,9 +44,10 @@ public class CPHInline
             // Combine the parsed Twitch Chat with the context
             string parsedTwitchChat = twitchChatBuilder.ToString();
             string context = File.ReadAllText(contextFilePath);
-
-            string combinedPrompt = $"{context}\n{parsedTwitchChat}";
-
+            string broadcaster = args["broadcaster"].ToString();
+            string currentTitle = args["currentTitle"].ToString();
+            string currentGame = args["currentGame"].ToString();
+            string combinedPrompt = $"{context}\n{parsedTwitchChat}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}";
             string prompt = userName + " asks " + rawInput;
             var mentionedKeywords = keywordContexts.Keys;
             bool keywordMatch = false;
@@ -73,7 +71,6 @@ public class CPHInline
             }
 
             CPH.LogInfo("Combined Prompt: " + combinedPrompt);
-
             string[] excludedCategories =
             {
                 "sexual",
@@ -114,6 +111,8 @@ public class CPHInline
 
     public async Task GenerateChatCompletion(string prompt, string combinedPrompt)
     {
+        string characterLimitReminder = " You must respond in less than 510 total characters.";
+        prompt += characterLimitReminder;
         string apiKey = args["OPENAI_API_KEY"].ToString();
         string completionsEndpoint = "https://api.openai.com/v1/chat/completions";
         var completionsRequest = new
@@ -162,6 +161,8 @@ public class CPHInline
                         return;
                     }
 
+                    // Replace line breaks with spaces in the generated text
+                    generatedText = generatedText.Replace("\r\n", " ").Replace("\n", " ");
                     responseVariable = generatedText;
                     CPH.LogInfo("Response: " + responseVariable);
                 }
