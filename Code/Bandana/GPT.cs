@@ -47,7 +47,9 @@ public class CPHInline
             string broadcaster = args["broadcaster"].ToString();
             string currentTitle = args["currentTitle"].ToString();
             string currentGame = args["currentGame"].ToString();
-            string combinedPrompt = $"{context}\n{parsedTwitchChat}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}";
+            string combinedPrompt = $"{context}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}";
+            string chatContext = "Here is the current chat log of people that have been chatting. You can interact with them and ask them questions sometimes.\n";
+            chatContext += parsedTwitchChat;
             string prompt = userName + " asks " + rawInput;
             var mentionedKeywords = keywordContexts.Keys;
             bool keywordMatch = false;
@@ -70,7 +72,6 @@ public class CPHInline
                 combinedPrompt += $"\n{usernamePhrase} {usernameValue}\n";
             }
 
-            CPH.LogInfo("Combined Prompt: " + combinedPrompt);
             string[] excludedCategories =
             {
                 "sexual",
@@ -86,7 +87,7 @@ public class CPHInline
                 return true;
             }
 
-            GenerateChatCompletion(prompt, combinedPrompt).Wait();
+            GenerateChatCompletion(prompt, combinedPrompt, chatContext).Wait();
             if (string.IsNullOrEmpty(responseVariable))
             {
                 responseVariable = "ChatGPT did not return a response.";
@@ -109,12 +110,19 @@ public class CPHInline
         }
     }
 
-    public async Task GenerateChatCompletion(string prompt, string combinedPrompt)
+    public async Task GenerateChatCompletion(string prompt, string combinedPrompt, string chatContext)
     {
-        string characterLimitReminder = " You must respond in less than 510 total characters.";
-        prompt += characterLimitReminder;
+        string coreDirectives = "You must respond in less than 500 total characters for each message or part of your response will be cut off.\n";
+        coreDirectives += "Do not preface your responses with your name and a colon in any of your messages.\n";
+        coreDirectives += "Any time your response has the word uwu in it replace it with oowoo.\n";
+        coreDirectives += "Any time your response has the word owo in it replace it with ohwoe.\n";
+        coreDirectives += "Do not say your character's name in your responses\n";
+        coreDirectives += "Always respond in the first person.\n";
+        coreDirectives += "You should use swear words in your responses sporadically";
         string apiKey = args["OPENAI_API_KEY"].ToString();
         string completionsEndpoint = "https://api.openai.com/v1/chat/completions";
+        string initialResponse = "I am ready to receive messages, and will comply with your instructions.";
+        string chatResponse = "I have received the chat log and will reference users or questions from there that are relevant to the current prompt";
         var completionsRequest = new
         {
             model = "gpt-3.5-turbo",
@@ -128,10 +136,32 @@ public class CPHInline
                 new Message
                 {
                     role = "user",
+                    content = coreDirectives
+                },
+                new Message
+                {
+                    role = "assistant",
+                    content = initialResponse
+                },
+                new Message
+                {
+                    role = "user",
+                    content = chatContext
+                },
+                new Message
+                {
+                    role = "assistant",
+                    content = chatResponse
+                },
+                new Message
+                {
+                    role = "user",
                     content = prompt
                 }
             }
         };
+        string completionsRequestJSON = JsonConvert.SerializeObject(completionsRequest, Formatting.Indented);
+        CPH.LogInfo("Request Body: " + completionsRequestJSON);
         var completionsJsonPayload = JsonConvert.SerializeObject(completionsRequest);
         var completionsContentBytes = Encoding.UTF8.GetBytes(completionsJsonPayload);
         WebRequest completionsWebRequest = WebRequest.Create(completionsEndpoint);
@@ -157,14 +187,13 @@ public class CPHInline
                     if (string.IsNullOrEmpty(generatedText))
                     {
                         responseVariable = "ChatGPT did not return a response.";
-                        CPH.LogInfo("Response: " + responseVariable);
+                        CPH.LogInfo(responseVariable);
                         return;
                     }
 
                     // Replace line breaks with spaces in the generated text
                     generatedText = generatedText.Replace("\r\n", " ").Replace("\n", " ");
                     responseVariable = generatedText;
-                    CPH.LogInfo("Response: " + responseVariable);
                 }
             }
         }
@@ -197,6 +226,7 @@ public class CPHInline
                 using (StreamReader responseReader = new StreamReader(responseStream))
                 {
                     string moderationResponseContent = responseReader.ReadToEnd();
+                    CPH.LogInfo("Prompt: " + prompt);
                     CPH.LogInfo("Moderation Response: " + moderationResponseContent);
                     var moderationJsonResponse = JsonConvert.DeserializeObject<ModerationResponse>(moderationResponseContent);
                     List<string> flaggedCategories = moderationJsonResponse?.Results?[0]?.Categories?.Where(category => category.Value && !excludedCategories.Contains(category.Key)).Select(category => category.Key).ToList() ?? new List<string>();
