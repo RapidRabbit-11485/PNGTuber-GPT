@@ -57,18 +57,18 @@ Rather you should first crawl, then walk, then run, and get comfortable with som
 To utilize Google Cloud for Text-to-Speech services with Speaker.bot, you need to register for Google Cloud Console by going to https://console.cloud.google.com/. You can start off with $300 in free credit to use for certain services (I’m not sure if TTS qualifies yet), but you will need to link a credit card so your bot doesn’t stop working. Once you are logged into the cloud console follow these steps:
 
 1.	Enable the Cloud Text-to-Speech API in your Google Cloud Console
-2.	Navigate to your API Credentials page.
-3.	Click the Create Credentials button, then select Service Account.
+2.	Navigate to your API Credentials page
+3.	Click the Create Credentials button, then select Service Account
 4.	Enter any name you want, such as speakerbot-tts, then click Create & Continue
-5.	When prompted to grant additional roles, skip this step by clicking Continue again.
-6.	When prompted to grant additional users access, skip this step by clicking Done.
-7.	You should now be on the Service Accounts page within Google Cloud Console.
-8.	Click the Actions dropdown for the service account you just created.
-9.	Select Manage Keys
+5.	When prompted to grant additional roles, skip this step by clicking Continue again
+6.	When prompted to grant additional users access, skip this step by clicking Done
+7.	You should now be on the Service Accounts page within Google Cloud Console
+8.	Click on Manage Service Accounts just above where the accounts are listed
+9.	Click the 3 dot menu next to the service account and select Manage Keys
 10.	Click Add Key and select Create New Key
-11.	In the modal dialog, select JSON and click Create.
-12.	The JSON file should be automatically downloaded by your web browser.
-13.	Save this file in a safe location, for Speaker.bot to access.
+11.	In the modal dialog, select JSON and click Create
+12.	The JSON file should be automatically downloaded by your web browser
+13.	Save this file in a safe location, for Speaker.bot to access
 
 # Create OpenAI Account
 To access ChatGPT 3.5 Turbo, you need to have an active OpenAI account to retrieve an API key to use to send their API prompts from Streamer.bot. Signup for a new account at https://platform.openai.com/signup?launch. Make sure to link a payment method to your account and convert to a paid account. By default your account has a hard limit of $120 per month, and you must request an increase to this limit if you should need more. 
@@ -222,6 +222,7 @@ This step will change in future versions, but right now categories to exclude fr
                 "sexual",
                 "violence"
             }; // Add the categories you want to exclude
+            
 The full list of moderation categories available can be found at:
 https://platform.openai.com/docs/guides/moderation
 
