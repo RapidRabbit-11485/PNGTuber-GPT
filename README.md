@@ -212,7 +212,13 @@ Now we need to update some variables for the GPT action to work.
 
 1.	Update the value of OPENAI_API_KEY to your exact API key you generated in previous steps
 2.	Update the value of PROJECT_FILE_PATH to the full path your Content.txt, keyword_contexts.json and TwitchChatRecoder.js file are located in without a trailing "\"
-3.	Update the Speak action to use the Voice Alias you want it to use in Speaker.bot. This allows you to have the bot use a different voice or the same voice as your other actions in Speaker.bot
+3.	Update the value of IgnoreBotNames under SaveMessagetoQueue to reflect a comma-separated list of bot names you want to not be recorded from chat.
+4.	Update the value of stripEmojis to either be 'true' or 'false' depending on whether you want emojis stripped from the response
+5.	Update the Speak action to use the Voice Alias you want it to use in Speaker.bot. This allows you to have the bot use a different voice or the same voice as your other actions in Speaker.bot
+6.	Enable the !modgpt command, and assign Moderators access to use it.
+7.	Enable the !modteach command, and assign Moderators access to use it.
+8.	Enable the Chat Message trigger under SaveMessagetoQueue
+9.	Associate the GPT and Teach commands with either Cheer or Channel Point Redemption triggers for users to be able to use it, alternatively, you can create a !gpt command and allow users access to it
 
 This step will change in future versions, but right now categories to exclude from moderation are hard coded into the code to ignore violence and sexual requests. If you would like to allow any other categories or remove these exclusions you need to update a certain part of the Execute C# Action in the GPT custom action. Edit the code and update this line:
 
@@ -264,15 +270,6 @@ Flagged Categories: These are the categories the content was flagged for
 Response: This is the raw response we received back from ChatGPT
 
 If we receive an invalid response back from GPT, the entire debug error will print instead of the expected data. 
-
-# Install Node.JS 
-To capture Twitch chat we need to use a JavaScript library called TMI.js. More information can be found at https://tmijs.com/. To use Javascript via the command line we need to install Node.JS from https://nodejs.org/en. Download and install the LTS version, and accept all of the defaults when installing, you don't need to check any additional boxes. Once it is installed do the following:
-
-1. Make sure that TwitchChatRecoder.js is in your Project Folder. 
-2. Open a new PowerShell window and change directory to your Project Folder
-3. Run "npm install tmi.js"
-4. Run "node TwitchChatRecorder.js" to start capturing Twitch Chat for the bot
-
 * It creates a new file called message_log.json that contains all the messages it captures from Twitch
 * It only keeps the last 15 messages, and deletes older ones with each new message
 * The messages are passed into the prompt automatically so that the bot has context of what is being said in chat
