@@ -260,6 +260,17 @@ In this section we will install Veadotube Mini from veadotube. This is very simp
 9.	Clicking display settings will allow you to edit the background, image mode, and hide the interface.
 10.	You can now capture the window via OBS, key out the background, and then overlay it on your stream.
 
+# Word Replacements
+Sometimes, Speaker.bot is not able to pronounce words correctly. You can use Speaker.bot's native text replacement for this. For example, we could replace the word "uwu" with "oowoo" to get it to pronounce it properly. Use this sparingly, as it can be like putting words in your viewer's mouth. 
+
+1. In Speaker.bot navigate to Settings -> Replacement
+2. Under Replace Options, enter the word to be replaced in the replace box
+3. Under Replace Options, enter the word that the bot pronounces correctly
+4. Check the box for Enabled
+5. Hit Add
+6. Save Settings
+7. Now when the bot is told to say that word, it will say the replacement word instead.
+
 # Diagnosing errors
 In the Streamer.bot directory there is a logs directory that has a daily log file. When submitting issues, please upload your log file as well, and let me know what time exactly the event occurred. Each transaction to GPT logs the following information:
 
