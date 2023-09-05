@@ -11,45 +11,45 @@ using Newtonsoft.Json;
 public class CPHInline
 {
     private string responseVariable; // Variable to store the response value
+    public Queue<chatMessage> PromptResponseLog { get; set; } = new Queue<chatMessage>(); // Store previous prompts and responses in a queue
+    public Queue<chatMessage> ChatGPTLog { get; set; } = new Queue<chatMessage>(); // Store the chat log in a queue
+
     public bool Execute()
     {
+        if (ChatGPTLog == null)
+        {
+            CPH.LogInfo("Warning: ChatGPTLog is null.");
+        }
+        else if (!ChatGPTLog.Any())
+        {
+            CPH.LogInfo("Warning: ChatGPTLog is empty.");
+        }
+        else
+        {
+            string chatLogAsString = JsonConvert.SerializeObject(ChatGPTLog, Formatting.Indented);
+            CPH.LogInfo("ChatGPTLog Content: " + chatLogAsString);
+        }
+
         try
         {
             string projectFilePath = args["PROJECT_FILE_PATH"].ToString();
             string contextFilePath = projectFilePath + "\\Context.txt";
             string keywordContextFilePath = projectFilePath + "\\keyword_contexts.json";
-            string twitchChatFilePath = projectFilePath + "\\message_log.json";
             string userName = args["userName"].ToString();
             string rawInput = args["rawInput"].ToString();
             bool stripEmojis = args.ContainsKey("stripEmojis") && bool.TryParse(args["stripEmojis"].ToString(), out bool result) ? result : false;
             Dictionary<string, string> keywordContexts = new Dictionary<string, string>();
-            // Read keywordContexts from the JSON file
             if (File.Exists(keywordContextFilePath))
             {
                 string jsonContent = File.ReadAllText(keywordContextFilePath);
                 keywordContexts = JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonContent) ?? new Dictionary<string, string>();
             }
 
-            // Parse the Twitch Chat JSON and extract displayName and message for each line
-            string[] twitchChatLines = File.ReadAllLines(twitchChatFilePath);
-            StringBuilder twitchChatBuilder = new StringBuilder();
-            foreach (string line in twitchChatLines)
-            {
-                ChatMessage chatMessage = JsonConvert.DeserializeObject<ChatMessage>(line);
-                string displayName = chatMessage.displayName;
-                string message = chatMessage.message;
-                twitchChatBuilder.AppendLine($"{displayName}: {message}");
-            }
-
-            // Combine the parsed Twitch Chat with the context
-            string parsedTwitchChat = twitchChatBuilder.ToString();
             string context = File.ReadAllText(contextFilePath);
             string broadcaster = args["broadcaster"].ToString();
             string currentTitle = args["currentTitle"].ToString();
             string currentGame = args["currentGame"].ToString();
             string combinedPrompt = $"{context}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}";
-            string chatContext = "Here is the current chat log of people that have been chatting. You can interact with them and ask them questions sometimes.\n";
-            chatContext += parsedTwitchChat;
             string prompt = userName + " asks " + rawInput;
             var mentionedKeywords = keywordContexts.Keys;
             bool keywordMatch = false;
@@ -80,20 +80,18 @@ public class CPHInline
             List<string> flaggedCategories = CallModerationEndpoint(prompt, excludedCategories);
             if (flaggedCategories.Except(excludedCategories).Any())
             {
-                string flaggedCategoriesString = string.Join(", ", flaggedCategories);
                 responseVariable = $"{userName} your request flagged for harmful or hateful content. Repeated attempts at abuse will result in a permanent ban.";
                 CPH.SetArgument("response", responseVariable);
                 CPH.LogInfo("Response: " + responseVariable);
                 return true;
             }
 
-            GenerateChatCompletion(prompt, combinedPrompt, chatContext).Wait();
+            GenerateChatCompletion(prompt, combinedPrompt).Wait();
             if (string.IsNullOrEmpty(responseVariable))
             {
                 responseVariable = "ChatGPT did not return a response.";
             }
 
-            // Remove emojis if stripEmojis is true
             if (stripEmojis)
             {
                 responseVariable = RemoveEmojis(responseVariable);
@@ -110,55 +108,44 @@ public class CPHInline
         }
     }
 
-    public async Task GenerateChatCompletion(string prompt, string combinedPrompt, string chatContext)
+    public async Task GenerateChatCompletion(string prompt, string combinedPrompt)
     {
-        string coreDirectives = "You must respond in less than 500 total characters for each message or part of your response will be cut off.\n";
-        coreDirectives += "Do not preface your responses with your name and a colon in any of your messages.\n";
-        coreDirectives += "Any time your response has the word uwu in it replace it with oowoo.\n";
-        coreDirectives += "Any time your response has the word owo in it replace it with ohwoe.\n";
-        coreDirectives += "Do not say your character's name in your responses\n";
-        coreDirectives += "Always respond in the first person.\n";
-        coreDirectives += "You should use swear words in your responses sporadically";
-        string apiKey = args["OPENAI_API_KEY"].ToString();
-        string completionsEndpoint = "https://api.openai.com/v1/chat/completions";
         string initialResponse = "I am ready to receive messages, and will comply with your instructions.";
         string chatResponse = "I have received the chat log and will reference users or questions from there that are relevant to the current prompt";
+        string apiKey = args["OPENAI_API_KEY"].ToString();
+        string completionsEndpoint = "https://api.openai.com/v1/chat/completions";
+        var messages = new List<chatMessage>
+        {
+            new chatMessage
+            {
+                role = "system",
+                content = combinedPrompt
+            },
+            new chatMessage
+            {
+                role = "assistant",
+                content = initialResponse
+            }
+        };
+        // Iterate over the ChatGPTLog variable to add each message to the messages list
+        foreach (var chatMessage in ChatGPTLog)
+        {
+            messages.Add(new chatMessage { role = chatMessage.role, content = chatMessage.content });
+        }
+
+        // Add previous prompts and responses to the messages list from PromptResponseLog
+        foreach (var chatMessage in PromptResponseLog)
+        {
+            messages.Add(new chatMessage { role = chatMessage.role, content = chatMessage.content });
+        }
+
+        messages.Add(new chatMessage { role = "assistant", content = chatResponse });
+        prompt = "You must respond in less than 500 characters. " + prompt;
+        messages.Add(new chatMessage { role = "user", content = prompt });
         var completionsRequest = new
         {
             model = "gpt-3.5-turbo",
-            messages = new List<Message>
-            {
-                new Message
-                {
-                    role = "system",
-                    content = combinedPrompt
-                },
-                new Message
-                {
-                    role = "user",
-                    content = coreDirectives
-                },
-                new Message
-                {
-                    role = "assistant",
-                    content = initialResponse
-                },
-                new Message
-                {
-                    role = "user",
-                    content = chatContext
-                },
-                new Message
-                {
-                    role = "assistant",
-                    content = chatResponse
-                },
-                new Message
-                {
-                    role = "user",
-                    content = prompt
-                }
-            }
+            messages = messages
         };
         string completionsRequestJSON = JsonConvert.SerializeObject(completionsRequest, Formatting.Indented);
         CPH.LogInfo("Request Body: " + completionsRequestJSON);
@@ -196,6 +183,15 @@ public class CPHInline
                     responseVariable = generatedText;
                 }
             }
+        }
+
+        // Save the current prompt and response to the PromptResponseLog queue
+        PromptResponseLog.Enqueue(new chatMessage { role = "user", content = prompt });
+        PromptResponseLog.Enqueue(new chatMessage { role = "assistant", content = responseVariable });
+        // Limit the queue size, for example to 20 messages, to keep the memory usage in check
+        while (PromptResponseLog.Count > 5)
+        {
+            PromptResponseLog.Dequeue();
         }
     }
 
@@ -248,18 +244,6 @@ public class CPHInline
         return text;
     }
 
-    public class ChatMessage
-    {
-        public string displayName { get; set; }
-        public string message { get; set; }
-    }
-
-    public class Message
-    {
-        public string role { get; set; }
-        public string content { get; set; }
-    }
-
     public class ChatCompletionsResponse
     {
         public List<Choice> Choices { get; set; }
@@ -268,7 +252,7 @@ public class CPHInline
     public class Choice
     {
         public string finish_reason { get; set; }
-        public Message Message { get; set; }
+        public chatMessage Message { get; set; }
     }
 
     public class ModerationResponse
@@ -281,5 +265,83 @@ public class CPHInline
         public bool Flagged { get; set; }
         public Dictionary<string, bool> Categories { get; set; }
         public Dictionary<string, double> Category_scores { get; set; }
+    }
+
+    public bool SaveMessage()
+    {
+        // Retrieving the 'ignoreBotNames' value from args
+        string ignoreNamesString = args["ignoreBotNames"].ToString();
+        if (string.IsNullOrWhiteSpace(ignoreNamesString))
+        {
+            CPH.LogInfo("'ignoreBotNames' value is either not found or not a valid string.");
+            return false;
+        }
+
+        List<string> ignoreNamesList = new List<string>(ignoreNamesString.Split(','));
+        // Trim any spaces from userNames
+        for (int i = 0; i < ignoreNamesList.Count; i++)
+        {
+            ignoreNamesList[i] = ignoreNamesList[i].Trim();
+        }
+
+        // Retrieving the 'userName' value from args
+        string currentuserName = args["userName"].ToString();
+        if (string.IsNullOrWhiteSpace(currentuserName))
+        {
+            CPH.LogInfo("'userName' value is either not found or not a valid string.");
+            return false;
+        }
+
+        // Check if the current userName exists in the ignore list, and if so, return
+        if (ignoreNamesList.Contains(currentuserName))
+        {
+            return false; // This means we are not processing this message as we are ignoring it
+        }
+
+        //ChatLog is null, so we need to create it
+        if (ChatGPTLog == null)
+        {
+            ChatGPTLog = new Queue<chatMessage>();
+        }
+
+        string msg;
+        if (args.ContainsKey("messageStripped"))
+        {
+            msg = args["messageStripped"].ToString();
+        }
+        else
+        {
+            CPH.LogInfo("Key 'messageStripped' not found in args.");
+            return false;
+        }
+
+        chatMessage gptMsg = new chatMessage();
+        gptMsg.role = "user";
+        gptMsg.content = $"-{currentuserName} says {msg}"; // Using currentuserName here
+        CPH.LogInfo("{gptMsg.role} {gptMsg.content}");
+        QueueMessage(gptMsg);
+        return true;
+    }
+
+    private void QueueMessage(chatMessage gptMsg)
+    {
+        ChatGPTLog.Enqueue(gptMsg);
+        if (ChatGPTLog.Count > 20)
+        {
+            ChatGPTLog.Dequeue();
+        }
+    }
+
+    // Clear internal history
+    public bool ClearHistory()
+    {
+        ChatGPTLog.Clear();
+        return true;
+    }
+
+    public class chatMessage
+    {
+        public string role { get; set; }
+        public string content { get; set; }
     }
 }
