@@ -72,11 +72,8 @@ public class CPHInline
                 combinedPrompt += $"\n{usernamePhrase} {usernameValue}\n";
             }
 
-            string[] excludedCategories =
-            {
-                "sexual",
-                "violence"
-            };
+            string excludedCategoriesString = args["excludedModCategories"].ToString();
+            string[] excludedCategories = excludedCategoriesString.Split(',');
             List<string> flaggedCategories = CallModerationEndpoint(prompt, excludedCategories);
             if (flaggedCategories.Except(excludedCategories).Any())
             {
@@ -97,7 +94,7 @@ public class CPHInline
                 responseVariable = RemoveEmojis(responseVariable);
             }
 
-            CPH.SetArgument("response", responseVariable);
+            CPH.SetGlobalVar("response", responseVariable, false);
             CPH.LogInfo("Response: " + responseVariable);
             return true;
         }
@@ -188,7 +185,7 @@ public class CPHInline
         // Save the current prompt and response to the PromptResponseLog queue
         PromptResponseLog.Enqueue(new chatMessage { role = "user", content = prompt });
         PromptResponseLog.Enqueue(new chatMessage { role = "assistant", content = responseVariable });
-        // Limit the queue size, for example to 20 messages, to keep the memory usage in check
+        // Limit the queue size, for example to 5 responses, to keep the memory usage in check
         while (PromptResponseLog.Count > 5)
         {
             PromptResponseLog.Dequeue();
@@ -318,7 +315,8 @@ public class CPHInline
         chatMessage gptMsg = new chatMessage();
         gptMsg.role = "user";
         gptMsg.content = $"-{currentuserName} says {msg}"; // Using currentuserName here
-        CPH.LogInfo("{gptMsg.role} {gptMsg.content}");
+        string messageContent = $"Queued message -{currentuserName} says {msg}";
+        CPH.LogInfo("{messageContent}");
         QueueMessage(gptMsg);
         return true;
     }
