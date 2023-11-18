@@ -350,7 +350,6 @@ public class CPHInline
             if (string.IsNullOrWhiteSpace(pronouns))
             {
                 CPH.LogError("'Pronouns' value is either not found or not a valid string.");
-                return false;
             }
 
             // Retrieve the preferred user name
