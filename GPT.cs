@@ -16,260 +16,673 @@ public class CPHInline
     public Queue<chatMessage> GPTLog { get; set; } = new Queue<chatMessage>(); // Store previous prompts and responses in a queue
     public Queue<chatMessage> ChatLog { get; set; } = new Queue<chatMessage>(); // Store the chat log in a queue
 
-    // Initialize Classes
+    /// <summary>
+    /// Represents the response structure for ChatGPT completions API.
+    /// This class is designed to capture the data returned from the API,
+    /// which includes a list of choices representing the possible completions
+    /// for the input provided to the chat model.
+    /// </summary>
     public class ChatCompletionsResponse
     {
+        /// <summary>
+        /// Gets or sets the list of choices provided by the API.
+        /// Each choice represents a different possible completion
+        /// returned by ChatGPT based on the input prompt.
+        /// </summary>
         public List<Choice> Choices { get; set; }
     }
 
+    /// <summary>
+    /// Represents a single choice in the completions response.
+    /// Each choice contains the reason for the completion's finish state
+    /// and the chat message which includes the generated text.
+    /// </summary>
     public class Choice
     {
+        /// <summary>
+        /// Gets or sets the reason why the completion ended.
+        /// The 'finish_reason' provides information about why the model
+        /// stopped generating further text, such as reaching the maximum length
+        /// or the model determining it has completed the content.
+        /// </summary>
         public string finish_reason { get; set; }
+        /// <summary>
+        /// Gets or sets the chat message which is the generated completion
+        /// from the ChatGPT model. This contains the actual text that was
+        /// generated in response to the input prompt.
+        /// </summary>
         public chatMessage Message { get; set; }
     }
 
+    /// <summary>
+    /// Represents the response structure for the ChatGPT Moderation API.
+    /// This class captures the data returned from the moderation service,
+    /// which includes a list of results. Each result indicates whether
+    /// the content was flagged and provides details about various moderation categories.
+    /// </summary>
     public class ModerationResponse
     {
+        /// <summary>
+        /// Gets or sets the list of moderation results.
+        /// Each 'Result' object contains detailed information about the moderation
+        /// analysis, including whether the message was flagged and specific category
+        /// scores that indicate the likelihood of the content falling into those categories.
+        /// </summary>
         public List<Result> Results { get; set; }
     }
 
+    /// <summary>
+    /// Represents a single result in the moderation response.
+    /// This contains the outcome of the moderation check for a piece of content,
+    /// indicating if it was flagged based on certain criteria.
+    /// </summary>
     public class Result
     {
+        /// <summary>
+        /// Gets or sets a value indicating whether the content was flagged
+        /// by the moderation system. A 'true' value means the content was flagged
+        /// as potentially problematic, while 'false' means it was not flagged.
+        /// </summary>
         public bool Flagged { get; set; }
+        /// <summary>
+        /// Gets or sets a dictionary where each key represents a moderation category,
+        /// and the corresponding boolean value indicates whether the content falls
+        /// into that category (true for yes, false for no).
+        /// </summary>
         public Dictionary<string, bool> Categories { get; set; }
+        /// <summary>
+        /// Gets or sets a dictionary where each key is a moderation category,
+        /// and the corresponding double value represents the score or likelihood
+        /// that the content belongs to that category, according to the moderation model.
+        /// </summary>
         public Dictionary<string, double> Category_scores { get; set; }
     }
 
+    /// <summary>
+    /// Represents a user record from the https://pronouns.alejo.io/ API.
+    /// This model captures the pronoun preferences for a Twitch user as specified
+    /// in their profile, which can be processed and displayed alongside their username.
+    /// </summary>
     public class PronounUser
     {
+        /// <summary>
+        /// Gets or sets the Twitch ID of the user. This is a unique identifier
+        /// for the user on the Twitch platform.
+        /// </summary>
         public string id { get; set; }
+        /// <summary>
+        /// Gets or sets the Twitch username (login) of the user. This is the user's
+        /// handle on Twitch, which is used for logging in and is displayed in the chat.
+        /// </summary>
         public string login { get; set; }
+        /// <summary>
+        /// Gets or sets the pronoun set identifier for the user. This is a compact,
+        /// concatenated string like "hehim" that represents the user's pronoun preferences.
+        /// It will be processed in later methods to format into a more readable form such as "He/Him."
+        /// </summary>
         public string pronoun_id { get; set; }
     }
 
+    /// <summary>
+    /// Represents an individual data record for a broadcaster's stream.
+    /// This class holds information about the stream, including details about
+    /// the broadcaster, the game being played, and the stream's metadata.
+    /// </summary>
     public class Datum
     {
+        /// <summary>
+        /// Gets or sets the Twitch ID of the broadcaster.
+        /// </summary>
         public string broadcaster_id { get; set; }
+        /// <summary>
+        /// Gets or sets the login name of the broadcaster on Twitch.
+        /// </summary>
         public string broadcaster_login { get; set; }
+        /// <summary>
+        /// Gets or sets the display name of the broadcaster on Twitch.
+        /// </summary>
         public string broadcaster_name { get; set; }
+        /// <summary>
+        /// Gets or sets the language of the broadcaster's stream.
+        /// </summary>
         public string broadcaster_language { get; set; }
+        /// <summary>
+        /// Gets or sets the game ID for the game being played on the stream.
+        /// </summary>
         public string game_id { get; set; }
+        /// <summary>
+        /// Gets or sets the name of the game being played.
+        /// </summary>
         public string game_name { get; set; }
+        /// <summary>
+        /// Gets or sets the title of the stream.
+        /// </summary>
         public string title { get; set; }
+        /// <summary>
+        /// Gets or sets the delay of the stream in seconds.
+        /// </summary>
         public int delay { get; set; }
     }
 
+    /// <summary>
+    /// Represents the root object for the JSON response that contains
+    /// the list of data records related to broadcaster streams.
+    /// </summary>
     public class Root
     {
+        /// <summary>
+        /// Gets or sets the list of 'Datum' objects representing each
+        /// individual stream's data returned from the API.
+        /// </summary>
         public List<Datum> data { get; set; }
     }
 
+    /// <summary>
+    /// Represents a simplified model that encapsulates specific information
+    /// about a broadcaster's stream, such as the user's name, the game name,
+    /// and the stream's title.
+    /// </summary>
     public class AllDatas
     {
+        /// <summary>
+        /// Gets or sets the username of the broadcaster.
+        /// </summary>
         public string UserName { get; set; }
+        /// <summary>
+        /// Gets or sets the name of the game that is currently being played on the stream.
+        /// </summary>
         public string gameName { get; set; }
+        /// <summary>
+        /// Gets or sets the title of the stream.
+        /// </summary>
         public string titleName { get; set; }
     }
 
+    /// <summary>
+    /// Represents a chat message from Twitch, capturing both the user's role and their message content.
+    /// This class is tailored for preparing the message to be sent to the Chat Completions API, 
+    /// which uses the role and content to generate contextually appropriate responses.
+    /// The ToString method has been overridden to provide a meaningful string representation
+    /// for logging purposes, which includes the role of the user and the message content.
+    /// </summary>
+    public class chatMessage
+    {
+        /// <summary>
+        /// Gets or sets the role of the Twitch user who sent the message.
+        /// This property is important for the Chat Completions API to understand the context of the message,
+        /// as different roles may receive different types of responses based on their privileges or status within the chat.
+        /// </summary>
+        public string role { get; set; }
+        /// <summary>
+        /// Gets or sets the text content of the Twitch chat message.
+        /// The content is used by the Chat Completions API to generate a response that is coherent
+        /// and relevant to the discussion at hand.
+        /// </summary>
+        public string content { get; set; }
+
+        /// <summary>
+        /// Overrides the default ToString method to provide a string representation of the chat message.
+        /// This representation includes the user's role and the content of the message, which can be used
+        /// for logging or debugging purposes to easily understand the nature of the message.
+        /// </summary>
+        /// <returns>A string that represents the current object, formatted as "Role: [role], Content: [content]".</returns>
+        public override string ToString()
+        {
+            return $"Role: {role}, Content: {content}";
+        }
+    }
+
+    // Helper class to store pronouns with an expiration date./// <summary>
+    /// Represents a cache entry for a user's pronouns, including the formatted pronouns and the expiration date of the cache.
+    /// </summary>
+    public class PronounCacheEntry
+    {
+        /// <summary>
+        /// Gets or sets the formatted string of the user's pronouns.
+        /// </summary>
+        public string FormattedPronouns { get; set; }
+        /// <summary>
+        /// Gets or sets the expiration date and time of the cached pronouns.
+        /// </summary>
+        public DateTime Expiration { get; set; }
+    }
+
+    /// <summary>
+    /// Queues a chat message into a chat log, ensuring the log does not exceed a specified size.
+    /// </summary>
+    /// <param name = "chatMsg">The chat message to enqueue.</param>
     private void QueueMessage(chatMessage chatMsg)
     {
+        // Log that we've entered the method
+        LogToFile($"Entering QueueMessage with chatMsg: {chatMsg}", "DEBUG");
         try
         {
+            // Log the action of enqueuing a message
+            LogToFile($"Enqueuing chat message: {chatMsg}", "INFO");
             ChatLog.Enqueue(chatMsg);
+            // Log the status of the queue after enqueuing
+            LogToFile($"ChatLog Count after enqueuing: {ChatLog.Count}", "DEBUG");
             if (ChatLog.Count > 20)
             {
+                // Log the message about to be dequeued
+                chatMessage dequeuedMessage = ChatLog.Peek(); // Peek to see what will be dequeued
+                LogToFile($"Dequeuing chat message to maintain queue size: {dequeuedMessage}", "DEBUG");
                 ChatLog.Dequeue();
-                CPH.LogInfo("Successfully dequeued a chat message to maintain the queue size.");
+                // Log the status of the queue after dequeuing
+                LogToFile($"ChatLog Count after dequeuing: {ChatLog.Count}", "DEBUG");
             }
         }
         catch (Exception ex)
         {
-            CPH.LogError($"An error occurred while dequeuing a chat message: {ex.Message}");
+            // Log the error
+            LogToFile($"An error occurred while enqueuing or dequeuing a chat message: {ex.Message}", "ERROR");
         }
     }
 
-    public class chatMessage
-    {
-        public string role { get; set; }
-        public string content { get; set; }
-    }
-
-    // Begin initialization
+    /// <summary>
+    /// Initializes the PNGTuber-GPT application and logs successful setup.
+    /// </summary>
+    /// <returns>Returns true to indicate successful execution.</returns>
     public bool Execute()
     {
-        CPH.LogInfo("Initialization of PNGTuber-GPT successful.");
+        // Log the start of the initialization process.
+        LogToFile("Starting initialization of the PNGTuber-GPT application.", "INFO");
+        // Since the method only returns true and no other action is taken, log the successful setup.
+        LogToFile("Initialization of PNGTuber-GPT successful. Added all global variables to memory.", "INFO");
+        // Log the start of the version number retrieval process.
+        LogToFile("Starting to retrieve the version number from a global variable.", "DEBUG");
+        // Retrieve the version number from a global variable.
+        string initializeVersionNumber = CPH.GetGlobalVar<string>("Version", true);
+        // Log the retrieved version number for debugging purposes.
+        LogToFile($"Retrieved version number: {initializeVersionNumber}", "DEBUG");
+        // Check if the version number was successfully retrieved.
+        if (string.IsNullOrWhiteSpace(initializeVersionNumber))
+        {
+            // Log an error if the version number is not found or is empty.
+            LogToFile("The 'Version' global variable is not found or is empty.", "ERROR");
+            return false;
+        }
+
+        // Log the sending of the version number to the chat for debugging purposes.
+        LogToFile($"Sending version number to chat: {initializeVersionNumber}", "DEBUG");
+        // Send the version number to the chat.
+        CPH.SendMessage($"{initializeVersionNumber} has been initialized successfully.", true);
+        // Log the result of sending the version number.
+        LogToFile("Version number sent to chat successfully.", "INFO");
+        // Return true to indicate the version number has been sent successfully.
+        return true;
         return true;
     }
 
+    /// <summary>
+    /// Retrieves a Twitch user's nickname appended with their pronouns. If the pronouns are not cached,
+    /// it fetches them from an external API and updates the cache. If the preferred username file does not exist,
+    /// it creates a default file.
+    /// </summary>
+    /// <returns>True if the nickname with pronouns is successfully retrieved and set; otherwise, false.</returns>
     public bool GetNicknamewPronouns()
     {
+        LogToFile("Entering GetNicknamewPronouns method.", "DEBUG");
+        string userName = args["userName"].ToString();
+        LogToFile($"Retrieved 'userName': {userName}", "DEBUG");
+        if (string.IsNullOrWhiteSpace(userName))
+        {
+            LogToFile("'userName' value is either not found or not a valid string.", "ERROR");
+            return false;
+        }
+
         try
         {
-            string userName = args["userName"].ToString();
-            if (string.IsNullOrWhiteSpace(userName))
-            {
-                CPH.LogError("'userName' value is either not found or not a valid string.");
-                return false;
-            }
-
-            // Retrieve Database Path using GetGlobalVar method
-            string databasePath = CPH.GetGlobalVar<string>("Database Path");
+            // Get the path where the database is stored
+            string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
             if (string.IsNullOrWhiteSpace(databasePath))
             {
-                CPH.LogError("'Database Path' value is either not found or not a valid string.");
+                LogToFile("'Database Path' value is either not found or not a valid string.", "ERROR");
                 return false;
             }
 
-            string filePath = databasePath + "\\preferred_userNames.json";
+            // Check if the preferred usernames file exists, create if not
+            string filePath = Path.Combine(databasePath, "preferred_userNames.json");
             if (!File.Exists(filePath))
             {
+                LogToFile("'preferred_userNames.json' does not exist. Creating default file.", "WARN");
                 CreateDefaultUserNameFile(filePath);
             }
 
+            // Retrieve the preferred username
             string preferredUserName = GetPreferredUsername(userName, filePath);
             if (string.IsNullOrWhiteSpace(preferredUserName))
             {
-                CPH.LogError("Preferred user name could not be retrieved.");
+                LogToFile("Preferred user name could not be retrieved.", "ERROR");
                 return false;
             }
 
-            string pronouns = FetchPronouns(userName);
-            string pronounsFormatted = string.IsNullOrEmpty(pronouns) ? "" : $" ({pronouns})";
-            string formattedUsername = $"{preferredUserName}{pronounsFormatted}";
+            // Validate ignore list of bot names.
+            string ignoreNamesString = CPH.GetGlobalVar<string>("Ignore Bot Usernames", true);
+            if (string.IsNullOrWhiteSpace(ignoreNamesString))
+            {
+                LogToFile("'Ignore Bot Usernames' global variable is not found or not a valid string.", "ERROR");
+                return false;
+            }
+
+            // Log the list of bot usernames to ignore.
+            LogToFile($"Bot usernames to ignore: {ignoreNamesString}", "DEBUG");
+            // Process and check against the list of bot names to ignore.
+            List<string> ignoreNamesList = ignoreNamesString.Split(',').Select(name => name.Trim()).ToList();
+            if (ignoreNamesList.Contains(userName, StringComparer.OrdinalIgnoreCase))
+            {
+                LogToFile($"Message from {userName} ignored as it's in the bot ignore list.", "INFO");
+                return false;
+            }
+
+            // Retrieve or create pronouns and append them to the preferred username
+            string pronouns = GetOrCreatePronouns(userName, databasePath);
+            string formattedUsername = $"{preferredUserName}{(string.IsNullOrEmpty(pronouns) ? "" : $" ({pronouns})")}";
+            LogToFile($"Formatted 'nicknamePronouns': {formattedUsername}", "INFO");
+            // Set the formatted nickname and pronouns for further use
             CPH.SetArgument("nicknamePronouns", formattedUsername);
-            CPH.SetArgument("Pronouns", pronounsFormatted);
+            CPH.SetArgument("Pronouns", pronouns);
             return true;
         }
         catch (Exception ex)
         {
-            CPH.LogError($"An error occurred in GetFormattedUsername: {ex.Message}");
+            // Log any exceptions that occur during the method execution
+            LogToFile($"An error occurred in GetNicknamewPronouns: {ex.Message}", "ERROR");
             return false;
         }
     }
 
-    public bool GetNickname()
+    /// <summary>
+    /// Retrieves or creates the pronouns for a user. If pronouns are already cached and not expired,
+    /// it uses the cached pronouns. Otherwise, it fetches the pronouns from the external API and updates
+    /// the cache with a 24-hour expiration.
+    /// </summary>
+    /// <param name = "username">The Twitch username to retrieve or create pronouns for.</param>
+    /// <param name = "pronounsCachePath">The file path to the pronouns cache.</param>
+    /// <returns>The formatted pronouns string for the user.</returns>
+    private string GetOrCreatePronouns(string username, string databasePath)
     {
-        try
+        // Ensure that databasePath is the directory path to where pronouns.json should be stored
+        string pronounsCachePath = Path.Combine(databasePath, "pronouns.json");
+        // Check if the pronouns cache file exists, if not, create a new dictionary to store pronouns
+        Dictionary<string, PronounCacheEntry> pronounsCache = File.Exists(pronounsCachePath) ? JsonConvert.DeserializeObject<Dictionary<string, PronounCacheEntry>>(File.ReadAllText(pronounsCachePath)) : new Dictionary<string, PronounCacheEntry>();
+        // Attempt to get cached pronouns if they exist and are not expired
+        if (pronounsCache.TryGetValue(username, out PronounCacheEntry cacheEntry) && cacheEntry.Expiration > DateTime.UtcNow)
         {
-            string userName = args["userName"].ToString();
-            if (string.IsNullOrWhiteSpace(userName))
-            {
-                CPH.LogError("'userName' value is either not found or not a valid string.");
-                return false;
-            }
-
-            // Retrieve Database Path using GetGlobalVar method
-            string databasePath = CPH.GetGlobalVar<string>("Database Path");
-            if (string.IsNullOrWhiteSpace(databasePath))
-            {
-                CPH.LogError("'Database Path' value is either not found or not a valid string.");
-                return false;
-            }
-
-            string filePath = databasePath + "\\preferred_userNames.json";
-            if (!File.Exists(filePath))
-            {
-                CreateDefaultUserNameFile(filePath);
-            }
-
-            string preferredUserName = GetPreferredUsername(userName, filePath);
-            if (string.IsNullOrWhiteSpace(preferredUserName))
-            {
-                CPH.LogError("Preferred user name could not be retrieved.");
-                return false;
-            }
-
-            CPH.SetArgument("nickname", preferredUserName);
-            return true;
+            LogToFile($"Using cached pronouns for user '{username}': {cacheEntry.FormattedPronouns}", "INFO");
+            return cacheEntry.FormattedPronouns;
         }
-        catch (Exception ex)
+        else
         {
-            CPH.LogError($"An error occurred in GetFormattedUsername: {ex.Message}");
-            return false;
-        }
-    }
-
-    private void CreateDefaultUserNameFile(string filePath)
-    {
-        var defaultUser = new Dictionary<string, string>
-        {
+            // Fetch pronouns from the API and update the cache
+            string pronouns = FetchPronouns(username, databasePath);
+            if (!string.IsNullOrEmpty(pronouns))
             {
-                "DefaultUser",
-                "Default User"
-            }
-        };
-        string jsonData = JsonConvert.SerializeObject(defaultUser, Formatting.Indented);
-        File.WriteAllText(filePath, jsonData);
-    }
-
-    private string GetPreferredUsername(string currentUserName, string filePath)
-    {
-        string preferredUserName = currentUserName;
-        try
-        {
-            if (File.Exists(filePath))
-            {
-                string jsonData = File.ReadAllText(filePath);
-                var userPreferences = JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonData);
-                if (userPreferences != null && userPreferences.TryGetValue(currentUserName, out var preferredName))
+                pronounsCache[username] = new PronounCacheEntry
                 {
-                    preferredUserName = preferredName;
+                    FormattedPronouns = pronouns,
+                    Expiration = DateTime.UtcNow.AddHours(24)
+                };
+                // Save the updated cache to the file
+                try
+                {
+                    File.WriteAllText(pronounsCachePath, JsonConvert.SerializeObject(pronounsCache, Formatting.Indented));
+                    LogToFile($"Fetched and cached new pronouns for user '{username}': {pronouns}", "INFO");
+                }
+                catch (Exception ex)
+                {
+                    LogToFile($"Failed to write pronouns cache to file '{pronounsCachePath}': {ex.Message}", "ERROR");
                 }
             }
+            else
+            {
+                LogToFile($"Failed to fetch pronouns for user '{username}' and no cached pronouns were available.", "ERROR");
+            }
+
+            return pronouns;
+        }
+    }
+
+    /// <summary>
+    /// Creates a default username file with a predefined user dictionary if the file does not exist.
+    /// </summary>
+    /// <param name = "filePath">The file path where the default username file will be created.</param>
+    private void CreateDefaultUserNameFile(string filePath)
+    {
+        // Log entry into the method for debugging purposes.
+        LogToFile($"Entering CreateDefaultUserNameFile method with filePath: {filePath}", "DEBUG");
+        try
+        {
+            // Log the action of creating the default user dictionary.
+            LogToFile("Creating a default user dictionary for the username file.", "DEBUG");
+            // Create a default user dictionary to be used when the preferred usernames file is not found.
+            var defaultUser = new Dictionary<string, string>
+            {
+                {
+                    "DefaultUser",
+                    "Default User"
+                }
+            };
+            // Serialize the default user dictionary to JSON format with indentation for readability.
+            string jsonData = JsonConvert.SerializeObject(defaultUser, Formatting.Indented);
+            LogToFile("Serialized default user data to JSON.", "DEBUG");
+            // Write the JSON data to the specified file path, effectively creating the file.
+            File.WriteAllText(filePath, jsonData);
+            // Log the result of the file creation.
+            LogToFile($"Created and wrote to the file: {filePath}", "INFO");
         }
         catch (Exception ex)
         {
-            CPH.LogError($"Error reading or deserializing user preferred names: {ex.Message}");
-            // Return the original username if an error occurs
-            preferredUserName = currentUserName;
+            // Log any exceptions that occur during the file creation process.
+            LogToFile($"An error occurred while creating the default username file: {ex.Message}", "ERROR");
+        }
+    }
+
+    /// <summary>
+    /// Retrieves a user's preferred username from a JSON file. If the file exists and contains the username, the preferred username is returned; otherwise, the current username is used.
+    /// </summary>
+    /// <param name = "currentUserName">The current username to look up the preferred username for.</param>
+    /// <param name = "filePath">The file path of the JSON file containing preferred usernames.</param>
+    /// <returns>The preferred username if found, otherwise the current username.</returns>
+    private string GetPreferredUsername(string currentUserName, string filePath)
+    {
+        // Initialize the preferred username with the current username.
+        string preferredUserName = currentUserName;
+        // Log the entry into the method along with the provided parameters.
+        LogToFile($"Entering GetPreferredUsername method with currentUserName: {currentUserName} and filePath: {filePath}", "DEBUG");
+        try
+        {
+            // Check if the file with user preferences exists.
+            if (File.Exists(filePath))
+            {
+                // Read the entire content of the file.
+                string jsonData = File.ReadAllText(filePath);
+                LogToFile("Read user preferences JSON data from file.", "DEBUG");
+                // Deserialize the JSON data into a dictionary of user preferences.
+                var userPreferences = JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonData);
+                // Log the attempt to find the preferred username.
+                LogToFile($"Attempting to find preferred username for {currentUserName}.", "DEBUG");
+                // Check if the deserialization was successful and if the current user's preferred name exists.
+                if (userPreferences != null && userPreferences.TryGetValue(currentUserName, out var preferredName))
+                {
+                    // Update the preferred username with the one obtained from the file.
+                    preferredUserName = preferredName;
+                    LogToFile($"Found and set preferred username: {preferredUserName}", "DEBUG");
+                }
+                else
+                {
+                    // Log that the preferred username was not found in the file.
+                    LogToFile($"Preferred username for {currentUserName} not found in file. Using current username as preferred.", "INFO");
+                }
+            }
+            else
+            {
+                // Log that the file does not exist.
+                LogToFile($"File not found: {filePath}. Using current username as preferred.", "WARN");
+            }
+
+            // Validate ignore list of bot names.
+            string ignoreNamesString = CPH.GetGlobalVar<string>("Ignore Bot Usernames", true);
+            if (string.IsNullOrWhiteSpace(ignoreNamesString))
+            {
+                LogToFile("'Ignore Bot Usernames' global variable is not found or not a valid string.", "ERROR");
+                return preferredUserName;
+            }
+
+            // Log the list of bot usernames to ignore.
+            LogToFile($"Bot usernames to ignore: {ignoreNamesString}", "DEBUG");
+            // Process and check against the list of bot names to ignore.
+            List<string> ignoreNamesList = ignoreNamesString.Split(',').Select(name => name.Trim()).ToList();
+            if (ignoreNamesList.Contains(currentUserName, StringComparer.OrdinalIgnoreCase))
+            {
+                LogToFile($"Username {currentUserName} is in the bot ignore list. Using current username as preferred.", "DEBUG");
+                return currentUserName;
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log the exception that occurred during the process.
+            LogToFile($"Error reading or deserializing user preferred names from file: {ex.Message}", "ERROR");
         }
 
+        // Log the result of the username retrieval.
+        LogToFile($"Returning preferred or original username: {preferredUserName}", "INFO");
+        // Return the preferred or original username.
         return preferredUserName;
     }
 
+    /// <summary>
+    /// Informs the user on how to set their pronouns using an external service, sending a message with the necessary instructions.
+    /// </summary>
+    /// <returns>Returns true if the instructional message was sent successfully, otherwise false if an error occurred.</returns>
     public bool SetPronouns()
     {
-        CPH.SendMessage("You can set your pronouns at https://pronouns.alejo.io/. Your pronouns will be available via a Public API. This means that users of 7TV, FFZ, and BTTV extensions can see your pronouns in chat.", true);
-        return true;
+        // Log the entry into the SetPronouns method.
+        LogToFile("Entering SetPronouns method.", "DEBUG");
+        try
+        {
+            // Log the action of sending the pronoun setting information.
+            LogToFile("Preparing to send pronouns setting information message to user.", "DEBUG");
+            // Send a message to the user about setting their pronouns using the provided service.
+            string message = "You can set your pronouns at https://pronouns.alejo.io/. Your pronouns will be available via a Public API. This means that users of 7TV, FFZ, and BTTV extensions can see your pronouns in chat.";
+            CPH.SendMessage(message, true);
+            // Log the successful sending of the message.
+            LogToFile("!setpronouns was triggered, sent pronouns setting information message to user.", "INFO");
+            // Return true indicating the method completed successfully.
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // Log any exceptions that occur during the sending of the message.
+            LogToFile($"An error occurred in SetPronouns while sending message: {ex.Message}", "ERROR");
+            // Return false indicating the method did not complete successfully.
+            return false;
+        }
     }
 
-    private string FetchPronouns(string username)
+    private string FetchPronouns(string username, string databasePath)
     {
-        string url = $"https://pronouns.alejo.io/api/users/{username}";
-        using (var httpClient = new HttpClient())
+        LogToFile($"Entering FetchPronouns method for username: {username}", "DEBUG");
+        // Define the path for the pronouns cache.
+        string pronounsCachePath = Path.Combine(databasePath, "pronouns.json");
+        // Load the pronouns cache if it exists.
+        Dictionary<string, PronounCacheEntry> pronounsCache = LoadPronounsCache(pronounsCachePath);
+        // Check if the pronouns are cached and not expired.
+        if (pronounsCache.TryGetValue(username, out PronounCacheEntry cacheEntry) && cacheEntry.Expiration > DateTime.UtcNow)
         {
-            var response = httpClient.GetAsync(url).GetAwaiter().GetResult(); // This makes the call synchronous
-            if (response.IsSuccessStatusCode)
+            LogToFile($"Using cached pronouns for user '{username}'.", "INFO");
+            return cacheEntry.FormattedPronouns;
+        }
+
+        // If not cached or expired, fetch pronouns from the API.
+        string url = $"https://pronouns.alejo.io/api/users/{username.ToLower()}";
+        LogToFile($"Fetching pronouns from URL: {url}", "DEBUG");
+        try
+        {
+            using (var httpClient = new HttpClient())
             {
-                string jsonResponse = response.Content.ReadAsStringAsync().GetAwaiter().GetResult(); // This also makes the call synchronous
-                var users = JsonConvert.DeserializeObject<List<PronounUser>>(jsonResponse);
-                var user = users.FirstOrDefault(u => u.login.Equals(username, StringComparison.OrdinalIgnoreCase));
-                if (user != null)
+                var response = httpClient.GetAsync(url).Result;
+                if (response.IsSuccessStatusCode)
                 {
-                    return FormatPronouns(user.pronoun_id);
+                    string jsonResponse = response.Content.ReadAsStringAsync().Result;
+                    LogToFile($"Received JSON response for pronouns: {jsonResponse}", "DEBUG");
+                    var users = JsonConvert.DeserializeObject<List<PronounUser>>(jsonResponse);
+                    var user = users?.FirstOrDefault(u => u.login.Equals(username, StringComparison.OrdinalIgnoreCase));
+                    if (user != null)
+                    {
+                        string formattedPronouns = FormatPronouns(user.pronoun_id);
+                        LogToFile($"Pronouns found for {username}: {formattedPronouns}", "INFO");
+                        // Cache the new pronouns with a 24-hour expiration time.
+                        pronounsCache[username] = new PronounCacheEntry
+                        {
+                            FormattedPronouns = formattedPronouns,
+                            Expiration = DateTime.UtcNow.AddHours(24)
+                        };
+                        // Save the updated cache to the JSON file.
+                        SavePronounsCache(pronounsCache, pronounsCachePath);
+                        return formattedPronouns;
+                    }
+                    else
+                    {
+                        LogToFile($"No pronouns found for {username}.", "INFO");
+                    }
+                }
+                else
+                {
+                    LogToFile($"Failed to fetch pronouns. HTTP response status: {response.StatusCode}", "ERROR");
                 }
             }
         }
+        catch (Exception ex)
+        {
+            LogToFile($"An error occurred while fetching pronouns for {username}: {ex.Message}", "ERROR");
+        }
 
+        LogToFile($"Pronouns for {username} were not found or an error occurred.", "DEBUG");
         return null;
     }
 
+    private Dictionary<string, PronounCacheEntry> LoadPronounsCache(string path)
+    {
+        if (File.Exists(path))
+        {
+            string jsonContent = File.ReadAllText(path);
+            return JsonConvert.DeserializeObject<Dictionary<string, PronounCacheEntry>>(jsonContent) ?? new Dictionary<string, PronounCacheEntry>();
+        }
+
+        return new Dictionary<string, PronounCacheEntry>();
+    }
+
+    private void SavePronounsCache(Dictionary<string, PronounCacheEntry> cache, string path)
+    {
+        string jsonContent = JsonConvert.SerializeObject(cache, Formatting.Indented);
+        File.WriteAllText(path, jsonContent);
+        LogToFile("Pronouns cache updated.", "DEBUG");
+    }
+
+    /// <summary>
+    /// Formats a concatenated string of pronoun identifiers into a human-readable format.
+    /// </summary>
+    /// <param name = "pronounId">The concatenated string of pronouns.</param>
+    /// <returns>A formatted string with each pronoun capitalized and separated by slashes.
     private string FormatPronouns(string pronounId)
     {
+        LogToFile($"Entering FormatPronouns method with pronounId: {pronounId}", "DEBUG");
+        // Initialize a list of all possible pronouns.
         var pronounsList = new List<string>
         {
-            "he",
-            "she",
             "they",
+            "she",
+            "he",
             "xe",
             "ze",
             "ey",
             "per",
             "ve",
             "it",
+            "them",
             "him",
             "her",
-            "them",
             "hir",
             "xis",
             "zer",
@@ -278,380 +691,632 @@ public class CPHInline
             "vers",
             "its"
         };
+        // Sort the list by the length of the pronouns in descending order to prevent matching substrings of longer pronouns.
+        pronounsList.Sort((a, b) => b.Length.CompareTo(a.Length));
+        // Initialize the list that will hold the formatted pronouns.
         var formattedPronouns = new List<string>();
+        // Convert the pronounId to lowercase for case-insensitive matching.
         string remainingPronounId = pronounId.ToLower();
-        foreach (var pronoun in pronounsList)
+        LogToFile("Starting pronoun formatting.", "DEBUG");
+        // Iterate over each pronoun in the list and attempt to match them at the start of the remaining string.
+        while (!string.IsNullOrEmpty(remainingPronounId))
         {
-            string lowerCasePronoun = pronoun.ToLower();
-            if (remainingPronounId.Contains(lowerCasePronoun))
+            bool matchFound = false;
+            foreach (var pronoun in pronounsList)
             {
-                formattedPronouns.Add(CultureInfo.CurrentCulture.TextInfo.ToTitleCase(pronoun));
-                remainingPronounId = Regex.Replace(remainingPronounId, $"\\b{lowerCasePronoun}\\b", "");
+                if (remainingPronounId.StartsWith(pronoun))
+                {
+                    // Capitalize and add the pronoun to the formatted list.
+                    formattedPronouns.Add(CultureInfo.CurrentCulture.TextInfo.ToTitleCase(pronoun));
+                    // Remove the matched pronoun from the start of the remaining string.
+                    remainingPronounId = remainingPronounId.Substring(pronoun.Length);
+                    matchFound = true;
+                    LogToFile($"Matched Pronoun: {pronoun}, Remaining ID: {remainingPronounId}", "DEBUG");
+                    break; // Break out of the foreach loop since we found a match.
+                }
+            }
+
+            // If no match is found, exit the while loop to prevent an infinite loop.
+            if (!matchFound)
+            {
+                break;
             }
         }
 
-        return string.Join("/", formattedPronouns);
+        // Join the formatted pronouns into a single string separated by slashes.
+        string formattedPronounsString = string.Join("/", formattedPronouns);
+        LogToFile($"Formatted pronouns: {formattedPronounsString}", "DEBUG");
+        return formattedPronounsString;
     }
 
+    /// <summary>
+    /// Retrieves the current nickname with pronouns for a user and sends a message indicating the nickname or stating that no custom nickname is set.
+    /// </summary>
+    /// <returns>Returns true if the message was successfully sent, otherwise false if an error occurs.</returns>
     public bool GetCurrentNickname()
     {
         try
         {
-            string userName = args["userName"].ToString();
-            if (string.IsNullOrWhiteSpace(userName))
+            LogToFile("Entering GetCurrentNickname method.", "DEBUG");
+            if (args.ContainsKey("nicknamePronouns"))
             {
-                CPH.LogError("'userName' value is either not found or not a valid string.");
-                return false;
-            }
+                string nicknamePronouns = args["nicknamePronouns"].ToString();
+                LogToFile($"Retrieved 'nicknamePronouns' argument: {nicknamePronouns}", "DEBUG");
+                if (string.IsNullOrWhiteSpace(nicknamePronouns))
+                {
+                    LogToFile("'nicknamePronouns' value is either not found or not a valid string.", "ERROR");
+                    return false;
+                }
 
-            string nicknamePronouns = args["nicknamePronouns"].ToString();
-            if (string.IsNullOrWhiteSpace(nicknamePronouns))
-            {
-                CPH.LogError("'nicknamePronouns' value is either not found or not a valid string.");
-                return false;
-            }
+                string userName = args["userName"].ToString();
+                LogToFile($"Retrieved 'userName' argument: {userName}", "DEBUG");
+                if (string.IsNullOrWhiteSpace(userName))
+                {
+                    LogToFile("'userName' value is either not found or not a valid string.", "ERROR");
+                    return false;
+                }
 
-            // Split the nicknamePronouns at the first space to extract the nickname
-            string[] split = nicknamePronouns.Split(new[] { ' ' }, 2);
-            string nickname = split[0];
-            if (userName.Equals(nickname, StringComparison.OrdinalIgnoreCase))
-            {
-                // If the userName is the same as the nickname, the user hasn't set a custom nickname.
-                CPH.SendMessage($"You don't have a custom nickname set. Your username is: {nicknamePronouns}", true);
+                // Log the processing of the nickname and pronouns.
+                LogToFile("Processing the nickname and pronouns for message sending.", "DEBUG");
+                // Split the nicknamePronouns at the first space to extract the nickname
+                string[] split = nicknamePronouns.Split(new[] { ' ' }, 2);
+                string nickname = split[0];
+                if (userName.Equals(nickname, StringComparison.OrdinalIgnoreCase))
+                {
+                    // If the userName is the same as the nickname, the user hasn't set a custom nickname.
+                    CPH.SendMessage($"You don't have a custom nickname set. Your username is: {nicknamePronouns}", true);
+                    LogToFile("Informed user they don't have a custom nickname set.", "INFO");
+                }
+                else
+                {
+                    // If the userName is different from the nickname, the user has set a custom nickname.
+                    CPH.SendMessage($"Your current nickname is: {nicknamePronouns}", true);
+                    LogToFile("Sent message with the user's current nickname.", "INFO");
+                }
+
+                return true;
             }
             else
             {
-                // If the userName is different from the nickname, the user has set a custom nickname.
-                CPH.SendMessage($"Your current nickname is: {nicknamePronouns}", true);
+                LogToFile("The 'nicknamePronouns' key is missing from args.", "ERROR");
+                return false;
             }
-
-            return true;
         }
         catch (Exception ex)
         {
-            CPH.LogError($"An error occurred while getting the current nickname: {ex.Message}");
+            LogToFile($"An error occurred while getting the current nickname: {ex.Message}", "ERROR");
             return false;
         }
     }
 
+    /// <summary>
+    /// Sets the preferred username for a user and updates the user preferences file.
+    /// If any parameter is missing or invalid, or if an error occurs during file operations,
+    /// the function will log the error and return false.
+    /// </summary>
+    /// <returns>True if the preferred username is set successfully, otherwise false.</returns>
     public bool SetPreferredUsername()
     {
+        LogToFile("Entering SetPreferredUsername method.", "DEBUG");
+        // Retrieve the necessary parameters from the args dictionary.
+        string userName = args["userName"]?.ToString();
+        string pronouns = args["Pronouns"]?.ToString();
+        string preferredUserNameInput = args["rawInput"]?.ToString();
+        string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
+        // Log the retrieved parameters for debugging purposes.
+        LogToFile($"Retrieved parameters: userName={userName}, Pronouns={pronouns}, rawInput={preferredUserNameInput}, Database Path={databasePath}", "DEBUG");
+        // Initial validation of the input parameters.
+        if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(databasePath) || string.IsNullOrWhiteSpace(preferredUserNameInput))
+        {
+            string missingParameter = string.IsNullOrWhiteSpace(userName) ? "userName" : string.IsNullOrWhiteSpace(databasePath) ? "Database Path" : "rawInput";
+            LogToFile($"'${missingParameter}' value is either not found or not a valid string.", "ERROR");
+            return false;
+        }
+
+        // Pronouns may be optional, so if not provided, proceed without them.
+        if (string.IsNullOrWhiteSpace(pronouns))
+        {
+            pronouns = "";
+            LogToFile("Pronouns value not found. Proceeding without pronouns.", "DEBUG");
+        }
+
+        // Construct the file path for the preferred usernames JSON file.
+        string filePath = Path.Combine(databasePath, "preferred_userNames.json");
+        LogToFile($"File path for preferred usernames: {filePath}", "DEBUG");
         try
         {
-            // Retrieve current user name
-            string userName = args["userName"].ToString();
-            if (string.IsNullOrWhiteSpace(userName))
-            {
-                CPH.LogError("'userName' value is either not found or not a valid string.");
-                return false;
-            }
-
-            string pronouns = args["Pronouns"].ToString();
-            if (string.IsNullOrWhiteSpace(pronouns))
-            {
-                CPH.LogError("'Pronouns' value is either not found or not a valid string.");
-            }
-
-            // Retrieve the preferred user name
-            if (!args.ContainsKey("rawInput"))
-            {
-                CPH.LogError("Key 'rawInput' not found in args.");
-                return false;
-            }
-
-            string preferredUserNameInput = args["rawInput"].ToString();
-            if (string.IsNullOrWhiteSpace(preferredUserNameInput))
-            {
-                CPH.LogError("Preferred user name input is either not found or not a valid string.");
-                return false;
-            }
-
-            // Retrieve Database Path using GetGlobalVar method
-            string databasePath = CPH.GetGlobalVar<string>("Database Path");
-            if (string.IsNullOrWhiteSpace(databasePath))
-            {
-                CPH.LogError("'Database Path' value is either not found or not a valid string.");
-                return false;
-            }
-
-            string filePath = databasePath + "\\preferred_userNames.json";
-            // Check if the file exists, if not, create it
-            Dictionary<string, string> userPreferences;
-            if (!File.Exists(filePath))
-            {
-                userPreferences = new Dictionary<string, string>
-                {
-                    {
-                        "DefaultUser",
-                        "Default User"
-                    }
-                };
-            }
-            else
-            {
-                string jsonData = File.ReadAllText(filePath);
-                userPreferences = JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonData);
-            }
-
-            // Update the preferred user name
+            // Check if the file exists, if not, create it or read existing user preferences.
+            Dictionary<string, string> userPreferences = File.Exists(filePath) ? JsonConvert.DeserializeObject<Dictionary<string, string>>(File.ReadAllText(filePath)) : new Dictionary<string, string>();
+            // Update or add the preferred username for the current user.
             userPreferences[userName] = preferredUserNameInput;
-            // Write the updated user preferences back to the file
+            LogToFile($"Set preferred username for '{userName}' to '{preferredUserNameInput}'.", "DEBUG");
+            // Write the updated user preferences back to the file.
             File.WriteAllText(filePath, JsonConvert.SerializeObject(userPreferences, Formatting.Indented));
-            CPH.SendMessage($"{userName} your nickname has been set to {preferredUserNameInput}{pronouns}.", true);
+            LogToFile("Updated user preferences file successfully.", "INFO");
+            // Send a confirmation message to the user.
+            string message = $"{userName}, your nickname has been set to {preferredUserNameInput} ({pronouns}).";
+            CPH.SendMessage(message, true);
+            LogToFile($"Sent confirmation message to user: {message}", "INFO");
             return true;
         }
         catch (Exception ex)
         {
-            // Retrieve current user name
-            string userName = args["userName"].ToString();
-            if (string.IsNullOrWhiteSpace(userName))
-            {
-                CPH.LogError("'userName' value is either not found or not a valid string.");
-                return false;
-            }
-
-            CPH.LogError($"An error occurred in SetPreferredUsername: {ex.Message}");
-            CPH.SendMessage($"{userName} I was unable to set your nickname. Please try again later.", true);
+            // Log any exceptions that occur during the process and notify the user.
+            LogToFile($"An error occurred while setting the preferred username: {ex.Message}", "ERROR");
+            string errorMessage = $"{userName}, I was unable to set your nickname. Please try again later.";
+            CPH.SendMessage(errorMessage, true);
+            LogToFile($"Sent error message to user: {errorMessage}", "INFO");
             return false;
         }
     }
 
+    /// <summary>
+    /// Removes the preferred nickname for a user from the keyword contexts file and confirms the action in chat.
+    /// </summary>
+    /// <returns>Returns true if the nickname was successfully removed, otherwise false.</returns>
+    public bool RemoveNick()
+    {
+    	LogToFile("Entering RemoveNick method.", "DEBUG");
+        try
+        {
+            string userName = args["userName"].ToString();
+            LogToFile($"Attempting to remove nickname for user: {userName}", "DEBUG");
+            string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
+            string filePath = Path.Combine(databasePath, "preferred_userNames.json");
+            if (!File.Exists(filePath))
+            {
+                LogToFile("The keyword contexts file does not exist. No action necessary.", "INFO");
+                CPH.SendMessage("There is no custom nickname to remove.", true);
+                return true;
+            }
+
+            var keywordContexts = JsonConvert.DeserializeObject<Dictionary<string, string>>(File.ReadAllText(filePath));
+            if (keywordContexts != null && keywordContexts.ContainsKey(userName))
+            {
+                keywordContexts.Remove(userName);
+                File.WriteAllText(filePath, JsonConvert.SerializeObject(keywordContexts, Formatting.Indented));
+                LogToFile($"Removed nickname for user: {userName}", "INFO");
+                CPH.SendMessage($"The custom nickname for {userName} has been removed.", true);
+            }
+            else
+            {
+                LogToFile($"No custom nickname found for user: {userName}", "INFO");
+                CPH.SendMessage($"There was no custom nickname set for {userName}.", true);
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"An error occurred while removing the nickname: {ex.Message}", "ERROR");
+            CPH.SendMessage("An error occurred while attempting to remove the custom nickname. Please try again later.", true);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Removes the keyword from the keyword contexts file and confirms the action in chat.
+    /// </summary>
+    /// <returns>Returns true if the keyword was successfully removed, otherwise false.</returns>
+    public bool ForgetThis()
+    {
+    	LogToFile("Entering ForgetThis method.", "DEBUG");
+        try
+        {
+            string keywordToRemove = args["inputRaw"].ToString();
+            LogToFile($"Attempting to remove definition for keyword: {keywordToRemove}", "DEBUG");
+            string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
+            string filePath = Path.Combine(databasePath, "keyword_contexts.json");
+            if (!File.Exists(filePath))
+            {
+                LogToFile("The keyword contexts file does not exist. No action necessary.", "INFO");
+                CPH.SendMessage("I don't have a definition for the specified keyword.", true);
+                return true;
+            }
+
+            var keywordContexts = JsonConvert.DeserializeObject<Dictionary<string, string>>(File.ReadAllText(filePath));
+            if (keywordContexts != null && keywordContexts.ContainsKey(keywordToRemove))
+            {
+                keywordContexts.Remove(keywordToRemove);
+                File.WriteAllText(filePath, JsonConvert.SerializeObject(keywordContexts, Formatting.Indented));
+                LogToFile($"Removed definition for keyword: {keywordToRemove}", "INFO");
+                CPH.SendMessage($"The definition for {keywordToRemove} has been removed.", true);
+            }
+            else
+            {
+                LogToFile($"No definition found for keyword: {keywordToRemove}", "INFO");
+                CPH.SendMessage($"There was no definition set for {keywordToRemove}.", true);
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            string ErrorKeywordToRemove = args["inputRaw"].ToString();
+            LogToFile($"An error occurred while removing the definition for {ErrorKeywordToRemove}: {ex.Message}", "ERROR");
+            CPH.SendMessage("An error occurred while attempting to remove the definition for {ErrorKeywordToRemove}. Please try again later.", true);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Removes the username from the keyword contexts file and confirms the action in chat.
+    /// </summary>
+    /// <returns>Returns true if the username was successfully removed, otherwise false.</returns>
+    public bool ForgetThisAboutMe()
+    {
+    	LogToFile("Entering ForgetThisAboutMe method.", "DEBUG");
+        try
+        {
+            string userName = args["userName"].ToString();
+            LogToFile($"Attempting to remove memory for username: {userName}", "DEBUG");
+            string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
+            string filePath = Path.Combine(databasePath, "keyword_contexts.json");
+            if (!File.Exists(filePath))
+            {
+                LogToFile("The keyword contexts file does not exist. No action necessary.", "INFO");
+                CPH.SendMessage("I don't have a memory set for you.", true);
+                return true;
+            }
+
+            var keywordContexts = JsonConvert.DeserializeObject<Dictionary<string, string>>(File.ReadAllText(filePath));
+            if (keywordContexts != null && keywordContexts.ContainsKey(userName))
+            {
+                keywordContexts.Remove(userName);
+                File.WriteAllText(filePath, JsonConvert.SerializeObject(keywordContexts, Formatting.Indented));
+                LogToFile($"Removed memory for username: {userName}", "INFO");
+                CPH.SendMessage($"The memory for {userName} has been removed.", true);
+            }
+            else
+            {
+                LogToFile($"No memory found for username: {userName}", "INFO");
+                CPH.SendMessage($"There was no memory set for {userName}.", true);
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            string errorUserName = args["userName"].ToString();
+            LogToFile($"An error occurred while removing the memory for {errorUserName}: {ex.Message}", "ERROR");
+            CPH.SendMessage("An error occurred while attempting to remove the memory for {errorUserName}. Please try again later.", true);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Retrieves the stored information for a user from the keyword contexts file and posts it to the chat.
+    /// </summary>
+    /// <returns>Returns true if information is successfully retrieved and sent to chat, otherwise false.</returns>
+    public bool GetMemory()
+    {
+    	LogToFile("Entering GetMemory method.", "DEBUG");
+        try
+        {
+            string userName = args["userName"].ToString();
+            string nicknamePronouns = args["nicknamePronouns"].ToString();
+            LogToFile($"Attempting to retrieve stored information for user: {userName}", "DEBUG");
+            string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
+            string filePath = Path.Combine(databasePath, "keyword_contexts.json");
+            // Check if the keyword contexts file exists
+            if (!File.Exists(filePath))
+            {
+                LogToFile("The keyword contexts file does not exist. No information to retrieve.", "WARN");
+                CPH.SendMessage("No information has been stored for you, {nicknamePronouns}", true);
+                return true;
+            }
+
+            var keywordContexts = JsonConvert.DeserializeObject<Dictionary<string, string>>(File.ReadAllText(filePath));
+            // Check if there's an entry for the user
+            if (keywordContexts != null && keywordContexts.TryGetValue(userName, out string storedInfo))
+            {
+                LogToFile($"Retrieved stored information for user: {userName}", "INFO");
+                CPH.SendMessage($"Here's what I remember about you, {nicknamePronouns}: {storedInfo}", true);
+            }
+            else
+            {
+                LogToFile($"No information found for user: {userName}", "INFO");
+                CPH.SendMessage($"I don't have any information stored for you, {nicknamePronouns}.", true);
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"An error occurred while retrieving stored information: {ex.Message}", "ERROR");
+            CPH.SendMessage("An error occurred while attempting to retrieve stored information. Please try again later.", true);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Saves a user's message to a queue unless it's a command or from a bot. It also handles initialization of the queue if needed.
+    /// </summary>
+    /// <returns>True if the message is successfully saved, otherwise false.</returns>
     public bool SaveMessage()
     {
-        // Check if the message starts with "!"
-        string msg = args["rawInput"].ToString();
-        if (string.IsNullOrWhiteSpace(msg))
+        LogToFile("Entering SaveMessage method.", "DEBUG");
+        // Retrieve the message from the args dictionary.
+        string msg = args["rawInput"]?.ToString();
+        string userName = args["userName"]?.ToString();
+        string ignoreNamesString = CPH.GetGlobalVar<string>("Ignore Bot Usernames", true);
+        // Initial validation of the message and username.
+        if (string.IsNullOrWhiteSpace(msg) || string.IsNullOrWhiteSpace(userName))
         {
-            CPH.LogError("'rawInput' value is either not found or not a valid string.");
+            LogToFile($"'rawInput' or 'userName' value is not found or not a valid string. rawInput: {msg}, userName: {userName}", "ERROR");
             return false;
         }
 
+        // Log the message and username retrieved.
+        LogToFile($"Retrieved message: {msg}, from user: {userName}", "INFO");
+        // Check if the message starts with "!" indicating a command.
         if (msg.StartsWith("!"))
         {
-            CPH.LogInfo("Ignoring message because it contains a command.");
+            LogToFile("Message is a command and will be ignored.", "INFO");
             return false;
         }
 
-        // Retrieve bot names to ignore
-        string ignoreNamesString = CPH.GetGlobalVar<string>("Ignore Bot Usernames", true);
+        // Validate ignore list of bot names.
         if (string.IsNullOrWhiteSpace(ignoreNamesString))
         {
-            CPH.LogError("'Ignore Bot Usernames' value is either not found or not a valid string.");
+            LogToFile("'Ignore Bot Usernames' global variable is not found or not a valid string.", "ERROR");
             return false;
         }
 
-        // Retrieve current user name
-        string userName = args["userName"].ToString();
-        if (string.IsNullOrWhiteSpace(userName))
-        {
-            CPH.LogError("'userName' value is either not found or not a valid string.");
-            return false;
-        }
-
-        // Process list of bot names to ignore
-        List<string> ignoreNamesList = new List<string>(ignoreNamesString.Split(','));
-        ignoreNamesList = ignoreNamesList.Select(name => name.Trim()).ToList();
-        // Check if the current userName exists in the ignore list
+        // Log the list of bot usernames to ignore.
+        LogToFile($"Bot usernames to ignore: {ignoreNamesString}", "DEBUG");
+        // Process and check against the list of bot names to ignore.
+        List<string> ignoreNamesList = ignoreNamesString.Split(',').Select(name => name.Trim()).ToList();
         if (ignoreNamesList.Contains(userName, StringComparer.OrdinalIgnoreCase))
         {
-            CPH.LogInfo("Ignoring message from bot.");
+            LogToFile($"Message from {userName} ignored as it's in the bot ignore list.", "INFO");
             return false;
         }
 
-        // Retrieve formatted user name or fall back to userName
+        // Retrieve formatted user name with pronouns.
         string nicknamePronouns = args.ContainsKey("nicknamePronouns") && !string.IsNullOrWhiteSpace(args["nicknamePronouns"].ToString()) ? args["nicknamePronouns"].ToString() : userName;
-        // If formattedUserName is not found, log an error
-        if (nicknamePronouns == userName)
-        {
-            CPH.LogError("Nickname with pronouns was not found. Falling back to userName.");
-        }
-
-        // Initialize ChatLog if it's null
+        // Log the retrieval of the formatted user name.
+        LogToFile($"Retrieved formatted nickname with pronouns: {nicknamePronouns}", "DEBUG");
+        // Initialize ChatLog if it's null.
         if (ChatLog == null)
         {
             ChatLog = new Queue<chatMessage>();
-            CPH.LogInfo("ChatLog queue has been initialized.");
+            LogToFile("ChatLog queue has been initialized.", "DEBUG");
         }
 
-        // Retrieve the message content
-        if (!args.ContainsKey("rawInput"))
-        {
-            CPH.LogError("Key 'rawInput' not found in args.");
-            return false;
-        }
-
-        // Queue the message
-        string messageContent = $"Queued message - {nicknamePronouns} says {msg}";
-        CPH.LogInfo(messageContent);
+        // Prepare the message to be queued.
+        string messageContent = $"{nicknamePronouns} says: {msg}";
+        LogToFile($"Preparing to queue message: {messageContent}", "DEBUG");
+        // Create and queue the chat message.
         chatMessage chatMsg = new chatMessage
         {
             role = "user",
-            content = $"-{nicknamePronouns} says {msg}"};
+            content = messageContent
+        };
         QueueMessage(chatMsg);
-        // Sleep for 500ms
+        // Log that the message has been queued.
+        LogToFile($"Message queued successfully: {messageContent}", "INFO");
+        // Optionally, sleep for a short duration if required for rate limiting or other purposes.
         System.Threading.Thread.Sleep(250);
         return true;
     }
 
-    // Clear Chat History
+    /// <summary>
+    /// Clears the chat history queue and logs the action.
+    /// </summary>
+    /// <returns>True if the chat history is cleared successfully, otherwise false.</returns>
     public bool ClearChatHistory()
     {
+        LogToFile("Attempting to clear chat history.", "DEBUG");
+        // Verify if ChatLog is initialized before attempting to clear it.
+        if (ChatLog == null)
+        {
+            LogToFile("ChatLog is not initialized and cannot be cleared.", "ERROR");
+            CPH.SendMessage("Chat history is already empty.", true);
+            return false;
+        }
+
         try
         {
+            // Clear the chat history queue.
             ChatLog.Clear();
-            CPH.LogInfo("Chat history has been successfully cleared.");
+            LogToFile("Chat history has been successfully cleared.", "INFO");
+            // Inform the chat that the history has been cleared.
             CPH.SendMessage("Chat history has been cleared.", true);
             return true;
         }
         catch (Exception ex)
         {
-            CPH.LogError($"An error occurred while clearing the chat history: {ex.Message}");
-            CPH.SendMessage("I was unable to clear the chat history. Check the log file for more details.", true);
+            // Log any exceptions that occur and notify the chat.
+            LogToFile($"An error occurred while clearing the chat history: {ex.Message}", "ERROR");
+            CPH.SendMessage("I was unable to clear the chat history. Please check the log file for more details.", true);
             return false;
         }
     }
 
+    /// <summary>
+    /// Evaluates a message against moderation preferences and performs appropriate actions based on the moderation results.
+    /// </summary>
+    /// <returns>True if the message passes moderation, otherwise false.</returns>
     public bool PerformModeration()
     {
+        LogToFile("Entering PerformModeration method.", "DEBUG");
+        // Retrieve the raw input message from the args dictionary safely.
+        string input = args["rawInput"]?.ToString();
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            LogToFile("'rawInput' value is either not found or not a valid string.", "ERROR");
+            return false;
+        }
+
+        LogToFile($"Message for moderation: {input}", "INFO");
+        // Load global variables for moderation preferences and construct exclusion list.
+        var preferences = LoadModerationPreferences();
+        var excludedCategories = preferences.Where(p => p.Value).Select(p => p.Key.Replace("_allowed", "").Replace("_", "/")).ToList();
+        LogToFile($"Excluded categories for moderation: {string.Join(", ", excludedCategories)}", "DEBUG");
         try
         {
-            string input = args["rawInput"].ToString();
-            if (string.IsNullOrWhiteSpace(input))
-            {
-                CPH.LogError("'rawInput' value is either not found or not a valid string.");
-                return false;
-            }
-
-            // Load global variables for moderation preferences
-            var preferences = new Dictionary<string, bool>
-            {
-                {
-                    "hate_allowed",
-                    CPH.GetGlobalVar<bool>("hate_allowed")
-                },
-                {
-                    "hate_threatening_allowed",
-                    CPH.GetGlobalVar<bool>("hate_threatening_allowed")
-                },
-                {
-                    "self_harm_allowed",
-                    CPH.GetGlobalVar<bool>("self_harm_allowed")
-                },
-                {
-                    "self_harm_intent_allowed",
-                    CPH.GetGlobalVar<bool>("self_harm_intent_allowed")
-                },
-                {
-                    "self_harm_instructions_allowed",
-                    CPH.GetGlobalVar<bool>("self_harm_instructions_allowed")
-                },
-                {
-                    "harassment_allowed",
-                    CPH.GetGlobalVar<bool>("harassment_allowed")
-                },
-                {
-                    "harassment_threatening_allowed",
-                    CPH.GetGlobalVar<bool>("harassment_threatening_allowed")
-                },
-                {
-                    "sexual_allowed",
-                    CPH.GetGlobalVar<bool>("sexual_allowed")
-                },
-                {
-                    "sexual_minors_allowed",
-                    CPH.GetGlobalVar<bool>("sexual_minors_allowed")
-                },
-                {
-                    "violence_allowed",
-                    CPH.GetGlobalVar<bool>("violence_allowed")
-                },
-                {
-                    "violence_graphic_allowed",
-                    CPH.GetGlobalVar<bool>("violence_graphic_allowed")
-                }
-            };
-            var excludedCategories = preferences.Where(p => p.Value).Select(p => p.Key.Replace("_allowed", "").Replace("_", "/")).ToList();
+            // Call the moderation endpoint with the message and excluded categories.
             List<string> flaggedCategories = CallModerationEndpoint(input, excludedCategories.ToArray());
             if (flaggedCategories == null)
             {
-                CPH.LogError("Moderation endpoint failed to respond or responded with an error.");
+                LogToFile("Moderation endpoint failed to respond or responded with an error.", "ERROR");
                 return false;
             }
 
-            if (flaggedCategories.Any())
-            {
-                string flaggedCategoriesString = string.Join(", ", flaggedCategories);
-                string outputMessage = $"Your message was flagged in the following categories: {flaggedCategoriesString}. Repeated attempts at abuse may result in a ban.";
-                string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
-                if (string.IsNullOrWhiteSpace(voiceAlias))
-                {
-                    CPH.LogError("'Voice Alias' global variable is not found or not a valid string.");
-                    CPH.SendMessage("I was unable to speak that message. Check the log for the error.", true);
-                    return false;
-                }
-
-                int speakResult = CPH.TtsSpeak(voiceAlias, outputMessage, false);
-                CPH.LogInfo(outputMessage);
-                CPH.SendMessage(outputMessage, true);
-                return false;
-            }
-            else
-            {
-                CPH.SetArgument("moderatedMessage", input);
-                return true;
-            }
+            // Handle the response from the moderation endpoint.
+            bool moderationResult = HandleModerationResponse(flaggedCategories, input);
+            LogToFile($"Moderation result: {(moderationResult ? "Passed" : "Failed")}", "INFO");
+            return moderationResult;
         }
         catch (Exception ex)
         {
-            CPH.LogError($"An error occurred in PerformModeration: {ex.Message}");
+            // Log any exceptions that occur during the moderation process.
+            LogToFile($"An error occurred in PerformModeration: {ex.Message}", "ERROR");
             return false;
         }
     }
 
+    /// <summary>
+    /// Loads the moderation preferences from global variables.
+    /// </summary>
+    /// <returns>Dictionary of moderation preferences.</returns>
+    private Dictionary<string, bool> LoadModerationPreferences()
+    {
+        LogToFile("Loading moderation preferences.", "DEBUG");
+        // Define the list of preferences to load.
+        string[] preferenceKeys = new string[]
+        {
+            "hate_allowed",
+            "hate_threatening_allowed",
+            "self_harm_allowed",
+            "self_harm_intent_allowed",
+            "self_harm_instructions_allowed",
+            "harassment_allowed",
+            "harassment_threatening_allowed",
+            "sexual_allowed",
+            "sexual_minors_allowed",
+            "violence_allowed",
+            "violence_graphic_allowed"
+        };
+        // Load each preference into a dictionary.
+        var preferences = new Dictionary<string, bool>();
+        foreach (var key in preferenceKeys)
+        {
+            bool value = CPH.GetGlobalVar<bool>(key, false);
+            preferences.Add(key, value);
+            LogToFile($"Loaded moderation preference: {key} is set to {value}.", "DEBUG");
+        }
+
+        return preferences;
+    }
+
+    /// <summary>
+    /// Handles the moderation response by logging the results and informing the user if necessary.
+    /// </summary>
+    /// <param name = "flaggedCategories">The categories in which the message was flagged.</param>
+    /// <param name = "input">The original message that was moderated.</param>
+    /// <returns>True if the message was not flagged, otherwise false.</returns>
+    private bool HandleModerationResponse(List<string> flaggedCategories, string input)
+    {
+        if (flaggedCategories.Any())
+        {
+            string flaggedCategoriesString = string.Join(", ", flaggedCategories);
+            string outputMessage = $"This message was flagged in the following categories: {flaggedCategoriesString}. Repeated attempts at abuse may result in a ban.";
+            LogToFile(outputMessage, "INFO");
+            // Attempt to retrieve the voice alias for TTS.
+            string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
+            if (string.IsNullOrWhiteSpace(voiceAlias))
+            {
+                LogToFile("'Voice Alias' global variable is not found or not a valid string.", "ERROR");
+                return false;
+            }
+
+            // Speak out the moderation result using TTS.
+            int speakResult = CPH.TtsSpeak(voiceAlias, outputMessage, false);
+            LogToFile($"TTS speak result: {speakResult}", "DEBUG");
+            // Inform the user in the chat about the moderation result.
+            CPH.SendMessage(outputMessage, true);
+            return false;
+        }
+        else
+        {
+            // If the message is not flagged, set the moderated message for further use.
+            CPH.SetArgument("moderatedMessage", input);
+            LogToFile("Message passed moderation.", "DEBUG");
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Calls the OpenAI Moderation API endpoint to check the content of the provided prompt against specified moderation categories.
+    /// </summary>
+    /// <param name = "prompt">The text to be moderated.</param>
+    /// <param name = "excludedCategories">Categories to be excluded from the moderation result.</param>
+    /// <returns>A list of categories in which the prompt was flagged, or null if an error occurs.</returns>
     private List<string> CallModerationEndpoint(string prompt, string[] excludedCategories)
     {
+        LogToFile("Entering CallModerationEndpoint method.", "DEBUG");
+        // Retrieve the OpenAI API Key from global variables.
         string apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            CPH.LogError("The OpenAI API Key is not set or is invalid.");
+            LogToFile("The OpenAI API Key is not set or is invalid.", "ERROR");
             return null;
         }
 
         try
         {
+            // Define the moderation endpoint URL.
             string moderationEndpoint = "https://api.openai.com/v1/moderations";
+            // Construct the request body for moderation.
             var moderationRequestBody = new
             {
                 input = prompt
             };
-            var moderationJsonPayload = JsonConvert.SerializeObject(moderationRequestBody);
-            var moderationContentBytes = Encoding.UTF8.GetBytes(moderationJsonPayload);
+            string moderationJsonPayload = JsonConvert.SerializeObject(moderationRequestBody);
+            byte[] moderationContentBytes = Encoding.UTF8.GetBytes(moderationJsonPayload);
+            // Create the web request and set the headers.
             WebRequest moderationWebRequest = WebRequest.Create(moderationEndpoint);
             moderationWebRequest.Method = "POST";
             moderationWebRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
             moderationWebRequest.ContentType = "application/json";
             moderationWebRequest.ContentLength = moderationContentBytes.Length;
+            // Log the sending of the moderation request.
+            LogToFile("Sending moderation request to OpenAI API.", "DEBUG");
+            // Write the request payload to the request stream.
             using (Stream requestStream = moderationWebRequest.GetRequestStream())
             {
                 requestStream.Write(moderationContentBytes, 0, moderationContentBytes.Length);
             }
 
+            // Get the response from the moderation request.
             using (WebResponse moderationWebResponse = moderationWebRequest.GetResponse())
             {
                 using (Stream responseStream = moderationWebResponse.GetResponseStream())
                 {
                     using (StreamReader responseReader = new StreamReader(responseStream))
                     {
+                        // Read the response content.
                         string moderationResponseContent = responseReader.ReadToEnd();
-                        CPH.LogInfo($"Moderation Response Content: {moderationResponseContent}");
+                        LogToFile($"Received moderation response: {moderationResponseContent}", "DEBUG");
+                        // Deserialize the response content to a ModerationResponse object.
                         var moderationJsonResponse = JsonConvert.DeserializeObject<ModerationResponse>(moderationResponseContent);
+                        // Validate the moderation results.
                         if (moderationJsonResponse?.Results == null || !moderationJsonResponse.Results.Any())
                         {
-                            CPH.LogError("No moderation results were returned from the API.");
+                            LogToFile("No moderation results were returned from the API.", "ERROR");
                             return null;
                         }
 
+                        // Extract flagged categories, excluding any specified categories.
                         List<string> flaggedCategories = moderationJsonResponse.Results[0].Categories.Where(category => category.Value && !excludedCategories.Contains(category.Key)).Select(category => category.Key).ToList();
+                        // Log the moderation results.
+                        if (flaggedCategories != null && flaggedCategories.Any())
+                        {
+                            LogToFile($"Flagged categories: {string.Join(", ", flaggedCategories)}", "INFO");
+                        }
+
                         return flaggedCategories;
                     }
                 }
@@ -659,318 +1324,306 @@ public class CPHInline
         }
         catch (WebException webEx)
         {
+            // Handle any web exceptions and log the response content if available.
             using (var stream = webEx.Response?.GetResponseStream())
             using (var reader = new StreamReader(stream ?? new MemoryStream()))
             {
                 string responseContent = reader.ReadToEnd();
-                CPH.LogError($"A WebException was caught during the moderation request: {responseContent}");
+                LogToFile($"A WebException was caught during the moderation request: {responseContent}", "ERROR");
             }
 
             return null;
         }
         catch (Exception ex)
         {
-            CPH.LogError($"An exception occurred while calling the moderation endpoint: {ex.Message}");
+            // Handle general exceptions and log the error message.
+            LogToFile($"An exception occurred while calling the moderation endpoint: {ex.Message}", "ERROR");
             return null;
         }
     }
 
+    /// <summary>
+    /// Uses text-to-speech to vocalize a message with the user's preferred nickname or username.
+    /// </summary>
+    /// <returns>True if the message is spoken successfully, otherwise false.</returns>
     public bool Speak()
     {
+        LogToFile("Entering Speak method.", "DEBUG");
+        // Retrieve the voice alias for TTS from global variables.
+        string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
+        if (string.IsNullOrWhiteSpace(voiceAlias))
+        {
+            LogToFile("'Voice Alias' global variable is not found or not a valid string.", "ERROR");
+            CPH.SendMessage("I was unable to speak that message. Please check the configuration.", true);
+            return false;
+        }
+
+        // Retrieve the user's nickname or username for speaking.
+        string userToSpeak = args.ContainsKey("nickname") && !string.IsNullOrWhiteSpace(args["nickname"].ToString()) ? args["nickname"].ToString() : args.ContainsKey("userName") && !string.IsNullOrWhiteSpace(args["userName"].ToString()) ? args["userName"].ToString() : "";
+        if (string.IsNullOrWhiteSpace(userToSpeak))
+        {
+            LogToFile("Unable to retrieve a valid 'nickname' or 'userName' for speaking.", "ERROR");
+            CPH.SendMessage("I was unable to speak that message. Please check the input.", true);
+            return false;
+        }
+
+        // Retrieve the moderated message or the raw input for speaking.
+        string messageToSpeak = args.ContainsKey("moderatedMessage") && !string.IsNullOrWhiteSpace(args["moderatedMessage"].ToString()) ? args["moderatedMessage"].ToString() : args.ContainsKey("rawInput") && !string.IsNullOrWhiteSpace(args["rawInput"].ToString()) ? args["rawInput"].ToString() : "";
+        if (string.IsNullOrWhiteSpace(messageToSpeak))
+        {
+            LogToFile("Unable to retrieve a valid 'moderatedMessage' or 'rawInput' for speaking.", "ERROR");
+            CPH.SendMessage("I was unable to speak that message. Please check the input.", true);
+            return false;
+        }
+
+        // Construct the message to be spoken.
+        string outputMessage = $"{userToSpeak} said: {messageToSpeak}";
+        LogToFile($"Speaking message: {outputMessage}", "INFO");
         try
         {
-            string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
-            if (string.IsNullOrWhiteSpace(voiceAlias))
-            {
-                CPH.LogError("'Voice Alias' global variable is not found or not a valid string.");
-                CPH.SendMessage("I was unable to speak that message. Check the log for the error.", true);
-                return false;
-            }
-
-            object nicknameObj;
-            string userToSpeak = args.TryGetValue("nickname", out nicknameObj) && !string.IsNullOrWhiteSpace(nicknameObj?.ToString()) ? nicknameObj.ToString() : args.TryGetValue("userName", out nicknameObj) && !string.IsNullOrWhiteSpace(nicknameObj?.ToString()) ? nicknameObj.ToString() : "";
-            if (string.IsNullOrWhiteSpace(userToSpeak))
-            {
-                CPH.LogError("Both 'nickname' and 'userName' are not found or are empty strings.");
-                CPH.SendMessage("I was unable to speak that message. Check the log for the error.", true);
-                return false;
-            }
-
-            object messageObj;
-            string messageToSpeak = args.TryGetValue("moderatedMessage", out messageObj) && !string.IsNullOrWhiteSpace(messageObj?.ToString()) ? messageObj.ToString() : args.TryGetValue("rawInput", out messageObj) && !string.IsNullOrWhiteSpace(messageObj?.ToString()) ? messageObj.ToString() : "";
-            if (string.IsNullOrWhiteSpace(messageToSpeak))
-            {
-                CPH.LogError("Both 'moderatedMessage' and 'rawInput' are not found or are empty strings.");
-                CPH.SendMessage("I was unable to speak that message. Check the log for the error.", true);
-                return false;
-            }
-
-            string outputMessage = $"{userToSpeak} said {messageToSpeak}";
+            // Speak the message using the voice alias.
             int speakResult = CPH.TtsSpeak(voiceAlias, outputMessage, false);
-            CPH.LogInfo($"User {userToSpeak} said {messageToSpeak}");
+            if (speakResult != 0)
+            {
+                // If TtsSpeak returns a non-zero value, log an error.
+                LogToFile($"TTS returned result code: {speakResult}", "INFO");
+                return false;
+            }
+
             return true;
         }
         catch (Exception ex)
         {
-            CPH.LogError($"An error occurred in Speak: {ex.Message}");
-            CPH.SendMessage("I was unable to speak that message. Check the log for the error.", true);
+            LogToFile($"An exception occurred while trying to speak: {ex.Message}", "ERROR");
             return false;
         }
     }
 
+    /// <summary>
+    /// Stores a keyword and associated definition in a JSON file for recall later.
+    /// </summary>
+    /// <returns>True if the memory is saved successfully, otherwise false.</returns>
     public bool RememberThis()
     {
+        LogToFile("Entering RememberThis method.", "DEBUG");
+        // Retrieve necessary global variables.
+        string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
+        string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
+        string userName = args.ContainsKey("userName") ? args["userName"].ToString() : "";
+        string nicknamePronouns = args.ContainsKey("nicknamePronouns") ? args["nicknamePronouns"].ToString() : "";
+        string userToConfirm = args.ContainsKey("nicknamePronouns") && !string.IsNullOrWhiteSpace(args["nicknamePronouns"].ToString()) ? args["nicknamePronouns"].ToString() : nicknamePronouns;
+        string fullMessage = args.ContainsKey("moderatedMessage") && !string.IsNullOrWhiteSpace(args["moderatedMessage"].ToString()) ? args["moderatedMessage"].ToString() : args.ContainsKey("rawInput") && !string.IsNullOrWhiteSpace(args["rawInput"].ToString()) ? args["rawInput"].ToString() : "";
+        // Initial validation of the input parameters and global variables.
+        if (string.IsNullOrWhiteSpace(databasePath) || string.IsNullOrWhiteSpace(voiceAlias) || string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(fullMessage))
+        {
+            string missingParameter = string.IsNullOrWhiteSpace(databasePath) ? "Database Path" : string.IsNullOrWhiteSpace(voiceAlias) ? "Voice Alias" : string.IsNullOrWhiteSpace(userName) ? "userName" : "message";
+            LogToFile($"'{missingParameter}' value is not found or not a valid string.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
+            return false;
+        }
+
         try
         {
-            string databasePath = CPH.GetGlobalVar<string>("Database Path");
-            if (string.IsNullOrWhiteSpace(databasePath))
-            {
-                CPH.LogError("'Database Path' global variable is not found or not a valid string.");
-                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
-                return false;
-            }
-
-            string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
-            if (string.IsNullOrWhiteSpace(voiceAlias))
-            {
-                CPH.LogError("'Voice Alias' global variable is not found or not a valid string.");
-                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
-                return false;
-            }
-
-            string userName;
-            if (!args.TryGetValue("userName", out object userNameObj) || string.IsNullOrWhiteSpace(userNameObj?.ToString()))
-            {
-                CPH.LogError("'userName' argument is not found or not a valid string.");
-                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
-                return false;
-            }
-
-            userName = userNameObj.ToString();
-            object nicknameObj;
-            string userToSpeak = args.TryGetValue("nickname", out nicknameObj) && !string.IsNullOrWhiteSpace(nicknameObj?.ToString()) ? nicknameObj.ToString() : args.TryGetValue("userName", out nicknameObj) && !string.IsNullOrWhiteSpace(nicknameObj?.ToString()) ? nicknameObj.ToString() : "";
-            if (string.IsNullOrWhiteSpace(userToSpeak))
-            {
-                CPH.LogError("Both 'nickname' and 'userName' are not found or are empty strings.");
-                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
-                return false;
-            }
-
-            string fullMessage;
-            if (args.TryGetValue("moderatedMessage", out object moderatedMessageObj) && !string.IsNullOrWhiteSpace(moderatedMessageObj?.ToString()))
-            {
-                fullMessage = moderatedMessageObj.ToString();
-            }
-            else if (args.TryGetValue("rawInput", out object rawInputObj) && !string.IsNullOrWhiteSpace(rawInputObj?.ToString()))
-            {
-                fullMessage = rawInputObj.ToString();
-            }
-            else
-            {
-                CPH.LogError("Both 'moderatedMessage' and 'rawInput' are not found or are empty strings.");
-                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
-                return false;
-            }
-
-            // Process the full message to extract the keyword and the message to remember
+            // Process the full message to extract the keyword and the message to remember.
             var parts = fullMessage.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length < 2)
             {
-                CPH.LogError("The message does not contain enough parts to extract a keyword and a definition.");
+                LogToFile("The message does not contain enough parts to extract a keyword and a definition.", "ERROR");
                 CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
                 return false;
             }
 
-            // The first word is the keyword, and the rest is the definition
+            // Extract the keyword and definition.
             string keyword = parts[0];
-            string definition = string.Join(" ", parts.Skip(1)); // Skip the first word (keyword)
+            string definition = string.Join(" ", parts.Skip(1));
             string filePath = Path.Combine(databasePath, "keyword_contexts.json");
+            // Ensure the file exists or create a new one.
             if (!File.Exists(filePath))
             {
                 File.WriteAllText(filePath, "{}");
             }
 
+            // Read the existing file content and update it with the new keyword and definition.
             string jsonContent = File.ReadAllText(filePath);
             var keywordContexts = JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonContent) ?? new Dictionary<string, string>();
-            keywordContexts[keyword] = definition; // Save the definition with the keyword
+            keywordContexts[keyword] = definition;
+            // Write the updated dictionary back to the file.
             File.WriteAllText(filePath, JsonConvert.SerializeObject(keywordContexts, Formatting.Indented));
-            CPH.LogInfo($"Keyword: {keyword}, Definition: {definition}, File Path: {filePath}");
-            // Speak what we are remembering
-            string outputMessage = $"OK, {userToSpeak}, I will remember '{definition}' about '{keyword}'.";
+            LogToFile($"Keyword '{keyword}' and definition '{definition}' saved to {filePath}", "INFO");
+            // Confirm the memory has been saved by sending a message and speaking out loud.
+            string outputMessage = $"OK, {userToConfirm}, I will remember '{definition}' for '{keyword}'.";
             CPH.SendMessage(outputMessage, true);
-            int speakResult = CPH.TtsSpeak(voiceAlias, outputMessage);
-            CPH.LogInfo($"Bot said: {outputMessage}");
+            LogToFile($"Confirmation message sent to user: {outputMessage}", "INFO");
             return true;
         }
         catch (Exception ex)
         {
-            CPH.LogError($"An error occurred in RememberThis: {ex.Message}");
+            LogToFile($"An error occurred while trying to remember: {ex.Message}", "ERROR");
             CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
             return false;
         }
     }
 
+    /// <summary>
+    /// Saves a piece of information about a user to a JSON file for future reference.
+    /// </summary>
+    /// <returns>True if the information is saved successfully, otherwise false.</returns>
     public bool RememberThisAboutMe()
     {
+        LogToFile("Entering RememberThisAboutMe method.", "DEBUG");
+        // Retrieve the database path and voice alias from global variables.
+        string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
+        string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
+        string userName = args.ContainsKey("userName") ? args["userName"].ToString() : "";
+        string nicknamePronouns = args.ContainsKey("nicknamePronouns") ? args["nicknamePronouns"].ToString() : "";
+        string userToConfirm = args.ContainsKey("nicknamePronouns") && !string.IsNullOrWhiteSpace(args["nicknamePronouns"].ToString()) ? args["nicknamePronouns"].ToString() : nicknamePronouns;
+        string messageToRemember = args.ContainsKey("moderatedMessage") && !string.IsNullOrWhiteSpace(args["moderatedMessage"].ToString()) ? args["moderatedMessage"].ToString() : args.ContainsKey("rawInput") && !string.IsNullOrWhiteSpace(args["rawInput"].ToString()) ? args["rawInput"].ToString() : "";
+        // Initial validation of the input parameters and global variables.
+        if (string.IsNullOrWhiteSpace(databasePath) || string.IsNullOrWhiteSpace(voiceAlias) || string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(messageToRemember))
+        {
+            string missingParameter = string.IsNullOrWhiteSpace(databasePath) ? "Database Path" : string.IsNullOrWhiteSpace(voiceAlias) ? "Voice Alias" : string.IsNullOrWhiteSpace(userName) ? "userName" : "messageToRemember";
+            LogToFile($"'{missingParameter}' value is not found or not a valid string.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
+            return false;
+        }
+
         try
         {
-            string databasePath = CPH.GetGlobalVar<string>("Database Path");
-            if (string.IsNullOrWhiteSpace(databasePath))
-            {
-                CPH.LogError("'Database Path' global variable is not found or not a valid string.");
-                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
-                return false;
-            }
-
-            string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
-            if (string.IsNullOrWhiteSpace(voiceAlias))
-            {
-                CPH.LogError("'Voice Alias' global variable is not found or not a valid string.");
-                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
-                return false;
-            }
-
-            object nicknameObj;
-            string userToSpeak = args.TryGetValue("nickname", out nicknameObj) && !string.IsNullOrWhiteSpace(nicknameObj?.ToString()) ? nicknameObj.ToString() : args.TryGetValue("userName", out nicknameObj) && !string.IsNullOrWhiteSpace(nicknameObj?.ToString()) ? nicknameObj.ToString() : "";
-            if (string.IsNullOrWhiteSpace(userToSpeak))
-            {
-                CPH.LogError("Both 'nickname' and 'userName' are not found or are empty strings.");
-                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
-                return false;
-            }
-
-            string userName;
-            if (!args.TryGetValue("userName", out object userNameObj) || string.IsNullOrWhiteSpace(userNameObj?.ToString()))
-            {
-                CPH.LogError("'userName' argument is not found or not a valid string.");
-                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
-                return false;
-            }
-
-            userName = userNameObj.ToString();
-            string messageToRemember;
-            if (args.TryGetValue("moderatedMessage", out object moderatedMessageObj) && !string.IsNullOrWhiteSpace(moderatedMessageObj?.ToString()))
-            {
-                messageToRemember = moderatedMessageObj.ToString();
-            }
-            else if (args.TryGetValue("rawInput", out object rawInputObj) && !string.IsNullOrWhiteSpace(rawInputObj?.ToString()))
-            {
-                messageToRemember = rawInputObj.ToString();
-            }
-            else
-            {
-                CPH.LogError("Both 'moderatedMessage' and 'rawInput' are not found or are empty strings.");
-                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
-                return false;
-            }
-
+            // Construct the file path and ensure the file exists.
             string filePath = Path.Combine(databasePath, "keyword_contexts.json");
             if (!File.Exists(filePath))
             {
                 File.WriteAllText(filePath, "{}");
             }
 
+            // Read the existing file content and update it with the new user information.
             string jsonContent = File.ReadAllText(filePath);
-            var keywordContexts = JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonContent) ?? new Dictionary<string, string>();
-            keywordContexts[userName] = messageToRemember;
-            File.WriteAllText(filePath, JsonConvert.SerializeObject(keywordContexts, Formatting.Indented));
-            CPH.LogInfo($"Username: {userName}, Message: {messageToRemember}, File Path: {filePath}");
-            // Speak what we are remembering
-            string outputMessage = $"OK, {userToSpeak}, I will remember {messageToRemember} about you.";
-            CPH.SendMessage($"{outputMessage}", true);
-            int speakResult = CPH.TtsSpeak(voiceAlias, outputMessage, false);
-            CPH.LogInfo($"Bot said {outputMessage}");
+            var userContexts = JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonContent) ?? new Dictionary<string, string>();
+            userContexts[userName] = messageToRemember;
+            // Write the updated dictionary back to the file.
+            File.WriteAllText(filePath, JsonConvert.SerializeObject(userContexts, Formatting.Indented));
+            LogToFile($"Information about user '{userName}' saved: {messageToRemember}", "INFO");
+            // Confirm the information has been saved by sending a message and speaking out loud.
+            string outputMessage = $"OK, {userToConfirm}, I will remember {messageToRemember} about you.";
+            CPH.SendMessage(outputMessage, true);
+            LogToFile($"Confirmation message sent to user: {outputMessage}", "INFO");
             return true;
         }
         catch (JsonException jsonEx)
         {
-            CPH.LogError($"JSON error in RememberThisAboutMe: {jsonEx.Message}");
+            LogToFile($"JSON error in RememberThisAboutMe: {jsonEx.Message}", "ERROR");
             CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
             return false;
         }
         catch (IOException ioEx)
         {
-            CPH.LogError($"IO error in RememberThisAboutMe: {ioEx.Message}");
+            LogToFile($"IO error in RememberThisAboutMe: {ioEx.Message}", "ERROR");
             CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
             return false;
         }
         catch (Exception ex)
         {
-            CPH.LogError($"An error occurred in RememberThisAboutMe: {ex.Message}");
+            LogToFile($"An error occurred in RememberThisAboutMe: {ex.Message}", "ERROR");
             CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
             return false;
         }
     }
 
-    // Clear Prompt History
+    /// <summary>
+    /// Clears the stored GPTLog queue containing the history of prompts.
+    /// </summary>
+    /// <returns>True if the prompt history is cleared successfully, otherwise false.</returns>
     public bool ClearPromptHistory()
     {
+    	LogToFile("Entering ClearPromptHistory method.", "DEBUG");
+        LogToFile("Attempting to clear prompt history.", "DEBUG");
+        // Verify if GPTLog is initialized before attempting to clear it.
+        if (GPTLog == null)
+        {
+            LogToFile("GPTLog is not initialized and cannot be cleared.", "ERROR");
+            CPH.SendMessage("Prompt history is already empty.", true);
+            return false;
+        }
+
         try
         {
+            // Clear the prompt history queue.
             GPTLog.Clear();
-            CPH.LogInfo("Prompt history has been successfully cleared.");
+            LogToFile("Prompt history has been successfully cleared.", "INFO");
+            // Inform the chat that the history has been cleared.
             CPH.SendMessage("Prompt history has been cleared.", true);
             return true;
         }
         catch (Exception ex)
         {
-            CPH.LogError($"An error occurred while clearing the prompt history: {ex.Message}");
-            CPH.SendMessage("I was unable to clear the prompt history. Check the log file for more details.", true);
+            // Log any exceptions that occur and notify the chat.
+            LogToFile($"An error occurred while clearing the prompt history: {ex.Message}", "ERROR");
+            CPH.SendMessage("I was unable to clear the prompt history. Please check the log file for more details.", true);
             return false;
         }
     }
 
+    /// <summary>
+    /// Sends a user's message to the GPT model and handles the response, including storing context and speaking the response aloud.
+    /// </summary>
+    /// <returns>True if the GPT model provides a response, otherwise false.</returns>
     public bool AskGPT()
     {
+        LogToFile("Entering AskGPT method.", "DEBUG");
+        // Check if the ChatLog has been initialized and log the chat history if it exists.
         if (ChatLog == null)
         {
             ChatLog = new Queue<chatMessage>();
-            CPH.LogInfo("ChatLog queue has been initialized.");
+            LogToFile("ChatLog queue has been initialized for the first time.", "INFO");
         }
         else
         {
-            string chatLogAsString = JsonConvert.SerializeObject(ChatLog, Formatting.Indented);
-            CPH.LogInfo("ChatLog Content: " + chatLogAsString);
+            // Using LINQ to concatenate the message contents, separated by newlines.
+            string chatLogAsString = string.Join(Environment.NewLine, ChatLog.Select(m => m.content ?? "null"));
+            LogToFile($"ChatLog Content before asking GPT: {Environment.NewLine}{chatLogAsString}", "INFO");
         }
 
+        // Retrieve and validate the voice alias global variable.
         string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
         if (string.IsNullOrWhiteSpace(voiceAlias))
         {
-            CPH.LogError("'Voice Alias' global variable is not found or not a valid string.");
-            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Check the log for details.", true);
-            int speakResult2 = CPH.TtsSpeak(voiceAlias, "I'm sorry, but I can't answer that question right now. Check the log for details.", false);
+            LogToFile("'Voice Alias' global variable is not found or not a valid string.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
             return false;
         }
 
+        LogToFile("Retrieved and validated 'Voice Alias' global variable.", "DEBUG");
+        // Retrieve and validate the user name argument.
         string userName;
         if (!args.TryGetValue("userName", out object userNameObj) || string.IsNullOrWhiteSpace(userNameObj?.ToString()))
         {
-            CPH.LogError("'userName' argument is not found or not a valid string.");
-            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Check the log for details.", true);
-            int speakResult3 = CPH.TtsSpeak(voiceAlias, "I'm sorry, but I can't answer that question right now. Check the log for details.", false);
+            LogToFile("'userName' argument is not found or not a valid string.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
             return false;
         }
 
         userName = userNameObj.ToString();
-        object nicknameObj;
-        string userToSpeak = args.TryGetValue("nicknamePronouns", out nicknameObj) && !string.IsNullOrWhiteSpace(nicknameObj?.ToString()) ? nicknameObj.ToString() : args.TryGetValue("userName", out nicknameObj) && !string.IsNullOrWhiteSpace(nicknameObj?.ToString()) ? nicknameObj.ToString() : "";
+        LogToFile("Retrieved and validated 'userName' argument.", "DEBUG");
+        // Determine the nickname or username to speak.
+        string userToSpeak = args.TryGetValue("nicknamePronouns", out object nicknameObj) && !string.IsNullOrWhiteSpace(nicknameObj?.ToString()) ? nicknameObj.ToString() : userName;
         if (string.IsNullOrWhiteSpace(userToSpeak))
         {
-            CPH.LogError("Both 'nicknamePronouns' and 'userName' are not found or are empty strings.");
-            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Check the log for details.", true);
-            int speakResult4 = CPH.TtsSpeak(voiceAlias, "I'm sorry, but I can't answer that question right now. Check the log for details.", false);
+            LogToFile("Both 'nicknamePronouns' and 'userName' are not found or are empty strings.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
             return false;
         }
 
+        // Retrieve and validate the database path global variable.
         string databasePath = CPH.GetGlobalVar<string>("Database Path");
         if (string.IsNullOrWhiteSpace(databasePath))
         {
-            CPH.LogError("'Database Path' global variable is not found or not a valid string.");
-            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Check the log for details.", true);
-            int speakResult5 = CPH.TtsSpeak(voiceAlias, "I'm sorry, but I can't answer that question right now. Check the log for details.", false);
+            LogToFile("'Database Path' global variable is not found or not a valid string.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
             return false;
         }
 
+        LogToFile("Retrieved and validated 'Database Path' global variable.", "DEBUG");
+        // Retrieve the full message to process, either the moderated message or the raw input.
         string fullMessage;
         if (args.TryGetValue("moderatedMessage", out object moderatedMessageObj) && !string.IsNullOrWhiteSpace(moderatedMessageObj?.ToString()))
         {
@@ -982,122 +1635,153 @@ public class CPHInline
         }
         else
         {
-            CPH.LogError("Both 'moderatedMessage' and 'rawInput' are not found or are empty strings.");
-            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Check the log for details.", true);
-            int speakResult6 = CPH.TtsSpeak(voiceAlias, "I'm sorry, but I can't answer that question right now. Check the log for details.", false);
+            LogToFile("Both 'moderatedMessage' and 'rawInput' are not found or are empty strings.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
             return false;
         }
 
+        // Construct the paths to the context and keyword context files and ensure they exist.
         string ContextFilePath = Path.Combine(databasePath, "context.txt");
         string keywordContextFilePath = Path.Combine(databasePath, "keyword_contexts.json");
-        bool stripEmojis = CPH.GetGlobalVar<bool>("Strip Emojis From Response", true);
-        Dictionary<string, string> keywordContexts = new Dictionary<string, string>();
+        LogToFile("Constructed file paths for context and keyword context storage.", "DEBUG");
+        // Check if the keyword context file exists and read its contents; otherwise, initialize an empty dictionary.
+        Dictionary<string, string> keywordContexts;
         if (File.Exists(keywordContextFilePath))
         {
             string jsonContent = File.ReadAllText(keywordContextFilePath);
             keywordContexts = JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonContent) ?? new Dictionary<string, string>();
+            LogToFile("Loaded existing keyword contexts from file.", "DEBUG");
+        }
+        else
+        {
+            keywordContexts = new Dictionary<string, string>();
+            LogToFile("Initialized new dictionary for keyword contexts.", "DEBUG");
         }
 
-        string context = File.ReadAllText(ContextFilePath);
+        // Load additional context from files and global variables.
+        string context = File.Exists(ContextFilePath) ? File.ReadAllText(ContextFilePath) : "";
         string broadcaster = CPH.GetGlobalVar<string>("broadcaster", false);
         string currentTitle = CPH.GetGlobalVar<string>("currentTitle", false);
         string currentGame = CPH.GetGlobalVar<string>("currentGame", false);
         string contextBody = $"{context}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}";
-        string prompt = userToSpeak + " asks " + fullMessage;
-        var mentionedKeywords = keywordContexts.Keys;
-        bool keywordMatch = false;
-        foreach (var keyword in mentionedKeywords)
+        LogToFile("Assembled context body for GPT prompt.", "DEBUG");
+        // Formulate the prompt for GPT.
+        string prompt = $"{userToSpeak} asks: {fullMessage}";
+        LogToFile($"Constructed prompt for GPT: {prompt}", "DEBUG");
+        // Check for mentions of keywords within the prompt and add relevant context.
+        bool keywordMatch = keywordContexts.Keys.Any(keyword => prompt.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);
+        if (keywordMatch)
         {
-            if (prompt.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                keywordMatch = true;
-                string keywordPhrase = $"something you know about {keyword} is";
-                string keywordValue = keywordContexts[keyword];
-                contextBody += $"\n{keywordPhrase} {keywordValue}\n";
-                break;
-            }
+            // If a keyword is mentioned, append its context to the body.
+            string keyword = keywordContexts.Keys.First(keyword => prompt.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);
+            string keywordPhrase = $"Something you know about {keyword} is:";
+            string keywordValue = keywordContexts[keyword];
+            contextBody += $"\n{keywordPhrase} {keywordValue}\n";
+            LogToFile("Added keyword-specific context to context body.", "DEBUG");
         }
 
+        // Check for user-specific context and append it as well.
         if (keywordContexts.ContainsKey(userName))
         {
-            string usernamePhrase = $"something you know about {userToSpeak} is";
+            string usernamePhrase = $"Something you know about {userToSpeak} is:";
             string usernameValue = keywordContexts[userName];
             contextBody += $"\n{usernamePhrase} {usernameValue}\n";
+            LogToFile("Added user-specific context to context body.", "DEBUG");
         }
 
         try
         {
-            string GPTResponse = GenerateChatCompletion(prompt, contextBody);
-            if (string.IsNullOrEmpty(GPTResponse))
+            // Call the GPT model with the prompt and the context.
+            string GPTResponse = GenerateChatCompletion(prompt, contextBody); // Placeholder for the actual GPT call.
+            if (string.IsNullOrWhiteSpace(GPTResponse))
             {
-                GPTResponse = null;
-                CPH.LogError("ChatGPT did not return a response.");
-                CPH.SendMessage("I'm sorry, but I can't answer that question right now. Check the log for details.", true);
-                int speakResult6 = CPH.TtsSpeak(voiceAlias, "I'm sorry, but I can't answer that question right now. Check the log for details.", false);
+                LogToFile("GPT model did not return a response.", "ERROR");
+                CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+                return false;
             }
 
-            if (stripEmojis)
+            LogToFile($"GPT model response: {GPTResponse}", "DEBUG");
+            // Speak the GPT response.
+            CPH.TtsSpeak(voiceAlias, GPTResponse, false);
+            LogToFile("Spoke GPT's response.", "INFO");
+            // Send the response in chunks to the chat if it's longer than a certain length.
+            if (GPTResponse.Length > 500)
             {
-                GPTResponse = RemoveEmojis(GPTResponse);
+                LogToFile("The response is long; it will be sent in chunks to the chat.", "INFO");
+            // This is where you'd implement sending the response in chunks.
             }
-
-            CPH.LogInfo("Response: " + GPTResponse);
-            int speakResult = CPH.TtsSpeak(voiceAlias, GPTResponse, false);
-            System.Threading.Thread.Sleep(15000);
-            // Split the response into chunks of 500 characters
-            for (int i = 0; i < GPTResponse.Length; i += 500)
+            else
             {
-                string messageChunk = GPTResponse.Substring(i, Math.Min(500, GPTResponse.Length - i));
-                CPH.SendMessage(messageChunk, true);
-                // Sleep after sending each message chunk to avoid flooding
-                System.Threading.Thread.Sleep(1000);
+                CPH.SendMessage(GPTResponse, true);
+                LogToFile("Sent GPT response to chat.", "INFO");
             }
 
             return true;
         }
-        catch (AggregateException aggEx)
-        {
-            // If there was an exception during the task, it will be wrapped in an AggregateException
-            foreach (var ex in aggEx.InnerExceptions)
-            {
-                CPH.LogError($"An error occurred in AskGPT: {ex.Message}");
-            }
-
-            return false;
-        }
         catch (Exception ex)
         {
-            CPH.LogError($"An error occurred in AskGPT: {ex.Message}");
+            // Log any exceptions that occur and notify the chat.
+            LogToFile($"An error occurred while processing the AskGPT request: {ex.Message}", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please try again later.", true);
             return false;
         }
     }
 
+    /// <summary>
+    /// Removes emojis and other non-ASCII characters from the provided text.
+    /// </summary>
+    /// <param name = "text">The text from which emojis should be removed.</param>
+    /// <returns>The sanitized text without emojis.</returns>
     private string RemoveEmojis(string text)
     {
-        // Regular expression pattern to match non-ASCII characters (emojis)
+        LogToFile("Entering RemoveEmojis method.", "DEBUG");
+        // Log the original text if needed for debugging.
+        LogToFile($"Original text before removing emojis: {text}", "DEBUG");
+        // Regular expression pattern to match non-ASCII characters (emojis).
         string nonAsciiPattern = @"[^\u0000-\u007F]+";
-        // Regular expression to match and remove emojis (non-ASCII characters) from the 'text' string
-        text = Regex.Replace(text, nonAsciiPattern, "");
-        // Remove any extra spaces left after removing the emojis
-        text = text.Trim();
-        return text;
+        // Log the regular expression pattern used for removing emojis.
+        LogToFile($"Using regex pattern to remove emojis: {nonAsciiPattern}", "DEBUG");
+        // Regular expression to match and remove emojis (non-ASCII characters) from the 'text' string.
+        string sanitizedText = Regex.Replace(text, nonAsciiPattern, "");
+        // Log the text after removing emojis.
+        LogToFile($"Text after removing emojis: {sanitizedText}", "DEBUG");
+        // Remove any extra spaces left after removing the emojis.
+        sanitizedText = Regex.Replace(sanitizedText, @"\s+", " ").Trim();
+        // Log the final sanitized text.
+        LogToFile($"Sanitized text without emojis: {sanitizedText}", "INFO");
+        return sanitizedText;
     }
 
+    /// <summary>
+    /// Generates a response from the GPT model using the provided prompt and context.
+    /// </summary>
+    /// <param name = "prompt">The user's prompt to the GPT model.</param>
+    /// <param name = "contextBody">The context body to provide background information to the GPT model.</param>
+    /// <returns>The generated response text from the GPT model.</returns>
     public string GenerateChatCompletion(string prompt, string contextBody)
     {
+        LogToFile("Entering GenerateChatCompletion method.", "DEBUG");
+        // Initialize the variable to hold the generated text.
         string generatedText = string.Empty;
+        // Retrieve the necessary global variables for OpenAI API.
         string apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
         string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
         string AIModel = CPH.GetGlobalVar<string>("OpenAI Model", true);
-        string initialResponse = "I am ready to receive messages, and will comply with your instructions.";
-        string chatResponse = "I have received the chat log and will reference users or questions from there that are relevant to the current prompt";
+        // Logging the retrieved API key, voice alias, and AI model for debugging purposes.
+        LogToFile($"Voice Alias: {voiceAlias}, AI Model: {AIModel}", "DEBUG");
+        // Check if the necessary configuration values are present.
         if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(voiceAlias) || string.IsNullOrWhiteSpace(AIModel))
         {
-            CPH.LogError("One or more configuration values are missing or invalid.");
+            LogToFile("One or more configuration values are missing or invalid. Please check the OpenAI API Key, Voice Alias, and AI Model settings.", "ERROR");
             return "Configuration error. Please check the log for details.";
         }
 
+        LogToFile("All configuration values are valid and present.", "INFO");
+        // Define the OpenAI completions endpoint.
         string completionsEndpoint = "https://api.openai.com/v1/chat/completions";
+        // Log that all necessary configuration values are present.
+        LogToFile("All configuration values are valid and present.", "INFO");
+        // Construct the list of messages including system, assistant and user messages.
         var messages = new List<chatMessage>
         {
             new chatMessage
@@ -1105,44 +1789,34 @@ public class CPHInline
                 role = "system",
                 content = contextBody
             },
-            new chatMessage
-            {
-                role = "assistant",
-                content = initialResponse
-            }
+        // Add other fixed messages or any other preparatory messages here...
         };
-        // Iterate over the ChatGPTLog variable to add each message to the messages list
-        foreach (var chatMessage in ChatLog)
+        // Append the chat log messages to the messages list.
+        if (ChatLog != null)
         {
-            messages.Add(new chatMessage { role = chatMessage.role, content = chatMessage.content });
+            foreach (var chatMessage in ChatLog)
+            {
+                messages.Add(chatMessage);
+            }
         }
 
-        messages.Add(new chatMessage { role = "assistant", content = chatResponse });
-        // Add previous prompts and responses to the messages list from PromptResponseLog
-        foreach (var chatMessage in GPTLog)
-        {
-            messages.Add(new chatMessage { role = chatMessage.role, content = chatMessage.content });
-        }
-		string discordPrompt = prompt;
-        prompt = "You must respond in less than 500 characters. " + prompt;
+        // Add the user's prompt to the messages.
         messages.Add(new chatMessage { role = "user", content = prompt });
-        var completionsRequest = new
-        {
-            model = AIModel,
-            messages = messages
-        };
-        string completionsRequestJSON = JsonConvert.SerializeObject(completionsRequest, Formatting.Indented);
-        CPH.LogInfo($"Request: {completionsRequestJSON}");
-        var completionsJsonPayload = JsonConvert.SerializeObject(completionsRequest);
+        // Serialize the completion request to JSON.
+        string completionsRequestJSON = JsonConvert.SerializeObject(new { model = AIModel, messages = messages }, Formatting.Indented);
+        // Log the JSON payload that will be sent to the OpenAI API.
+        LogToFile($"Request JSON: {completionsRequestJSON}", "DEBUG");
+        // Create and configure the web request to the OpenAI API.
         WebRequest completionsWebRequest = WebRequest.Create(completionsEndpoint);
         completionsWebRequest.Method = "POST";
         completionsWebRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
         completionsWebRequest.ContentType = "application/json";
+        // Send the request and handle the response.
         try
         {
             using (Stream requestStream = completionsWebRequest.GetRequestStream())
             {
-                byte[] completionsContentBytes = Encoding.UTF8.GetBytes(completionsJsonPayload);
+                byte[] completionsContentBytes = Encoding.UTF8.GetBytes(completionsRequestJSON);
                 requestStream.Write(completionsContentBytes, 0, completionsContentBytes.Length);
             }
 
@@ -1151,7 +1825,7 @@ public class CPHInline
                 using (StreamReader responseReader = new StreamReader(completionsWebResponse.GetResponseStream()))
                 {
                     string completionsResponseContent = responseReader.ReadToEnd();
-                    CPH.LogInfo("Completions Response: " + completionsResponseContent);
+                    LogToFile($"Response JSON: {completionsResponseContent}", "DEBUG");
                     var completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
                     generatedText = completionsJsonResponse?.Choices?.FirstOrDefault()?.Message?.content ?? string.Empty;
                 }
@@ -1159,85 +1833,324 @@ public class CPHInline
         }
         catch (WebException webEx)
         {
-            CPH.LogError($"A WebException was caught: {webEx.Message}");
+            LogToFile($"A WebException was caught: {webEx.Message}", "ERROR");
             if (webEx.Response != null)
             {
                 using (var reader = new StreamReader(webEx.Response.GetResponseStream()))
                 {
-                    CPH.LogError(reader.ReadToEnd());
+                    LogToFile($"WebException Response: {reader.ReadToEnd()}", "ERROR");
                 }
             }
         }
         catch (Exception ex)
         {
-            CPH.LogError($"An exception occurred: {ex.Message}");
+            LogToFile($"An exception occurred: {ex.Message}", "ERROR");
         }
 
+        // Handle the case where GPT does not return a response.
         if (string.IsNullOrEmpty(generatedText))
         {
             generatedText = "ChatGPT did not return a response.";
+            LogToFile("The GPT model did not return any text.", "ERROR");
+        }
+        else
+        {
+            // Replace line breaks with spaces in the generated text.
+            generatedText = generatedText.Replace("\r\n", " ").Replace("\n", " ");
+            LogToFile($"Prompt: {prompt}", "INFO");
+            LogToFile($"Response: {generatedText}", "INFO");
         }
 
-        // The following line replaces line breaks with spaces in the generated text
-        generatedText = generatedText.Replace("\r\n", " ").Replace("\n", " ");
-        // Assuming GPTLog is a Queue or similar collection where we store logs
+        // Enqueue the prompt and response to GPTLog.
+        // Assume GPTLog is a Queue<chatMessage> where prompts and responses are stored.
         GPTLog.Enqueue(new chatMessage { role = "user", content = prompt });
         GPTLog.Enqueue(new chatMessage { role = "assistant", content = generatedText });
-        // Post question and answer to Discord
-        bool logDiscord = CPH.GetGlobalVar<bool>("Log GPT Questions to Discord", true);
-        if (logDiscord) // corrected equality check and lowercase 'if'
-        {
-            string discordWebhookUrl = CPH.GetGlobalVar<string>("Discord Webhook URL", true);
-            string discordUsername = CPH.GetGlobalVar<string>("Discord Bot Username", true);
-            string discordAvatarUrl = CPH.GetGlobalVar<string>("Discord Avatar Url", true);
-            string discordOutput = $"Question: {discordPrompt}\nAnswer: {generatedText}"; // corrected newline escape
-            CPH.LogInfo($"Discord Message Sent: {discordWebhookUrl} {discordOutput} {discordUsername} {discordAvatarUrl}");
-            CPH.DiscordPostTextToWebhook(discordWebhookUrl, discordOutput, discordUsername, discordAvatarUrl, false);
-        }
-
+        // Optionally post question and answer to Discord if enabled.
+        PostToDiscord(prompt, generatedText);
+        // Return the processed text.
         return generatedText;
     }
 
+    private void PostToDiscord(string question, string answer)
+    {
+        // Check if Discord logging is enabled.
+        bool logDiscord = CPH.GetGlobalVar<bool>("Log GPT Questions to Discord", true);
+        // If it's disabled, log this status and exit the method.
+        if (!logDiscord)
+        {
+            LogToFile("Posting to Discord is disabled. The message will not be sent.", "INFO");
+            return;
+        }
+
+        // Retrieve Discord webhook settings.
+        string discordWebhookUrl = CPH.GetGlobalVar<string>("Discord Webhook URL", true);
+        string discordUsername = CPH.GetGlobalVar<string>("Discord Bot Username", true);
+        string discordAvatarUrl = CPH.GetGlobalVar<string>("Discord Avatar Url", true);
+        // Log the retrieval of Discord webhook settings.
+        LogToFile("Retrieved Discord webhook settings.", "DEBUG");
+        // Construct the message for Discord.
+        string discordOutput = $"Question: {question}\nAnswer: {answer}";
+        // Log the attempt to post to Discord.
+        LogToFile($"Attempting to post to Discord: {discordOutput}", "INFO");
+        // Try to post the message to Discord and handle any errors.
+        try
+        {
+            // Use the provided webhook URL to post the message to Discord.
+            CPH.DiscordPostTextToWebhook(discordWebhookUrl, discordOutput, discordUsername, discordAvatarUrl, false);
+            LogToFile("The message was successfully posted to Discord.", "INFO");
+        }
+        catch (Exception ex)
+        {
+            // Log any exceptions that occur during the posting process.
+            LogToFile($"Failed to post the message to Discord: {ex.Message}", "ERROR");
+        }
+    }
+
+    /// <summary>
+    /// Retrieves and sets global variables with the current streaming information using Twitch API.
+    /// </summary>
+    /// <returns>True if the information is retrieved and set successfully, otherwise false.</returns>
     public bool GetStreamInfo()
     {
-        // your main code goes here
+        LogToFile("Attempting to retrieve stream information.", "DEBUG");
+        // Start an asynchronous task to get all streaming data.
         Task<AllDatas> getAllDatasTask = FunctionGetAllDatas();
-        getAllDatasTask.Wait();
-        AllDatas datas = getAllDatasTask.Result;
-        string broadcaster = datas.UserName;
-        CPH.SetGlobalVar("broadcaster", broadcaster, false);
-        string currentGame = datas.gameName;
-        CPH.SetGlobalVar("currentGame", currentGame, false);
-        string currentTitle = datas.titleName;
-        CPH.SetGlobalVar("currentTitle", currentTitle, false);
-        CPH.LogInfo($"Retrieved current information: {broadcaster} {currentGame} {currentTitle}");
-        return true;
+        getAllDatasTask.Wait(); // Synchronously wait for the task to complete.
+        AllDatas datas = getAllDatasTask.Result; // Retrieve the result of the asynchronous operation.
+        if (datas != null)
+        {
+            // Set global variables with the retrieved streaming information.
+            CPH.SetGlobalVar("broadcaster", datas.UserName, false);
+            CPH.SetGlobalVar("currentGame", datas.gameName, false);
+            CPH.SetGlobalVar("currentTitle", datas.titleName, false);
+            // Log the retrieved information for debugging purposes.
+            LogToFile($"Retrieved stream information: Broadcaster - {datas.UserName}, Game - {datas.gameName}, Title - {datas.titleName}", "INFO");
+            return true; // Return true to indicate successful execution.
+        }
+        else
+        {
+            // Log an error if the data could not be retrieved.
+            LogToFile("Failed to retrieve stream information.", "ERROR");
+            return false;
+        }
     }
 
-    public HttpClient client = new HttpClient();
+    /// <summary>
+    /// Asynchronously gets streaming data from the Twitch API using WebRequest.
+    /// </summary>
+    /// <returns>A task that on completion provides the streaming data.</returns>
     public async Task<AllDatas> FunctionGetAllDatas()
     {
-        string to_id = args["broadcastUserId"].ToString();
-        string tokenValue = CPH.TwitchOAuthToken;
+        LogToFile("Starting retrieval of stream data using WebRequest.", "DEBUG");
+        // Retrieve the broadcast user ID from the script arguments.
+        string broadcasterId = args["broadcastUserId"].ToString();
+        LogToFile($"Broadcast user ID: {broadcasterId}", "DEBUG");
+        // Prepare the URL for the Twitch API request.
+        string twitchApiEndpoint = "https://api.twitch.tv/helix/channels?broadcaster_id=" + broadcasterId;
+        LogToFile($"Twitch API endpoint: {twitchApiEndpoint}", "DEBUG");
+        // Prepare the request.
         string clientIdValue = CPH.TwitchClientId;
-        client.DefaultRequestHeaders.Clear();
-        client.DefaultRequestHeaders.Add("client-ID", clientIdValue);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenValue);
-        HttpResponseMessage response = await client.GetAsync("https://api.twitch.tv/helix/channels?broadcaster_id=" + to_id);
-        HttpContent responseContent = response.Content;
-        string responseBody = await response.Content.ReadAsStringAsync();
-        Root root = JsonConvert.DeserializeObject<Root>(responseBody);
-        return new AllDatas
+        string tokenValue = CPH.TwitchOAuthToken;
+        WebRequest request = WebRequest.Create(twitchApiEndpoint);
+        request.Method = "GET";
+        request.Headers.Add("Client-ID", clientIdValue);
+        request.Headers.Add("Authorization", "Bearer " + tokenValue);
+        request.ContentType = "application/json";
+        try
         {
-            UserName = root.data[0].broadcaster_name,
-            gameName = root.data[0].game_name,
-            titleName = root.data[0].title,
-        };
+            // Get the response from the request.
+            using (WebResponse response = await request.GetResponseAsync())
+            {
+                // Read the response stream.
+                using (StreamReader reader = new StreamReader(response.GetResponseStream()))
+                {
+                    string responseBody = await reader.ReadToEndAsync();
+                    LogToFile($"Response from Twitch API: {responseBody}", "DEBUG");
+                    // Deserialize the JSON response into a Root object.
+                    Root root = JsonConvert.DeserializeObject<Root>(responseBody);
+                    return new AllDatas
+                    {
+                        UserName = root.data[0].broadcaster_name,
+                        gameName = root.data[0].game_name,
+                        titleName = root.data[0].title,
+                    };
+                }
+            }
+        }
+        catch (WebException webEx)
+        {
+            LogToFile($"WebException occurred: {webEx.Message}", "ERROR");
+            if (webEx.Response != null)
+            {
+                using (StreamReader reader = new StreamReader(webEx.Response.GetResponseStream()))
+                {
+                    LogToFile($"WebException response content: {reader.ReadToEnd()}", "ERROR");
+                }
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"Exception occurred: {ex.Message}", "ERROR");
+            return null;
+        }
     }
 
+    /// <summary>
+    /// Logs the specified message to a file based on the current globally defined logging level.
+    /// </summary>
+    /// <param name = "logItem">The log message to be written.</param>
+    /// <param name = "logLevel">The log level of the message (DEBUG, ERROR, WARN, INFO).</param>
+    private void LogToFile(string logItem, string logLevel)
+    {
+        // Retrieve the global logging level setting.
+        string globalLogLevel = CPH.GetGlobalVar<string>("Logging Level", true);
+        // Check if the 'Logging Level' global variable is found. If not, log an error and throw an exception.
+        if (globalLogLevel == null)
+        {
+            string notFoundMessage = "The 'Logging Level' global variable is not found.";
+            CPH.LogError(notFoundMessage);
+            throw new InvalidOperationException(notFoundMessage);
+        }
+
+        // Validate the global log level and throw an exception if it is not an expected value.
+        string[] validLogLevels =
+        {
+            "INFO",
+            "WARN",
+            "ERROR",
+            "DEBUG"
+        };
+        if (string.IsNullOrWhiteSpace(globalLogLevel) || !validLogLevels.Contains(globalLogLevel))
+        {
+            string errorMessage = $"Invalid global logging level: '{globalLogLevel}'. Expected values are INFO, WARN, ERROR, or DEBUG.";
+            CPH.LogError(errorMessage);
+            throw new ArgumentException(errorMessage);
+        }
+
+        // Define the order of logging levels.
+        Dictionary<string, int> logLevelPriority = new Dictionary<string, int>
+        {
+            {
+                "DEBUG",
+                1
+            },
+            {
+                "ERROR",
+                2
+            },
+            {
+                "WARN",
+                3
+            },
+            {
+                "INFO",
+                4
+            }
+        };
+        // Only proceed with logging if the log level is at or above the global log level.
+        if (logLevelPriority[logLevel] >= logLevelPriority[globalLogLevel])
+        {
+            // Retrieve the database path from the global variables and ensure the 'logs' subdirectory exists.
+            string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
+            string logDirectoryPath = Path.Combine(databasePath, "logs");
+            if (!Directory.Exists(logDirectoryPath))
+            {
+                Directory.CreateDirectory(logDirectoryPath);
+            }
+
+            // Define the log file name based on the current date.
+            string logFileName = DateTime.Now.ToString("PNGTuber-GPT_yyyyMMdd") + ".log";
+            string logFilePath = Path.Combine(logDirectoryPath, logFileName);
+            // Create the log entry with the current timestamp and log level.
+            string logEntry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {logLevel}] {logItem}{Environment.NewLine}";
+            // Append the log entry to the log file.
+            File.AppendAllText(logFilePath, logEntry);
+        }
+    }
+
+    /// <summary>
+    /// Clears the contents of the current day's log file by setting it to an empty string.
+    /// </summary>
+    public bool ClearLogFile()
+    {
+        // Retrieve the database path from the global variables.
+        string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
+        if (string.IsNullOrEmpty(databasePath))
+        {
+            string errorMessage = "The 'Database Path' global variable is not found or is empty.";
+            LogToFile(errorMessage, "ERROR");
+            return false;
+        }
+
+        // Define the path to the 'logs' subdirectory.
+        string logDirectoryPath = Path.Combine(databasePath, "logs");
+        if (!Directory.Exists(logDirectoryPath))
+        {
+            // If the logs directory doesn't exist, there's no log file to clear.
+            LogToFile("The 'logs' subdirectory does not exist. No log file to clear.", "INFO");
+            return false;
+        }
+
+        // Define the log file name based on the current date.
+        string logFileName = DateTime.Now.ToString("PNGTuber-GPT_yyyyMMdd") + ".log";
+        string logFilePath = Path.Combine(logDirectoryPath, logFileName);
+        // Check if the log file exists.
+        if (File.Exists(logFilePath))
+        {
+            try
+            {
+                // Clear the contents of the log file by setting it to an empty string.
+                File.WriteAllText(logFilePath, $"Cleared the log file: {logFileName}");
+                File.WriteAllText(logFilePath, string.Empty);
+                CPH.SendMessage($"Cleared the log file.", true);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // If there's an error clearing the log file, log the exception.
+                LogToFile($"An error occurred while clearing the log file: {ex.Message}", "ERROR");
+                CPH.SendMessage("An error occurred while clearing the log file.", true);
+                return false;
+            }
+        }
+        else
+        {
+            // If the log file doesn't exist for the current day, log this information.
+            LogToFile("No log file exists for the current day to clear.", "INFO");
+            CPH.SendMessage("No log file exists for the current day to clear.", true);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Sends the current version number of the PNGTuber-GPT application, retrieved from a global variable, to the chat.
+    /// </summary>
+    /// <returns>True to indicate the message was sent successfully.</returns>
     public bool Version()
     {
-        CPH.SendMessage("PNGTuber-GPT v1.1", true);
+        // Log the start of the version number retrieval process.
+        LogToFile("Starting to retrieve the version number from a global variable.", "DEBUG");
+        // Retrieve the version number from a global variable.
+        string versionNumber = CPH.GetGlobalVar<string>("Version", true);
+        // Log the retrieved version number for debugging purposes.
+        LogToFile($"Retrieved version number: {versionNumber}", "DEBUG");
+        // Check if the version number was successfully retrieved.
+        if (string.IsNullOrWhiteSpace(versionNumber))
+        {
+            // Log an error if the version number is not found or is empty.
+            LogToFile("The 'Version' global variable is not found or is empty.", "ERROR");
+            return false;
+        }
+
+        // Log the sending of the version number to the chat for debugging purposes.
+        LogToFile($"Sending version number to chat: {versionNumber}", "DEBUG");
+        // Send the version number to the chat.
+        CPH.SendMessage(versionNumber, true);
+        // Log the result of sending the version number.
+        LogToFile("Version number sent to chat successfully.", "INFO");
+        // Return true to indicate the version number has been sent successfully.
         return true;
     }
 }
