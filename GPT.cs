@@ -280,6 +280,55 @@ public class CPHInline
     }
 
     /// <summary>
+    /// Queues a pair of messages to the GPTLog, one from the user and one from the assistant.
+    /// This method ensures that messages are always kept in balance within the queue. 
+    /// The queue is managed on a First-In-First-Out (FIFO) basis and maintains up to 5 pairs of messages.
+    /// If the limit is exceeded, the oldest pair of messages is dequeued to maintain the size of the queue.
+    /// </summary>
+    /// <param name = "userContent">The content of the user's message.</param>
+    /// <param name = "assistantContent">The content of the assistant's message.</param>
+    private void QueueGPTMessage(string userContent, string assistantContent)
+    {
+        // Log that we've entered the method
+        LogToFile("Entering QueueGPTMessage with paired messages.", "DEBUG");
+        // Create the user and assistant chat messages
+        chatMessage userMessage = new chatMessage
+        {
+            role = "user",
+            content = userContent
+        };
+        chatMessage assistantMessage = new chatMessage
+        {
+            role = "assistant",
+            content = assistantContent
+        };
+        try
+        {
+            // Enqueue the user and assistant messages as a pair
+            GPTLog.Enqueue(userMessage);
+            GPTLog.Enqueue(assistantMessage);
+            // Log the action of enqueuing the messages
+            LogToFile($"Enqueuing user message: {userMessage}", "INFO");
+            LogToFile($"Enqueuing assistant message: {assistantMessage}", "INFO");
+            // If the queue exceeds 10 messages (5 pairs), dequeue the oldest pair
+            if (GPTLog.Count > 10)
+            {
+                LogToFile("GPTLog limit exceeded. Dequeuing the oldest pair of messages.", "DEBUG");
+                GPTLog.Dequeue(); // Dequeue user message
+                GPTLog.Dequeue(); // Dequeue assistant message
+            }
+
+            // Log the status of the queue after operation
+            LogToFile($"GPTLog Count after enqueueing/dequeueing: {GPTLog.Count}", "DEBUG");
+        }
+        catch (Exception ex)
+        {
+            // Log the error
+            LogToFile($"An error occurred while enqueuing GPT messages: {ex.Message}", "ERROR");
+        }
+    }
+
+    /// <summary>
     /// Initializes the PNGTuber-GPT application and logs successful setup.
     /// </summary>
     /// <returns>Returns true to indicate successful execution.</returns>
@@ -856,7 +905,7 @@ public class CPHInline
     /// <returns>Returns true if the nickname was successfully removed, otherwise false.</returns>
     public bool RemoveNick()
     {
-    	LogToFile("Entering RemoveNick method.", "DEBUG");
+        LogToFile("Entering RemoveNick method.", "DEBUG");
         try
         {
             string userName = args["userName"].ToString();
@@ -900,7 +949,7 @@ public class CPHInline
     /// <returns>Returns true if the keyword was successfully removed, otherwise false.</returns>
     public bool ForgetThis()
     {
-    	LogToFile("Entering ForgetThis method.", "DEBUG");
+        LogToFile("Entering ForgetThis method.", "DEBUG");
         try
         {
             string keywordToRemove = args["inputRaw"].ToString();
@@ -945,7 +994,7 @@ public class CPHInline
     /// <returns>Returns true if the username was successfully removed, otherwise false.</returns>
     public bool ForgetThisAboutMe()
     {
-    	LogToFile("Entering ForgetThisAboutMe method.", "DEBUG");
+        LogToFile("Entering ForgetThisAboutMe method.", "DEBUG");
         try
         {
             string userName = args["userName"].ToString();
@@ -990,7 +1039,7 @@ public class CPHInline
     /// <returns>Returns true if information is successfully retrieved and sent to chat, otherwise false.</returns>
     public bool GetMemory()
     {
-    	LogToFile("Entering GetMemory method.", "DEBUG");
+        LogToFile("Entering GetMemory method.", "DEBUG");
         try
         {
             string userName = args["userName"].ToString();
@@ -1535,7 +1584,7 @@ public class CPHInline
     /// <returns>True if the prompt history is cleared successfully, otherwise false.</returns>
     public bool ClearPromptHistory()
     {
-    	LogToFile("Entering ClearPromptHistory method.", "DEBUG");
+        LogToFile("Entering ClearPromptHistory method.", "DEBUG");
         LogToFile("Attempting to clear prompt history.", "DEBUG");
         // Verify if GPTLog is initialized before attempting to clear it.
         if (GPTLog == null)
@@ -1707,8 +1756,37 @@ public class CPHInline
             // Send the response in chunks to the chat if it's longer than a certain length.
             if (GPTResponse.Length > 500)
             {
-                LogToFile("The response is long; it will be sent in chunks to the chat.", "INFO");
-            // This is where you'd implement sending the response in chunks.
+                LogToFile("The response is too long for Twitch; it will be sent in chunks to the chat.", "INFO");
+                int startIndex = 0;
+                while (startIndex < GPTResponse.Length)
+                {
+                    // Determine the chunk size dynamically based on punctuation or space before 500 characters.
+                    int chunkSize = Math.Min(500, GPTResponse.Length - startIndex);
+                    int endIndex = startIndex + chunkSize;
+                    // Look for the last full word or punctuation if the chunkSize is less than the total length.
+                    if (endIndex < GPTResponse.Length)
+                    {
+                        int lastSpaceIndex = GPTResponse.LastIndexOf(' ', endIndex, chunkSize);
+                        int lastPunctuationIndex = GPTResponse.LastIndexOf('.', endIndex, chunkSize);
+                        lastPunctuationIndex = Math.Max(lastPunctuationIndex, GPTResponse.LastIndexOf('!', endIndex, chunkSize));
+                        lastPunctuationIndex = Math.Max(lastPunctuationIndex, GPTResponse.LastIndexOf('?', endIndex, chunkSize));
+                        int lastBreakIndex = Math.Max(lastSpaceIndex, lastPunctuationIndex);
+                        if (lastBreakIndex > startIndex)
+                        {
+                            endIndex = lastBreakIndex;
+                        }
+                    }
+
+                    // Extract the substring for the current chunk.
+                    string messageChunk = GPTResponse.Substring(startIndex, endIndex - startIndex).Trim();
+                    CPH.SendMessage(messageChunk, true);
+                    // Update the startIndex for the next loop iteration.
+                    startIndex = endIndex;
+                    // Sleep after sending each message chunk to avoid flooding.
+                    System.Threading.Thread.Sleep(1000);
+                }
+
+                return true;
             }
             else
             {
@@ -1776,12 +1854,12 @@ public class CPHInline
             return "Configuration error. Please check the log for details.";
         }
 
-        LogToFile("All configuration values are valid and present.", "INFO");
+        LogToFile("All configuration values are valid and present.", "DEBUG");
         // Define the OpenAI completions endpoint.
         string completionsEndpoint = "https://api.openai.com/v1/chat/completions";
         // Log that all necessary configuration values are present.
-        LogToFile("All configuration values are valid and present.", "INFO");
-        // Construct the list of messages including system, assistant and user messages.
+        LogToFile("All configuration values are valid and present.", "DEBUG");
+        // Construct the list of messages including system, assistant, and user messages.
         var messages = new List<chatMessage>
         {
             new chatMessage
@@ -1789,19 +1867,44 @@ public class CPHInline
                 role = "system",
                 content = contextBody
             },
-        // Add other fixed messages or any other preparatory messages here...
+            // Add instruction message for the GPT model here.
+            new chatMessage
+            {
+                role = "user",
+                content = "I am going to send you the chat log from Twitch. You should reference these messages for all future prompts if it is relevant to the prompt being asked. Each message will be prefixed with the users name that you can refer to them as, if referring to their message in the response. After each message you receive, you will return simply \"OK\" to indicate you have received this message, and no other text. When I am finished I will say FINISHED, and you will again respond with simply \"OK\" and nothing else, and then resume normal operation on all future prompts."
+            },
+            // Assistant's acknowledgment message.
+            new chatMessage
+            {
+                role = "assistant",
+                content = "OK"
+            }
         };
-        // Append the chat log messages to the messages list.
+        // Process user messages stored in ChatLog.
         if (ChatLog != null)
         {
             foreach (var chatMessage in ChatLog)
             {
                 messages.Add(chatMessage);
+                // Assistant's acknowledgment message for each user message.
+                messages.Add(new chatMessage { role = "assistant", content = "OK" });
             }
         }
 
-        // Add the user's prompt to the messages.
-        messages.Add(new chatMessage { role = "user", content = prompt });
+        // Add the "FINISHED" message from the user and final "OK" from the assistant.
+        messages.Add(new chatMessage { role = "user", content = "FINISHED" });
+        messages.Add(new chatMessage { role = "assistant", content = "OK" });
+        // Add messages from GPTLog after the chat log has been sent.
+        if (GPTLog != null)
+        {
+            foreach (var gptMessage in GPTLog)
+            {
+                messages.Add(gptMessage);
+            }
+        }
+
+        // Finally, add the user's current prompt to the messages.
+        messages.Add(new chatMessage { role = "user", content = $"{prompt} You must respond in less than 500 characters." });
         // Serialize the completion request to JSON.
         string completionsRequestJSON = JsonConvert.SerializeObject(new { model = AIModel, messages = messages }, Formatting.Indented);
         // Log the JSON payload that will be sent to the OpenAI API.
@@ -1828,6 +1931,14 @@ public class CPHInline
                     LogToFile($"Response JSON: {completionsResponseContent}", "DEBUG");
                     var completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
                     generatedText = completionsJsonResponse?.Choices?.FirstOrDefault()?.Message?.content ?? string.Empty;
+                }
+
+                // Check the 'Strip Emojis From Response' setting and remove emojis from response if set to true.
+                bool stripEmojis = CPH.GetGlobalVar<bool>("Strip Emojis From Response", true);
+                if (stripEmojis)
+                {
+                    generatedText = RemoveEmojis(generatedText);
+                    LogToFile("Emojis have been removed from the response.", "INFO");
                 }
             }
         }
@@ -1861,10 +1972,10 @@ public class CPHInline
             LogToFile($"Response: {generatedText}", "INFO");
         }
 
-        // Enqueue the prompt and response to GPTLog.
-        // Assume GPTLog is a Queue<chatMessage> where prompts and responses are stored.
-        GPTLog.Enqueue(new chatMessage { role = "user", content = prompt });
-        GPTLog.Enqueue(new chatMessage { role = "assistant", content = generatedText });
+        // Enqueue the user's prompt and the assistant's generated text to GPTLog as a balanced pair.
+        // The QueueGPTMessage method ensures that there is an equal number of user and assistant messages.
+        // It maintains the limit of 5 user messages and 5 assistant messages within GPTLog.
+        QueueGPTMessage(prompt, generatedText);
         // Optionally post question and answer to Discord if enabled.
         PostToDiscord(prompt, generatedText);
         // Return the processed text.
