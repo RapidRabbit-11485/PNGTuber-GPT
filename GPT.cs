@@ -952,7 +952,7 @@ public class CPHInline
         LogToFile("Entering ForgetThis method.", "DEBUG");
         try
         {
-            string keywordToRemove = args["inputRaw"].ToString();
+            string keywordToRemove = args["rawInput"].ToString();
             LogToFile($"Attempting to remove definition for keyword: {keywordToRemove}", "DEBUG");
             string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
             string filePath = Path.Combine(databasePath, "keyword_contexts.json");
@@ -981,7 +981,7 @@ public class CPHInline
         }
         catch (Exception ex)
         {
-            string ErrorKeywordToRemove = args["inputRaw"].ToString();
+            string ErrorKeywordToRemove = args["rawInput"].ToString();
             LogToFile($"An error occurred while removing the definition for {ErrorKeywordToRemove}: {ex.Message}", "ERROR");
             CPH.SendMessage("An error occurred while attempting to remove the definition for {ErrorKeywordToRemove}. Please try again later.", true);
             return false;
@@ -2261,6 +2261,22 @@ public class CPHInline
         CPH.SendMessage(versionNumber, true);
         // Log the result of sending the version number.
         LogToFile("Version number sent to chat successfully.", "INFO");
+        // Return true to indicate the version number has been sent successfully.
+        return true;
+    }
+    
+    /// <summary>
+    /// Sends the current version number of the PNGTuber-GPT application, retrieved from a global variable, to the chat.
+    /// </summary>
+    /// <returns>True to indicate the message was sent successfully.</returns>
+    public bool SayPlay()
+    {
+        // Log the start of SayPlayMethod
+        LogToFile("Entering the SayPlay method.", "DEBUG");
+        // Send the !play command to chat
+        CPH.SendMessage("!play", true);
+        // Log the result of sending the version number.
+        LogToFile("Sent !play command to chat successfully.", "INFO");
         // Return true to indicate the version number has been sent successfully.
         return true;
     }
