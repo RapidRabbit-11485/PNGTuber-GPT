@@ -9,12 +9,100 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.Security.Cryptography;
 using Newtonsoft.Json;
 
 public class CPHInline
 {
     public Queue<chatMessage> GPTLog { get; set; } = new Queue<chatMessage>(); // Store previous prompts and responses in a queue
     public Queue<chatMessage> ChatLog { get; set; } = new Queue<chatMessage>(); // Store the chat log in a queue
+
+    /// <summary>
+    /// Represents application settings used to configure various aspects of the application.
+    /// </summary>
+    public class AppSettings
+    {
+        /// <summary>
+        /// Gets or sets the API key used for OpenAI services.
+        /// </summary>
+        public string OpenApiKey { get; set; }
+        /// <summary>
+        /// Gets or sets the model used by OpenAI for generating responses.
+        /// </summary>
+        public string OpenAiModel { get; set; }
+        /// <summary>
+        /// Gets or sets the path where the database is stored.
+        /// </summary>
+        public string DatabasePath { get; set; }
+        /// <summary>
+        /// Gets or sets a value indicating whether the application should ignore bot usernames.
+        /// </summary>
+        public string IgnoreBotUsernames { get; set; }
+        /// <summary>
+        /// Gets or sets an alias or identifier for a voice.
+        /// </summary>
+        public string VoiceAlias { get; set; }
+        /// <summary>
+        /// Gets or sets a value indicating whether emojis should be stripped from generated responses.
+        /// </summary>
+        public string StripEmojisFromResponse { get; set; }
+        /// <summary>
+        /// Gets or sets the level of logging used by the application.
+        /// </summary>
+        public string LoggingLevel { get; set; }
+        /// <summary>
+        /// Gets or sets the version of the application.
+        /// </summary>
+        public string Version { get; set; }
+        /// <summary>
+        /// Gets or sets a value indicating whether hate content is allowed.
+        /// </summary>
+        public string HateAllowed { get; set; }
+        /// <summary>
+        /// Gets or sets a value indicating whether threatening hate content is allowed.
+        /// </summary>
+        public string HateThreateningAllowed { get; set; }
+        /// <summary>
+        /// Gets or sets a value indicating whether self-harm content is allowed.
+        /// </summary>
+        public string SelfHarmAllowed { get; set; }
+        /// <summary>
+        /// Gets or sets a value indicating whether violent content is allowed.
+        /// </summary>
+        public string ViolenceAllowed { get; set; }
+        /// <summary>
+        /// Gets or sets a value indicating whether content related to self-harm intent is allowed.
+        /// </summary>
+        public string SelfHarmIntentAllowed { get; set; }
+        /// <summary>
+        /// Gets or sets a value indicating whether content containing self-harm instructions is allowed.
+        /// </summary>
+        public string SelfHarmInstructionsAllowed { get; set; }
+        /// <summary>
+        /// Gets or sets a value indicating whether harassment content is allowed.
+        /// </summary>
+        public string HarassmentAllowed { get; set; }
+        /// <summary>
+        /// Gets or sets a value indicating whether threatening harassment content is allowed.
+        /// </summary>
+        public string HarassmentThreateningAllowed { get; set; }
+        /// <summary>
+        /// Gets or sets a value indicating whether GPT questions should be logged to Discord.
+        /// </summary>
+        public string LogGptQuestionsToDiscord { get; set; }
+        /// <summary>
+        /// Gets or sets the URL of the Discord webhook.
+        /// </summary>
+        public string DiscordWebhookUrl { get; set; }
+        /// <summary>
+        /// Gets or sets the username of the Discord bot.
+        /// </summary>
+        public string DiscordBotUsername { get; set; }
+        /// <summary>
+        /// Gets or sets the URL of the Discord bot's avatar.
+        /// </summary>
+        public string DiscordAvatarUrl { get; set; }
+    }
 
     /// <summary>
     /// Represents the response structure for ChatGPT completions API.
@@ -1244,7 +1332,6 @@ public class CPHInline
             "harassment_allowed",
             "harassment_threatening_allowed",
             "sexual_allowed",
-            "sexual_minors_allowed",
             "violence_allowed",
             "violence_graphic_allowed"
         };
@@ -1252,7 +1339,7 @@ public class CPHInline
         var preferences = new Dictionary<string, bool>();
         foreach (var key in preferenceKeys)
         {
-            bool value = CPH.GetGlobalVar<bool>(key, false);
+            bool value = CPH.GetGlobalVar<bool>(key, true);
             preferences.Add(key, value);
             LogToFile($"Loaded moderation preference: {key} is set to {value}.", "DEBUG");
         }
@@ -2264,7 +2351,7 @@ public class CPHInline
         // Return true to indicate the version number has been sent successfully.
         return true;
     }
-    
+
     /// <summary>
     /// Sends the current version number of the PNGTuber-GPT application, retrieved from a global variable, to the chat.
     /// </summary>
@@ -2279,5 +2366,236 @@ public class CPHInline
         LogToFile("Sent !play command to chat successfully.", "INFO");
         // Return true to indicate the version number has been sent successfully.
         return true;
+    }
+
+    /// <summary>
+    /// Retrieves the nickname from the file.
+    /// </summary>
+    /// <returns>True if the nickname is found or not found; otherwise, false if an error occurs.</returns>
+    public bool GetNickname()
+    {
+        try
+        {
+            // Get the path where the database is stored
+            string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
+            if (string.IsNullOrWhiteSpace(databasePath))
+            {
+                LogToFile("'Database Path' value is either not found or not a valid string.", "ERROR");
+                return false;
+            }
+
+            // Check if the preferred usernames file exists, create if not
+            string filePath = Path.Combine(databasePath, "preferred_userNames.json");
+            if (!File.Exists(filePath))
+            {
+                LogToFile("'preferred_userNames.json' does not exist. Creating default file.", "WARN");
+                CreateDefaultUserNameFile(filePath);
+            }
+
+            // Retrieve the userName value from the args dictionary
+            string userName = args.ContainsKey("userName") ? args["userName"].ToString() : "";
+            // Retrieve the preferred username
+            string preferredUserName = GetPreferredUsername(userName, filePath);
+            if (string.IsNullOrWhiteSpace(preferredUserName))
+            {
+                LogToFile("Preferred user name could not be retrieved.", "WARN");
+            }
+
+            // Set the nickname argument
+            CPH.SetArgument("nickname", preferredUserName);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // Log any exceptions that occur during the method execution
+            LogToFile($"An error occurred in GetNickname: {ex.Message}", "ERROR");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Saves the settings to a JSON file in the specified database path.
+    /// </summary>
+    /// <returns>True if the settings are saved successfully; otherwise, false if an error occurs.</returns>
+    public bool SaveSettings()
+    {
+        try
+        {
+            // Log the entry of the method
+            LogToFile("Entering SaveSettings method.", "DEBUG");
+            // Retrieve the settings from the global variables
+            AppSettings settings = new AppSettings
+            {
+                OpenApiKey = EncryptData(CPH.GetGlobalVar<string>("OpenAI API Key", true)),
+                OpenAiModel = CPH.GetGlobalVar<string>("OpenAI Model", true),
+                DatabasePath = CPH.GetGlobalVar<string>("Database Path", true),
+                IgnoreBotUsernames = CPH.GetGlobalVar<string>("Ignore Bot Usernames", true),
+                VoiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true),
+                StripEmojisFromResponse = CPH.GetGlobalVar<string>("Strip Emojis From Response", true),
+                LoggingLevel = CPH.GetGlobalVar<string>("Logging Level", true),
+                Version = CPH.GetGlobalVar<string>("Version", true),
+                HateAllowed = CPH.GetGlobalVar<string>("hate_allowed", true),
+                HateThreateningAllowed = CPH.GetGlobalVar<string>("hate_thretening_allowed", true),
+                SelfHarmAllowed = CPH.GetGlobalVar<string>("self-harm_allowed", true),
+                ViolenceAllowed = CPH.GetGlobalVar<string>("violence_allowed", true),
+                SelfHarmIntentAllowed = CPH.GetGlobalVar<string>("self-harm_intent_allowed", true),
+                SelfHarmInstructionsAllowed = CPH.GetGlobalVar<string>("self-harm_instructions_allowed", true),
+                HarassmentAllowed = CPH.GetGlobalVar<string>("harrassment_allowed", true),
+                HarassmentThreateningAllowed = CPH.GetGlobalVar<string>("harrassment_threatening_allowed", true),
+                LogGptQuestionsToDiscord = CPH.GetGlobalVar<string>("Log GPT Questions to Discord", true),
+                DiscordWebhookUrl = CPH.GetGlobalVar<string>("Discord Webhook URL", true),
+                DiscordBotUsername = CPH.GetGlobalVar<string>("Discord Bot Username", true),
+                DiscordAvatarUrl = CPH.GetGlobalVar<string>("Discord Avatar Url", true)
+            };
+            // Log the values of the settings (you can customize the format)
+            LogToFile($"OpenApiKey: {settings.OpenApiKey}", "DEBUG");
+            LogToFile($"OpenAiModel: {settings.OpenAiModel}", "DEBUG");
+            // Add similar logging for other settings...
+            // Check if any of the settings are null or empty
+            if (string.IsNullOrWhiteSpace(settings.OpenApiKey) || string.IsNullOrWhiteSpace(settings.OpenAiModel) || string.IsNullOrWhiteSpace(settings.DatabasePath) || string.IsNullOrWhiteSpace(settings.IgnoreBotUsernames) || string.IsNullOrWhiteSpace(settings.VoiceAlias) || string.IsNullOrWhiteSpace(settings.LoggingLevel) || string.IsNullOrWhiteSpace(settings.Version) || string.IsNullOrWhiteSpace(settings.DiscordWebhookUrl) || string.IsNullOrWhiteSpace(settings.DiscordBotUsername) || string.IsNullOrWhiteSpace(settings.DiscordAvatarUrl))
+            {
+                LogToFile("One or more settings are null or empty.", "WARN");
+                return false;
+            }
+
+            // Convert the settings object to JSON
+            var json = Newtonsoft.Json.JsonConvert.SerializeObject(settings);
+            // Save the JSON to the settings.json file in the specified database path
+            var filePath = Path.Combine(settings.DatabasePath, "settings.json");
+            File.WriteAllText(filePath, json);
+            // Log the values of the settings
+            LogToFile($"Settings saved successfully. Settings: {json}", "INFO");
+            // Log the success message for encryption
+            LogToFile("Encryption of OpenAI API Key successful.", "INFO");
+            // Log the exit of the method
+            LogToFile("Exiting SaveSettings method.", "DEBUG");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // Log the error if there was an exception during saving
+            LogToFile($"Error saving settings: {ex.Message}", "ERROR");
+            return false;
+        }
+    }
+
+    public bool ReadSettings()
+    {
+        try
+        {
+            LogToFile("Entering ReadSettings method.", "DEBUG");
+            // Get the path where the database is stored
+            string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
+            if (string.IsNullOrWhiteSpace(databasePath))
+            {
+                LogToFile("'Database Path' value is either not found or not a valid string.", "ERROR");
+                return false;
+            }
+
+            // Construct the path to the settings file
+            string filePath = Path.Combine(databasePath, "settings.json");
+            // Check if the settings file exists
+            if (!File.Exists(filePath))
+            {
+                LogToFile("Settings file not found.", "WARN");
+                return false;
+            }
+
+            // Read the JSON from the file
+            string json = File.ReadAllText(filePath);
+            // Deserialize the JSON into an instance of AppSettings
+            AppSettings settings = Newtonsoft.Json.JsonConvert.DeserializeObject<AppSettings>(json);
+            // Set the global variables using the SetGlobalVar method
+            CPH.SetGlobalVar("OpenAI API Key", DecryptData(settings.OpenApiKey), true);
+            CPH.SetGlobalVar("OpenAI Model", settings.OpenAiModel, true);
+            CPH.SetGlobalVar("Database Path", settings.DatabasePath, true);
+            CPH.SetGlobalVar("Ignore Bot Usernames", settings.IgnoreBotUsernames, true);
+            CPH.SetGlobalVar("Voice Alias", settings.VoiceAlias, true);
+            CPH.SetGlobalVar("Strip Emojis From Response", settings.StripEmojisFromResponse, true);
+            CPH.SetGlobalVar("Logging Level", settings.LoggingLevel, true);
+            CPH.SetGlobalVar("Version", settings.Version, true);
+            CPH.SetGlobalVar("hate_allowed", settings.HateAllowed, true);
+            CPH.SetGlobalVar("hate_thretening_allowed", settings.HateThreateningAllowed, true);
+            CPH.SetGlobalVar("self-harm_allowed", settings.SelfHarmAllowed, true);
+            CPH.SetGlobalVar("violence_allowed", settings.ViolenceAllowed, true);
+            CPH.SetGlobalVar("self-harm_intent_allowed", settings.SelfHarmIntentAllowed, true);
+            CPH.SetGlobalVar("self-harm_instructions_allowed", settings.SelfHarmInstructionsAllowed, true);
+            CPH.SetGlobalVar("harrassment_allowed", settings.HarassmentAllowed, true);
+            CPH.SetGlobalVar("harrassment_threatening_allowed", settings.HarassmentThreateningAllowed, true);
+            CPH.SetGlobalVar("Log GPT Questions to Discord", settings.LogGptQuestionsToDiscord, true);
+            CPH.SetGlobalVar("Discord Webhook URL", settings.DiscordWebhookUrl, true);
+            CPH.SetGlobalVar("Discord Bot Username", settings.DiscordBotUsername, true);
+            CPH.SetGlobalVar("Discord Avatar Url", settings.DiscordAvatarUrl, true);
+            // Log the values of the settings
+            LogToFile($"Settings loaded successfully. Settings: {json}", "INFO");
+            LogToFile("Exiting ReadSettings method.", "DEBUG");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // Log the error if there was an exception during reading the settings
+            LogToFile($"Error reading settings: {ex.Message}", "ERROR");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Encrypts data using AES with machine-specific key management.
+    /// </summary>
+    /// <param name = "data">The data to be encrypted.</param>
+    /// <returns>The base64 encoded encrypted data, or null if an error occurs.</returns>
+    private string EncryptData(string data)
+    {
+        try
+        {
+            LogToFile("Entering EncryptData method.", "DEBUG");
+            // Encrypt the data using ProtectedData with current user scope and entropy
+            LogToFile("Encrypting data with user-specific key.", "INFO");
+            byte[] encryptedData = ProtectedData.Protect(Encoding.UTF8.GetBytes(data), null, DataProtectionScope.CurrentUser);
+            // Convert the encrypted data to base64 string for storage or transmission
+            LogToFile("Converting encrypted data to base64 string.", "INFO");
+            string base64EncryptedData = Convert.ToBase64String(encryptedData);
+            LogToFile("Data encrypted successfully.", "INFO");
+            LogToFile("Exiting EncryptData method.", "DEBUG");
+            return base64EncryptedData;
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"An error occurred in EncryptData: {ex.Message}", "ERROR");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Decrypts data using AES with machine-specific key management.
+    /// </summary>
+    /// <param name = "data">The data to be encrypted.</param>
+    /// <returns>The decrypted data as a string, or null if an error occurs.</returns>
+    private string DecryptData(string encryptedData)
+    {
+        try
+        {
+            LogToFile("Entering DecryptData method.", "DEBUG");
+            if (string.IsNullOrWhiteSpace(encryptedData))
+            {
+                LogToFile("Encrypted data is null or empty.", "WARN");
+                return null;
+            }
+
+            // Convert the base64 string to byte array
+            byte[] encryptedDataBytes = Convert.FromBase64String(encryptedData);
+            // Decrypt the data using ProtectedData with user scope
+            byte[] decryptedData = ProtectedData.Unprotect(encryptedDataBytes, null, DataProtectionScope.CurrentUser);
+            // Convert the decrypted data to a string
+            string data = Encoding.UTF8.GetString(decryptedData);
+            LogToFile("Data decrypted successfully.", "INFO");
+            LogToFile("Exiting DecryptData method.", "DEBUG");
+            return data;
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"An error occurred in DecryptData: {ex.Message}", "ERROR");
+            return null;
+        }
     }
 }
