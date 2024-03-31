@@ -1902,12 +1902,12 @@ public class CPHInline
         LogToFile("Entering RemoveEmojis method.", "DEBUG");
         // Log the original text if needed for debugging.
         LogToFile($"Original text before removing emojis: {text}", "DEBUG");
-        // Regular expression pattern to match non-ASCII characters (emojis).
-        string nonAsciiPattern = @"[^\u0000-\u007F]+";
+        // Regular expression pattern to match emoji characters specifically
+        string emojiPattern = @"[\uD83C-\uDBFF\uDC00-\uDFFF]";  // Use Unicode property for emoji characters
         // Log the regular expression pattern used for removing emojis.
-        LogToFile($"Using regex pattern to remove emojis: {nonAsciiPattern}", "DEBUG");
+        LogToFile($"Using regex pattern to remove emojis: {emojiPattern}", "DEBUG");
         // Regular expression to match and remove emojis (non-ASCII characters) from the 'text' string.
-        string sanitizedText = Regex.Replace(text, nonAsciiPattern, "");
+        string sanitizedText = Regex.Replace(text, emojiPattern, "");
         // Log the text after removing emojis.
         LogToFile($"Text after removing emojis: {sanitizedText}", "DEBUG");
         // Remove any extra spaces left after removing the emojis.
