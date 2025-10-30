@@ -986,7 +986,10 @@ public class CPHInline
         LogToFile($"Message for moderation: {input}", "INFO");
 
         var preferences = LoadModerationPreferences();
-        var excludedCategories = preferences.Where(p => p.Value).Select(p => p.Key.Replace("_allowed", "").Replace("_", "/")).ToList();
+        var excludedCategories = preferences
+            .Where(p => p.Value)
+            .Select(p => p.Key)
+            .ToList();
         LogToFile($"Excluded categories for moderation: {string.Join(", ", excludedCategories)}", "DEBUG");
         try
         {
@@ -1014,28 +1017,28 @@ public class CPHInline
     {
         LogToFile("Loading moderation preferences.", "DEBUG");
 
-        string[] preferenceKeys = new string[]
+        var keyMap = new Dictionary<string, string>
         {
-            "hate_allowed",
-            "hate_threatening_allowed",
-            "self_harm_allowed",
-            "self_harm_intent_allowed",
-            "self_harm_instructions_allowed",
-            "harassment_allowed",
-            "harassment_threatening_allowed",
-            "sexual_allowed",
-            "violence_allowed",
-            "violence_graphic_allowed",
-            "illicit_allowed",
-            "illicit_violent_allowed"
+            { "hate_allowed", "hate" },
+            { "hate_threatening_allowed", "hate/threatening" },
+            { "harassment_allowed", "harassment" },
+            { "harassment_threatening_allowed", "harassment/threatening" },
+            { "sexual_allowed", "sexual" },
+            { "violence_allowed", "violence" },
+            { "violence_graphic_allowed", "violence/graphic" },
+            { "self_harm_allowed", "self-harm" },
+            { "self_harm_intent_allowed", "self-harm/intent" },
+            { "self_harm_instructions_allowed", "self-harm/instructions" },
+            { "illicit_allowed", "illicit" },
+            { "illicit_violent_allowed", "illicit/violent" }
         };
 
         var preferences = new Dictionary<string, bool>();
-        foreach (var key in preferenceKeys)
+        foreach (var kvp in keyMap)
         {
-            bool value = CPH.GetGlobalVar<bool>(key, true);
-            preferences.Add(key, value);
-            LogToFile($"Loaded moderation preference: {key} is set to {value}.", "DEBUG");
+            bool value = CPH.GetGlobalVar<bool>(kvp.Key, true);
+            preferences.Add(kvp.Value, value);
+            LogToFile($"Loaded moderation preference: {kvp.Key} (API: {kvp.Value}) = {value}", "DEBUG");
         }
 
         return preferences;
@@ -2022,16 +2025,18 @@ public class CPHInline
                 StripEmojisFromResponse = CPH.GetGlobalVar<string>("Strip Emojis From Response", true),
                 LoggingLevel = CPH.GetGlobalVar<string>("Logging Level", true),
                 Version = CPH.GetGlobalVar<string>("Version", true),
-                HateAllowed = CPH.GetGlobalVar<string>("hate_allowed", true),
-                HateThreateningAllowed = CPH.GetGlobalVar<string>("hate_thretening_allowed", true),
-                SelfHarmAllowed = CPH.GetGlobalVar<string>("self-harm_allowed", true),
-                ViolenceAllowed = CPH.GetGlobalVar<string>("violence_allowed", true),
-                SelfHarmIntentAllowed = CPH.GetGlobalVar<string>("self-harm_intent_allowed", true),
-                SelfHarmInstructionsAllowed = CPH.GetGlobalVar<string>("self-harm_instructions_allowed", true),
-                HarassmentAllowed = CPH.GetGlobalVar<string>("harrassment_allowed", true),
-                HarassmentThreateningAllowed = CPH.GetGlobalVar<string>("harrassment_threatening_allowed", true),
-                IllicitAllowed = CPH.GetGlobalVar<string>("illicit_allowed", true),
-                IllicitViolentAllowed = CPH.GetGlobalVar<string>("illicit_violent_allowed", true),
+
+                HateAllowed = CPH.GetGlobalVar<bool>("hate_allowed", true),
+                HateThreateningAllowed = CPH.GetGlobalVar<bool>("hate_threatening_allowed", true),
+                SelfHarmAllowed = CPH.GetGlobalVar<bool>("self_harm_allowed", true),
+                ViolenceAllowed = CPH.GetGlobalVar<bool>("violence_allowed", true),
+                SelfHarmIntentAllowed = CPH.GetGlobalVar<bool>("self_harm_intent_allowed", true),
+                SelfHarmInstructionsAllowed = CPH.GetGlobalVar<bool>("self_harm_instructions_allowed", true),
+                HarassmentAllowed = CPH.GetGlobalVar<bool>("harassment_allowed", true),
+                HarassmentThreateningAllowed = CPH.GetGlobalVar<bool>("harassment_threatening_allowed", true),
+                IllicitAllowed = CPH.GetGlobalVar<bool>("illicit_allowed", true),
+                IllicitViolentAllowed = CPH.GetGlobalVar<bool>("illicit_violent_allowed", true),
+
                 LogGptQuestionsToDiscord = CPH.GetGlobalVar<string>("Log GPT Questions to Discord", true),
                 DiscordWebhookUrl = CPH.GetGlobalVar<string>("Discord Webhook URL", true),
                 DiscordBotUsername = CPH.GetGlobalVar<string>("Discord Bot Username", true),
@@ -2101,13 +2106,13 @@ public class CPHInline
             CPH.SetGlobalVar("Logging Level", settings.LoggingLevel, true);
             CPH.SetGlobalVar("Version", settings.Version, true);
             CPH.SetGlobalVar("hate_allowed", settings.HateAllowed, true);
-            CPH.SetGlobalVar("hate_thretening_allowed", settings.HateThreateningAllowed, true);
-            CPH.SetGlobalVar("self-harm_allowed", settings.SelfHarmAllowed, true);
+            CPH.SetGlobalVar("hate_threatening_allowed", settings.HateThreateningAllowed, true);
+            CPH.SetGlobalVar("self_harm_allowed", settings.SelfHarmAllowed, true);
             CPH.SetGlobalVar("violence_allowed", settings.ViolenceAllowed, true);
-            CPH.SetGlobalVar("self-harm_intent_allowed", settings.SelfHarmIntentAllowed, true);
-            CPH.SetGlobalVar("self-harm_instructions_allowed", settings.SelfHarmInstructionsAllowed, true);
-            CPH.SetGlobalVar("harrassment_allowed", settings.HarassmentAllowed, true);
-            CPH.SetGlobalVar("harrassment_threatening_allowed", settings.HarassmentThreateningAllowed, true);
+            CPH.SetGlobalVar("self_harm_intent_allowed", settings.SelfHarmIntentAllowed, true);
+            CPH.SetGlobalVar("self_harm_instructions_allowed", settings.SelfHarmInstructionsAllowed, true);
+            CPH.SetGlobalVar("harassment_allowed", settings.HarassmentAllowed, true);
+            CPH.SetGlobalVar("harassment_threatening_allowed", settings.HarassmentThreateningAllowed, true);
             CPH.SetGlobalVar("illicit_allowed", settings.IllicitAllowed, true);
             CPH.SetGlobalVar("illicit_violent_allowed", settings.IllicitViolentAllowed, true);
             CPH.SetGlobalVar("Log GPT Questions to Discord", settings.LogGptQuestionsToDiscord, true);
