@@ -1025,7 +1025,9 @@ public class CPHInline
             "harassment_threatening_allowed",
             "sexual_allowed",
             "violence_allowed",
-            "violence_graphic_allowed"
+            "violence_graphic_allowed",
+            "illicit_allowed",
+            "illicit_violent_allowed"
         };
 
         var preferences = new Dictionary<string, bool>();
