@@ -19,45 +19,27 @@ public class CPHInline
 
     public class AppSettings
     {
-
         public string OpenApiKey { get; set; }
-
         public string OpenAiModel { get; set; }
-
         public string DatabasePath { get; set; }
-
         public string IgnoreBotUsernames { get; set; }
-
         public string VoiceAlias { get; set; }
-
         public string StripEmojisFromResponse { get; set; }
-
         public string LoggingLevel { get; set; }
-
         public string Version { get; set; }
-
         public string HateAllowed { get; set; }
-
         public string HateThreateningAllowed { get; set; }
-
         public string SelfHarmAllowed { get; set; }
-
         public string ViolenceAllowed { get; set; }
-
         public string SelfHarmIntentAllowed { get; set; }
-
         public string SelfHarmInstructionsAllowed { get; set; }
-
         public string HarassmentAllowed { get; set; }
-
         public string HarassmentThreateningAllowed { get; set; }
-
+        public string IllicitAllowed { get; set; }
+        public string IllicitViolentAllowed { get; set; }
         public string LogGptQuestionsToDiscord { get; set; }
-
         public string DiscordWebhookUrl { get; set; }
-
         public string DiscordBotUsername { get; set; }
-
         public string DiscordAvatarUrl { get; set; }
     }
 
@@ -1105,6 +1087,7 @@ public class CPHInline
 
             var moderationRequestBody = new
             {
+                model = "omni-moderation-latest",
                 input = prompt
             };
             string moderationJsonPayload = JsonConvert.SerializeObject(moderationRequestBody);
@@ -2045,6 +2028,8 @@ public class CPHInline
                 SelfHarmInstructionsAllowed = CPH.GetGlobalVar<string>("self-harm_instructions_allowed", true),
                 HarassmentAllowed = CPH.GetGlobalVar<string>("harrassment_allowed", true),
                 HarassmentThreateningAllowed = CPH.GetGlobalVar<string>("harrassment_threatening_allowed", true),
+                IllicitAllowed = CPH.GetGlobalVar<string>("illicit_allowed", true),
+                IllicitViolentAllowed = CPH.GetGlobalVar<string>("illicit_violent_allowed", true),
                 LogGptQuestionsToDiscord = CPH.GetGlobalVar<string>("Log GPT Questions to Discord", true),
                 DiscordWebhookUrl = CPH.GetGlobalVar<string>("Discord Webhook URL", true),
                 DiscordBotUsername = CPH.GetGlobalVar<string>("Discord Bot Username", true),
@@ -2121,6 +2106,8 @@ public class CPHInline
             CPH.SetGlobalVar("self-harm_instructions_allowed", settings.SelfHarmInstructionsAllowed, true);
             CPH.SetGlobalVar("harrassment_allowed", settings.HarassmentAllowed, true);
             CPH.SetGlobalVar("harrassment_threatening_allowed", settings.HarassmentThreateningAllowed, true);
+            CPH.SetGlobalVar("illicit_allowed", settings.IllicitAllowed, true);
+            CPH.SetGlobalVar("illicit_violent_allowed", settings.IllicitViolentAllowed, true);
             CPH.SetGlobalVar("Log GPT Questions to Discord", settings.LogGptQuestionsToDiscord, true);
             CPH.SetGlobalVar("Discord Webhook URL", settings.DiscordWebhookUrl, true);
             CPH.SetGlobalVar("Discord Bot Username", settings.DiscordBotUsername, true);
