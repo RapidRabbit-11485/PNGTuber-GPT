@@ -41,6 +41,7 @@ public class CPHInline
         public string DiscordWebhookUrl { get; set; }
         public string DiscordBotUsername { get; set; }
         public string DiscordAvatarUrl { get; set; }
+        public string PostToChat { get; set; }
     }
 
     public class ChatCompletionsResponse
@@ -1490,6 +1491,15 @@ public class CPHInline
 
             LogToFile($"GPT model response: {GPTResponse}", "DEBUG");
 
+            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+            if (!postToChat)
+            {
+                LogToFile("Posting GPT responses to chat is disabled by settings.", "INFO");
+                CPH.TtsSpeak(voiceAlias, GPTResponse, false);
+                LogToFile("Spoke GPT's response (chat posting skipped).", "INFO");
+                return true;
+            }
+
             CPH.TtsSpeak(voiceAlias, GPTResponse, false);
             LogToFile("Spoke GPT's response.", "INFO");
 
@@ -2036,7 +2046,7 @@ public class CPHInline
                 HarassmentThreateningAllowed = CPH.GetGlobalVar<bool>("harassment_threatening_allowed", true).ToString(),
                 IllicitAllowed = CPH.GetGlobalVar<bool>("illicit_allowed", true).ToString(),
                 IllicitViolentAllowed = CPH.GetGlobalVar<bool>("illicit_violent_allowed", true).ToString(),
-
+                PostToChat = CPH.GetGlobalVar<bool>("Post To Chat", true).ToString(),
                 LogGptQuestionsToDiscord = CPH.GetGlobalVar<string>("Log GPT Questions to Discord", true),
                 DiscordWebhookUrl = CPH.GetGlobalVar<string>("Discord Webhook URL", true),
                 DiscordBotUsername = CPH.GetGlobalVar<string>("Discord Bot Username", true),
@@ -2115,6 +2125,7 @@ public class CPHInline
             CPH.SetGlobalVar("harassment_threatening_allowed", settings.HarassmentThreateningAllowed, true);
             CPH.SetGlobalVar("illicit_allowed", settings.IllicitAllowed, true);
             CPH.SetGlobalVar("illicit_violent_allowed", settings.IllicitViolentAllowed, true);
+            CPH.SetGlobalVar("Post To Chat", settings.PostToChat, true);
             CPH.SetGlobalVar("Log GPT Questions to Discord", settings.LogGptQuestionsToDiscord, true);
             CPH.SetGlobalVar("Discord Webhook URL", settings.DiscordWebhookUrl, true);
             CPH.SetGlobalVar("Discord Bot Username", settings.DiscordBotUsername, true);
