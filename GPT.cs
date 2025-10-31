@@ -1397,7 +1397,30 @@ public class CPHInline
 
     public bool AskGPT()
     {
-        LogToFile("Entering AskGPT method.", "DEBUG");
+        LogToFile("Entering AskGPT method (multi-character model).", "DEBUG");
+
+        // --- Character Context and Voice Selection ---
+        int characterNumber = 1;
+        try
+        {
+            characterNumber = CPH.GetGlobalVar<int>("character", true);
+            LogToFile($"Active character number set to {characterNumber}.", "INFO");
+        }
+        catch
+        {
+            LogToFile("No active 'character' variable found. Defaulting to 1.", "WARN");
+        }
+
+        string voiceAlias = CPH.GetGlobalVar<string>($"character_voice_alias_{characterNumber}", true);
+        if (string.IsNullOrWhiteSpace(voiceAlias))
+        {
+            string err = $"No voice alias configured for Character {characterNumber}. Please set 'character_voice_alias_{characterNumber}'.";
+            LogToFile(err, "ERROR");
+            CPH.SendMessage(err, true);
+            return false;
+        }
+
+        LogToFile($"Using voice alias '{voiceAlias}' for Character {characterNumber}.", "INFO");
 
         if (ChatLog == null)
         {
@@ -1406,20 +1429,9 @@ public class CPHInline
         }
         else
         {
-
             string chatLogAsString = string.Join(Environment.NewLine, ChatLog.Select(m => m.content ?? "null"));
             LogToFile($"ChatLog Content before asking GPT: {Environment.NewLine}{chatLogAsString}", "INFO");
         }
-
-        string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
-        if (string.IsNullOrWhiteSpace(voiceAlias))
-        {
-            LogToFile("'Voice Alias' global variable is not found or not a valid string.", "ERROR");
-            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
-            return false;
-        }
-
-        LogToFile("Retrieved and validated 'Voice Alias' global variable.", "DEBUG");
 
         string userName;
         if (!args.TryGetValue("userName", out object userNameObj) || string.IsNullOrWhiteSpace(userNameObj?.ToString()))
@@ -1432,7 +1444,9 @@ public class CPHInline
         userName = userNameObj.ToString();
         LogToFile("Retrieved and validated 'userName' argument.", "DEBUG");
 
-        string userToSpeak = args.TryGetValue("nicknamePronouns", out object nicknameObj) && !string.IsNullOrWhiteSpace(nicknameObj?.ToString()) ? nicknameObj.ToString() : userName;
+        string userToSpeak = args.TryGetValue("nicknamePronouns", out object nicknameObj) && !string.IsNullOrWhiteSpace(nicknameObj?.ToString())
+            ? nicknameObj.ToString()
+            : userName;
         if (string.IsNullOrWhiteSpace(userToSpeak))
         {
             LogToFile("Both 'nicknamePronouns' and 'userName' are not found or are empty strings.", "ERROR");
@@ -1448,27 +1462,15 @@ public class CPHInline
             return false;
         }
 
-        LogToFile("Retrieved and validated 'Database Path' global variable.", "DEBUG");
-
-        string fullMessage;
-        if (args.TryGetValue("moderatedMessage", out object moderatedMessageObj) && !string.IsNullOrWhiteSpace(moderatedMessageObj?.ToString()))
+        string characterFileName = CPH.GetGlobalVar<string>($"character_file_{characterNumber}", true);
+        if (string.IsNullOrWhiteSpace(characterFileName))
         {
-            fullMessage = moderatedMessageObj.ToString();
+            characterFileName = "context.txt";
+            LogToFile($"Character file not set for {characterNumber}, defaulting to context.txt", "WARN");
         }
-        else if (args.TryGetValue("rawInput", out object rawInputObj) && !string.IsNullOrWhiteSpace(rawInputObj?.ToString()))
-        {
-            fullMessage = rawInputObj.ToString();
-        }
-        else
-        {
-            LogToFile("Both 'moderatedMessage' and 'rawInput' are not found or are empty strings.", "ERROR");
-            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
-            return false;
-        }
-
-        string ContextFilePath = Path.Combine(databasePath, "context.txt");
+        string ContextFilePath = Path.Combine(databasePath, characterFileName);
         string keywordContextFilePath = Path.Combine(databasePath, "keyword_contexts.json");
-        LogToFile("Constructed file paths for context and keyword context storage.", "DEBUG");
+        LogToFile($"Resolved context file for Character {characterNumber}: {ContextFilePath}", "INFO");
 
         Dictionary<string, string> keywordContexts;
         if (File.Exists(keywordContextFilePath))
@@ -1490,13 +1492,28 @@ public class CPHInline
         string contextBody = $"{context}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}";
         LogToFile("Assembled context body for GPT prompt.", "DEBUG");
 
+        string fullMessage;
+        if (args.TryGetValue("moderatedMessage", out object moderatedMessageObj) && !string.IsNullOrWhiteSpace(moderatedMessageObj?.ToString()))
+        {
+            fullMessage = moderatedMessageObj.ToString();
+        }
+        else if (args.TryGetValue("rawInput", out object rawInputObj) && !string.IsNullOrWhiteSpace(rawInputObj?.ToString()))
+        {
+            fullMessage = rawInputObj.ToString();
+        }
+        else
+        {
+            LogToFile("Both 'moderatedMessage' and 'rawInput' are not found or are empty strings.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            return false;
+        }
+
         string prompt = $"{userToSpeak} asks: {fullMessage}";
         LogToFile($"Constructed prompt for GPT: {prompt}", "DEBUG");
 
         bool keywordMatch = keywordContexts.Keys.Any(keyword => prompt.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);
         if (keywordMatch)
         {
-
             string keyword = keywordContexts.Keys.First(keyword => prompt.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);
             string keywordPhrase = $"Something you know about {keyword} is:";
             string keywordValue = keywordContexts[keyword];
@@ -1514,8 +1531,7 @@ public class CPHInline
 
         try
         {
-
-            string GPTResponse = GenerateChatCompletion(prompt, contextBody); 
+            string GPTResponse = GenerateChatCompletion(prompt, contextBody);
             if (string.IsNullOrWhiteSpace(GPTResponse))
             {
                 LogToFile("GPT model did not return a response.", "ERROR");
@@ -1533,11 +1549,12 @@ public class CPHInline
                 LogToFile("Posting GPT responses to chat is disabled by settings.", "INFO");
                 CPH.TtsSpeak(voiceAlias, GPTResponse, false);
                 LogToFile("Spoke GPT's response (chat posting skipped).", "INFO");
+                CPH.SetGlobalVar("character", 1, true);
                 return true;
             }
 
             CPH.TtsSpeak(voiceAlias, GPTResponse, false);
-            LogToFile("Spoke GPT's response.", "INFO");
+            LogToFile($"Character {characterNumber} spoke GPT's response.", "INFO");
 
             if (GPTResponse.Length > 500)
             {
@@ -1545,32 +1562,23 @@ public class CPHInline
                 int startIndex = 0;
                 while (startIndex < GPTResponse.Length)
                 {
-
                     int chunkSize = Math.Min(500, GPTResponse.Length - startIndex);
                     int endIndex = startIndex + chunkSize;
-
                     if (endIndex < GPTResponse.Length)
                     {
                         int lastSpaceIndex = GPTResponse.LastIndexOf(' ', endIndex, chunkSize);
-                        int lastPunctuationIndex = GPTResponse.LastIndexOf('.', endIndex, chunkSize);
-                        lastPunctuationIndex = Math.Max(lastPunctuationIndex, GPTResponse.LastIndexOf('!', endIndex, chunkSize));
-                        lastPunctuationIndex = Math.Max(lastPunctuationIndex, GPTResponse.LastIndexOf('?', endIndex, chunkSize));
+                        int lastPunctuationIndex = Math.Max(GPTResponse.LastIndexOf('.', endIndex, chunkSize),
+                            Math.Max(GPTResponse.LastIndexOf('!', endIndex, chunkSize),
+                            GPTResponse.LastIndexOf('?', endIndex, chunkSize)));
                         int lastBreakIndex = Math.Max(lastSpaceIndex, lastPunctuationIndex);
-                        if (lastBreakIndex > startIndex)
-                        {
-                            endIndex = lastBreakIndex;
-                        }
+                        if (lastBreakIndex > startIndex) endIndex = lastBreakIndex;
                     }
 
                     string messageChunk = GPTResponse.Substring(startIndex, endIndex - startIndex).Trim();
                     CPH.SendMessage(messageChunk, true);
-
                     startIndex = endIndex;
-
                     System.Threading.Thread.Sleep(1000);
                 }
-
-                return true;
             }
             else
             {
@@ -1578,11 +1586,14 @@ public class CPHInline
                 LogToFile("Sent GPT response to chat.", "INFO");
             }
 
+            // Reset character to default
+            CPH.SetGlobalVar("character", 1, true);
+            LogToFile("Reset 'character' global to 1 after AskGPT.", "DEBUG");
+
             return true;
         }
         catch (Exception ex)
         {
-
             LogToFile($"An error occurred while processing the AskGPT request: {ex.Message}", "ERROR");
             CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please try again later.", true);
             return false;
