@@ -1004,7 +1004,6 @@ public class CPHInline
 
         try
         {
-            var settings = LoadSettings();
             var response = CallModerationEndpoint(input);
             if (response?.Results == null || response.Results.Count == 0)
             {
@@ -1029,18 +1028,18 @@ public class CPHInline
 
                 double threshold = category switch
                 {
-                    "violence" => ParseThreshold(settings.ViolenceThreshold, 0.5),
-                    "violence/graphic" => ParseThreshold(settings.ViolenceGraphicThreshold, 0.5),
-                    "self-harm" => ParseThreshold(settings.SelfHarmThreshold, 0.4),
-                    "self-harm/intent" => ParseThreshold(settings.SelfHarmIntentThreshold, 0.4),
-                    "self-harm/instructions" => ParseThreshold(settings.SelfHarmInstructionsThreshold, 0.4),
-                    "harassment" => ParseThreshold(settings.HarassmentThreshold, 0.5),
-                    "harassment/threatening" => ParseThreshold(settings.HarassmentThreateningThreshold, 0.5),
-                    "hate" => ParseThreshold(settings.HateThreshold, 0.5),
-                    "hate/threatening" => ParseThreshold(settings.HateThreateningThreshold, 0.5),
-                    "illicit" => ParseThreshold(settings.IllicitThreshold, 0.5),
-                    "illicit/violent" => ParseThreshold(settings.IllicitViolentThreshold, 0.5),
-                    "sexual" => ParseThreshold(settings.SexualThreshold, 0.5),
+                    "violence" => ParseThreshold(CPH.GetGlobalVar<string>("Violence Threshold", true), 0.5),
+                    "violence/graphic" => ParseThreshold(CPH.GetGlobalVar<string>("Violence Graphic Threshold", true), 0.5),
+                    "self-harm" => ParseThreshold(CPH.GetGlobalVar<string>("Self Harm Threshold", true), 0.4),
+                    "self-harm/intent" => ParseThreshold(CPH.GetGlobalVar<string>("Self Harm Intent Threshold", true), 0.4),
+                    "self-harm/instructions" => ParseThreshold(CPH.GetGlobalVar<string>("Self Harm Instructions Threshold", true), 0.4),
+                    "harassment" => ParseThreshold(CPH.GetGlobalVar<string>("Harassment Threshold", true), 0.5),
+                    "harassment/threatening" => ParseThreshold(CPH.GetGlobalVar<string>("Harassment Threatening Threshold", true), 0.5),
+                    "hate" => ParseThreshold(CPH.GetGlobalVar<string>("Hate Threshold", true), 0.5),
+                    "hate/threatening" => ParseThreshold(CPH.GetGlobalVar<string>("Hate Threatening Threshold", true), 0.5),
+                    "illicit" => ParseThreshold(CPH.GetGlobalVar<string>("Illicit Threshold", true), 0.5),
+                    "illicit/violent" => ParseThreshold(CPH.GetGlobalVar<string>("Illicit Violent Threshold", true), 0.5),
+                    "sexual" => ParseThreshold(CPH.GetGlobalVar<string>("Sexual Threshold", true), 0.5),
                     _ => 0.5
                 };
 
