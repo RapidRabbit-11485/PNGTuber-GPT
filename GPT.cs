@@ -23,7 +23,21 @@ public class CPHInline
         public string OpenAiModel { get; set; }
         public string DatabasePath { get; set; }
         public string IgnoreBotUsernames { get; set; }
-        public string VoiceAlias { get; set; }
+
+        public string CharacterVoiceAlias_1 { get; set; }
+        public string CharacterVoiceAlias_2 { get; set; }
+        public string CharacterVoiceAlias_3 { get; set; }
+        public string CharacterVoiceAlias_4 { get; set; }
+        public string CharacterVoiceAlias_5 { get; set; }
+
+        public string CharacterFile_1 { get; set; }
+        public string CharacterFile_2 { get; set; }
+        public string CharacterFile_3 { get; set; }
+        public string CharacterFile_4 { get; set; }
+        public string CharacterFile_5 { get; set; }
+
+        public string CompletionsEndpoint { get; set; }
+
         public string StripEmojisFromResponse { get; set; }
         public string LoggingLevel { get; set; }
         public string Version { get; set; }
@@ -1164,50 +1178,70 @@ public class CPHInline
 
     public bool Speak()
     {
-        LogToFile("Entering Speak method.", "DEBUG");
+        LogToFile("Entering Speak method (multi-character model).", "DEBUG");
 
-        string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
-        if (string.IsNullOrWhiteSpace(voiceAlias))
-        {
-            LogToFile("'Voice Alias' global variable is not found or not a valid string.", "ERROR");
-            CPH.SendMessage("I was unable to speak that message. Please check the configuration.", true);
-            return false;
-        }
-
-        string userToSpeak = args.ContainsKey("nickname") && !string.IsNullOrWhiteSpace(args["nickname"].ToString()) ? args["nickname"].ToString() : args.ContainsKey("userName") && !string.IsNullOrWhiteSpace(args["userName"].ToString()) ? args["userName"].ToString() : "";
-        if (string.IsNullOrWhiteSpace(userToSpeak))
-        {
-            LogToFile("Unable to retrieve a valid 'nickname' or 'userName' for speaking.", "ERROR");
-            CPH.SendMessage("I was unable to speak that message. Please check the input.", true);
-            return false;
-        }
-
-        string messageToSpeak = args.ContainsKey("moderatedMessage") && !string.IsNullOrWhiteSpace(args["moderatedMessage"].ToString()) ? args["moderatedMessage"].ToString() : args.ContainsKey("rawInput") && !string.IsNullOrWhiteSpace(args["rawInput"].ToString()) ? args["rawInput"].ToString() : "";
-        if (string.IsNullOrWhiteSpace(messageToSpeak))
-        {
-            LogToFile("Unable to retrieve a valid 'moderatedMessage' or 'rawInput' for speaking.", "ERROR");
-            CPH.SendMessage("I was unable to speak that message. Please check the input.", true);
-            return false;
-        }
-
-        string outputMessage = $"{userToSpeak} said: {messageToSpeak}";
-        LogToFile($"Speaking message: {outputMessage}", "INFO");
+        int characterNumber = 1;
         try
         {
+            characterNumber = CPH.GetGlobalVar<int>("character", true);
+            LogToFile($"Active character set to {characterNumber}.", "INFO");
+        }
+        catch
+        {
+            LogToFile("No active 'character' variable found. Defaulting to 1.", "WARN");
+        }
 
+        string voiceAlias = CPH.GetGlobalVar<string>($"character_voice_alias_{characterNumber}", true);
+        if (string.IsNullOrWhiteSpace(voiceAlias))
+        {
+            string err = $"No voice alias configured for Character {characterNumber}. Please set 'character_voice_alias_{characterNumber}'.";
+            LogToFile(err, "ERROR");
+            CPH.SendMessage(err, true);
+            return false;
+        }
+
+        string messageToSpeak =
+            args.ContainsKey("moderatedMessage") && !string.IsNullOrWhiteSpace(args["moderatedMessage"]?.ToString())
+                ? args["moderatedMessage"].ToString()
+                : args.ContainsKey("rawInput") && !string.IsNullOrWhiteSpace(args["rawInput"]?.ToString())
+                    ? args["rawInput"].ToString()
+                    : "";
+
+        if (string.IsNullOrWhiteSpace(messageToSpeak))
+        {
+            LogToFile("No text provided to speak.", "ERROR");
+            CPH.SendMessage("No text provided to speak.", true);
+            return false;
+        }
+
+        string userToSpeak =
+            args.ContainsKey("nickname") && !string.IsNullOrWhiteSpace(args["nickname"]?.ToString())
+                ? args["nickname"].ToString()
+                : args.ContainsKey("userName") && !string.IsNullOrWhiteSpace(args["userName"]?.ToString())
+                    ? args["userName"].ToString()
+                    : "Unknown";
+
+        string outputMessage = $"{userToSpeak} said: {messageToSpeak}";
+        LogToFile($"Character {characterNumber} ({voiceAlias}) speaking message: {outputMessage}", "INFO");
+
+        try
+        {
             int speakResult = CPH.TtsSpeak(voiceAlias, outputMessage, false);
             if (speakResult != 0)
             {
-
-                LogToFile($"TTS returned result code: {speakResult}", "INFO");
+                LogToFile($"TTS returned non-zero result code: {speakResult}", "WARN");
                 return false;
             }
 
+            // Reset to default character after speaking
+            CPH.SetGlobalVar("character", 1, true);
+            LogToFile("Reset 'character' global to 1 after speaking.", "DEBUG");
             return true;
         }
         catch (Exception ex)
         {
-            LogToFile($"An exception occurred while trying to speak: {ex.Message}", "ERROR");
+            LogToFile($"Speak() encountered an error: {ex.Message}", "ERROR");
+            CPH.SendMessage("An internal error occurred while speaking.", true);
             return false;
         }
     }
@@ -2036,7 +2070,6 @@ public class CPHInline
     {
         try
         {
-
             LogToFile("Entering SaveSettings method.", "DEBUG");
 
             AppSettings settings = new AppSettings
@@ -2045,7 +2078,6 @@ public class CPHInline
                 OpenAiModel = CPH.GetGlobalVar<string>("OpenAI Model", true),
                 DatabasePath = CPH.GetGlobalVar<string>("Database Path", true),
                 IgnoreBotUsernames = CPH.GetGlobalVar<string>("Ignore Bot Usernames", true),
-                VoiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true),
                 StripEmojisFromResponse = CPH.GetGlobalVar<string>("Strip Emojis From Response", true),
                 LoggingLevel = CPH.GetGlobalVar<string>("Logging Level", true),
                 Version = CPH.GetGlobalVar<string>("Version", true),
@@ -2064,13 +2096,48 @@ public class CPHInline
                 LogGptQuestionsToDiscord = CPH.GetGlobalVar<string>("Log GPT Questions to Discord", true),
                 DiscordWebhookUrl = CPH.GetGlobalVar<string>("Discord Webhook URL", true),
                 DiscordBotUsername = CPH.GetGlobalVar<string>("Discord Bot Username", true),
-                DiscordAvatarUrl = CPH.GetGlobalVar<string>("Discord Avatar Url", true)
+                DiscordAvatarUrl = CPH.GetGlobalVar<string>("Discord Avatar Url", true),
+
+                CharacterVoiceAlias_1 = CPH.GetGlobalVar<string>("character_voice_alias_1", true),
+                CharacterVoiceAlias_2 = CPH.GetGlobalVar<string>("character_voice_alias_2", true),
+                CharacterVoiceAlias_3 = CPH.GetGlobalVar<string>("character_voice_alias_3", true),
+                CharacterVoiceAlias_4 = CPH.GetGlobalVar<string>("character_voice_alias_4", true),
+                CharacterVoiceAlias_5 = CPH.GetGlobalVar<string>("character_voice_alias_5", true),
+
+                CharacterFile_1 = CPH.GetGlobalVar<string>("character_file_1", true),
+                CharacterFile_2 = CPH.GetGlobalVar<string>("character_file_2", true),
+                CharacterFile_3 = CPH.GetGlobalVar<string>("character_file_3", true),
+                CharacterFile_4 = CPH.GetGlobalVar<string>("character_file_4", true),
+                CharacterFile_5 = CPH.GetGlobalVar<string>("character_file_5", true),
+
+                CompletionsEndpoint = CPH.GetGlobalVar<string>("Completions Endpoint", true),
             };
 
             LogToFile($"OpenApiKey: {settings.OpenApiKey}", "DEBUG");
             LogToFile($"OpenAiModel: {settings.OpenAiModel}", "DEBUG");
 
-            if (string.IsNullOrWhiteSpace(settings.OpenApiKey) || string.IsNullOrWhiteSpace(settings.OpenAiModel) || string.IsNullOrWhiteSpace(settings.DatabasePath) || string.IsNullOrWhiteSpace(settings.IgnoreBotUsernames) || string.IsNullOrWhiteSpace(settings.VoiceAlias) || string.IsNullOrWhiteSpace(settings.LoggingLevel) || string.IsNullOrWhiteSpace(settings.Version) || string.IsNullOrWhiteSpace(settings.DiscordWebhookUrl) || string.IsNullOrWhiteSpace(settings.DiscordBotUsername) || string.IsNullOrWhiteSpace(settings.DiscordAvatarUrl))
+            if (
+                string.IsNullOrWhiteSpace(settings.OpenApiKey)
+                || string.IsNullOrWhiteSpace(settings.OpenAiModel)
+                || string.IsNullOrWhiteSpace(settings.DatabasePath)
+                || string.IsNullOrWhiteSpace(settings.IgnoreBotUsernames)
+                || string.IsNullOrWhiteSpace(settings.LoggingLevel)
+                || string.IsNullOrWhiteSpace(settings.Version)
+                || string.IsNullOrWhiteSpace(settings.DiscordWebhookUrl)
+                || string.IsNullOrWhiteSpace(settings.DiscordBotUsername)
+                || string.IsNullOrWhiteSpace(settings.DiscordAvatarUrl)
+                || string.IsNullOrWhiteSpace(settings.CharacterVoiceAlias_1)
+                || string.IsNullOrWhiteSpace(settings.CharacterVoiceAlias_2)
+                || string.IsNullOrWhiteSpace(settings.CharacterVoiceAlias_3)
+                || string.IsNullOrWhiteSpace(settings.CharacterVoiceAlias_4)
+                || string.IsNullOrWhiteSpace(settings.CharacterVoiceAlias_5)
+                || string.IsNullOrWhiteSpace(settings.CharacterFile_1)
+                || string.IsNullOrWhiteSpace(settings.CharacterFile_2)
+                || string.IsNullOrWhiteSpace(settings.CharacterFile_3)
+                || string.IsNullOrWhiteSpace(settings.CharacterFile_4)
+                || string.IsNullOrWhiteSpace(settings.CharacterFile_5)
+                || string.IsNullOrWhiteSpace(settings.CompletionsEndpoint)
+            )
             {
                 LogToFile("One or more settings are null or empty.", "WARN");
                 return false;
@@ -2090,7 +2157,6 @@ public class CPHInline
         }
         catch (Exception ex)
         {
-
             LogToFile($"Error saving settings: {ex.Message}", "ERROR");
             return false;
         }
@@ -2125,7 +2191,7 @@ public class CPHInline
             CPH.SetGlobalVar("OpenAI Model", settings.OpenAiModel, true);
             CPH.SetGlobalVar("Database Path", settings.DatabasePath, true);
             CPH.SetGlobalVar("Ignore Bot Usernames", settings.IgnoreBotUsernames, true);
-            CPH.SetGlobalVar("Voice Alias", settings.VoiceAlias, true);
+            // CPH.SetGlobalVar("Voice Alias", settings.VoiceAlias, true); // REMOVE this line per instructions
             CPH.SetGlobalVar("Strip Emojis From Response", settings.StripEmojisFromResponse, true);
             CPH.SetGlobalVar("Logging Level", settings.LoggingLevel, true);
             CPH.SetGlobalVar("Version", settings.Version, true);
@@ -2144,6 +2210,21 @@ public class CPHInline
             CPH.SetGlobalVar("Discord Webhook URL", settings.DiscordWebhookUrl, true);
             CPH.SetGlobalVar("Discord Bot Username", settings.DiscordBotUsername, true);
             CPH.SetGlobalVar("Discord Avatar Url", settings.DiscordAvatarUrl, true);
+
+            // Add new global variable assignments for each per-character property and the completions endpoint:
+            CPH.SetGlobalVar("character_voice_alias_1", settings.CharacterVoiceAlias_1, true);
+            CPH.SetGlobalVar("character_voice_alias_2", settings.CharacterVoiceAlias_2, true);
+            CPH.SetGlobalVar("character_voice_alias_3", settings.CharacterVoiceAlias_3, true);
+            CPH.SetGlobalVar("character_voice_alias_4", settings.CharacterVoiceAlias_4, true);
+            CPH.SetGlobalVar("character_voice_alias_5", settings.CharacterVoiceAlias_5, true);
+
+            CPH.SetGlobalVar("character_file_1", settings.CharacterFile_1, true);
+            CPH.SetGlobalVar("character_file_2", settings.CharacterFile_2, true);
+            CPH.SetGlobalVar("character_file_3", settings.CharacterFile_3, true);
+            CPH.SetGlobalVar("character_file_4", settings.CharacterFile_4, true);
+            CPH.SetGlobalVar("character_file_5", settings.CharacterFile_5, true);
+
+            CPH.SetGlobalVar("Completions Endpoint", settings.CompletionsEndpoint, true);
 
             LogToFile($"Settings loaded successfully. Settings: {json}", "INFO");
             LogToFile("Exiting ReadSettings method.", "DEBUG");
