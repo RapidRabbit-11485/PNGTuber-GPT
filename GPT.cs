@@ -1607,7 +1607,7 @@ public class CPHInline
         }
     }
 
-public bool AskGPTWebhook()
+    public bool AskGPTWebhook()
 {
     LogToFile("Entering AskGPTWebhook method.", "DEBUG");
 
