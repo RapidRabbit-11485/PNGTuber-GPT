@@ -1535,7 +1535,82 @@ public class CPHInline
 
         try
         {
-            string GPTResponse = GenerateChatCompletion(prompt, contextBody);
+            // --- BEGIN: OpenAI API call with raw request/response capture ---
+            string completionsRequestJSON = null;
+            string completionsResponseContent = null;
+            string GPTResponse = null;
+            try
+            {
+                // Prepare OpenAI API call as in GenerateChatCompletion, but inline for capturing JSON
+                string apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
+                string voiceAliasLocal = CPH.GetGlobalVar<string>("Voice Alias", true);
+                string AIModel = CPH.GetGlobalVar<string>("OpenAI Model", true);
+                string completionsEndpoint = "https://api.openai.com/v1/chat/completions";
+
+                var messages = new List<chatMessage>
+                {
+                    new chatMessage
+                    {
+                        role = "system",
+                        content = contextBody
+                    },
+                    new chatMessage
+                    {
+                        role = "user",
+                        content = "I am going to send you the chat log from Twitch. You should reference these messages for all future prompts if it is relevant to the prompt being asked. Each message will be prefixed with the users name that you can refer to them as, if referring to their message in the response. After each message you receive, you will return simply \"OK\" to indicate you have received this message, and no other text. When I am finished I will say FINISHED, and you will again respond with simply \"OK\" and nothing else, and then resume normal operation on all future prompts."
+                    },
+                    new chatMessage
+                    {
+                        role = "assistant",
+                        content = "OK"
+                    }
+                };
+                if (ChatLog != null)
+                {
+                    foreach (var chatMessage in ChatLog)
+                    {
+                        messages.Add(chatMessage);
+                        messages.Add(new chatMessage { role = "assistant", content = "OK" });
+                    }
+                }
+                messages.Add(new chatMessage { role = "user", content = "FINISHED" });
+                messages.Add(new chatMessage { role = "assistant", content = "OK" });
+                if (GPTLog != null)
+                {
+                    foreach (var gptMessage in GPTLog)
+                    {
+                        messages.Add(gptMessage);
+                    }
+                }
+                messages.Add(new chatMessage { role = "user", content = $"{prompt} You must respond in less than 500 characters." });
+                completionsRequestJSON = JsonConvert.SerializeObject(new { model = AIModel, messages = messages }, Formatting.Indented);
+                LogToFile($"Request JSON: {completionsRequestJSON}", "DEBUG");
+                WebRequest completionsWebRequest = WebRequest.Create(completionsEndpoint);
+                completionsWebRequest.Method = "POST";
+                completionsWebRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
+                completionsWebRequest.ContentType = "application/json";
+                using (Stream requestStream = completionsWebRequest.GetRequestStream())
+                {
+                    byte[] completionsContentBytes = Encoding.UTF8.GetBytes(completionsRequestJSON);
+                    requestStream.Write(completionsContentBytes, 0, completionsContentBytes.Length);
+                }
+                using (WebResponse completionsWebResponse = completionsWebRequest.GetResponse())
+                {
+                    using (StreamReader responseReader = new StreamReader(completionsWebResponse.GetResponseStream()))
+                    {
+                        completionsResponseContent = responseReader.ReadToEnd();
+                        LogToFile($"Response JSON: {completionsResponseContent}", "DEBUG");
+                        var completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
+                        GPTResponse = completionsJsonResponse?.Choices?.FirstOrDefault()?.Message?.content ?? string.Empty;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogToFile($"An error occurred during OpenAI API call: {ex.Message}", "ERROR");
+                GPTResponse = null;
+            }
+            // --- END: OpenAI API call with raw request/response capture ---
 
             GPTResponse = CleanAIText(GPTResponse);
             LogToFile("Applied CleanAIText() to GPT response.", "DEBUG");
@@ -1549,6 +1624,63 @@ public class CPHInline
             LogToFile($"GPT model response: {GPTResponse}", "DEBUG");
             CPH.SetGlobalVar("Response", GPTResponse, true);
             LogToFile("Stored GPT response in global variable 'Response'.", "INFO");
+
+            // Outbound webhook logic
+            string outboundWebhookUrl = CPH.GetGlobalVar<string>("outbound_webhook_url", true);
+            string outboundWebhookMode = CPH.GetGlobalVar<string>("outbound_webhook_mode", true);
+            if (!string.IsNullOrWhiteSpace(outboundWebhookUrl))
+            {
+                string payload = null;
+                if ((outboundWebhookMode ?? "").ToLower() == "clean")
+                {
+                    // Send only plain GPT response text, no JSON, no quotes
+                    payload = GPTResponse ?? "";
+                }
+                else if ((outboundWebhookMode ?? "").ToLower() == "full")
+                {
+                    // Send full API call data
+                    var fullPayloadObj = new
+                    {
+                        prompt = prompt,
+                        contextBody = contextBody,
+                        completionsRequestJSON = completionsRequestJSON,
+                        completionsResponseContent = completionsResponseContent
+                    };
+                    payload = JsonConvert.SerializeObject(fullPayloadObj);
+                }
+                else
+                {
+                    // Default: send JSON with response only
+                    payload = JsonConvert.SerializeObject(new { response = GPTResponse });
+                }
+                LogToFile($"Sending outbound webhook payload: {payload}", "INFO");
+                try
+                {
+                    var request = WebRequest.Create(outboundWebhookUrl);
+                    request.Method = "POST";
+                    if ((outboundWebhookMode ?? "").ToLower() == "clean")
+                    {
+                        request.ContentType = "text/plain";
+                    }
+                    else
+                    {
+                        request.ContentType = "application/json";
+                    }
+                    byte[] payloadBytes = Encoding.UTF8.GetBytes(payload);
+                    using (var stream = request.GetRequestStream())
+                    {
+                        stream.Write(payloadBytes, 0, payloadBytes.Length);
+                    }
+                    using (var response = request.GetResponse())
+                    {
+                        LogToFile("Outbound webhook POST successful.", "INFO");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogToFile($"Failed to POST outbound webhook: {ex.Message}", "ERROR");
+                }
+            }
 
             bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
             if (!postToChat)
@@ -1672,7 +1804,65 @@ public class CPHInline
         }
         try
         {
-            string GPTResponse = GenerateChatCompletion(prompt, contextBody);
+            // --- BEGIN: OpenAI API call with raw request/response capture ---
+            string completionsRequestJSON = null;
+            string completionsResponseContent = null;
+            string GPTResponse = null;
+            try
+            {
+                string apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
+                string voiceAliasLocal = CPH.GetGlobalVar<string>("Voice Alias", true);
+                string AIModel = CPH.GetGlobalVar<string>("OpenAI Model", true);
+                string completionsEndpoint = "https://api.openai.com/v1/chat/completions";
+                var messages = new List<chatMessage>
+                {
+                    new chatMessage
+                    {
+                        role = "system",
+                        content = contextBody
+                    },
+                    new chatMessage
+                    {
+                        role = "user",
+                        content = "I am going to send you the chat log from Twitch. You should reference these messages for all future prompts if it is relevant to the prompt being asked. Each message will be prefixed with the users name that you can refer to them as, if referring to their message in the response. After each message you receive, you will return simply \"OK\" to indicate you have received this message, and no other text. When I am finished I will say FINISHED, and you will again respond with simply \"OK\" and nothing else, and then resume normal operation on all future prompts."
+                    },
+                    new chatMessage
+                    {
+                        role = "assistant",
+                        content = "OK"
+                    }
+                };
+                // ChatLog and GPTLog logic omitted for webhook, but can be added if needed
+                messages.Add(new chatMessage { role = "user", content = $"{prompt} You must respond in less than 500 characters." });
+                completionsRequestJSON = JsonConvert.SerializeObject(new { model = AIModel, messages = messages }, Formatting.Indented);
+                LogToFile($"Request JSON: {completionsRequestJSON}", "DEBUG");
+                WebRequest completionsWebRequest = WebRequest.Create(completionsEndpoint);
+                completionsWebRequest.Method = "POST";
+                completionsWebRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
+                completionsWebRequest.ContentType = "application/json";
+                using (Stream requestStream = completionsWebRequest.GetRequestStream())
+                {
+                    byte[] completionsContentBytes = Encoding.UTF8.GetBytes(completionsRequestJSON);
+                    requestStream.Write(completionsContentBytes, 0, completionsContentBytes.Length);
+                }
+                using (WebResponse completionsWebResponse = completionsWebRequest.GetResponse())
+                {
+                    using (StreamReader responseReader = new StreamReader(completionsWebResponse.GetResponseStream()))
+                    {
+                        completionsResponseContent = responseReader.ReadToEnd();
+                        LogToFile($"Response JSON: {completionsResponseContent}", "DEBUG");
+                        var completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
+                        GPTResponse = completionsJsonResponse?.Choices?.FirstOrDefault()?.Message?.content ?? string.Empty;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogToFile($"An error occurred during OpenAI API call: {ex.Message}", "ERROR");
+                GPTResponse = null;
+            }
+            // --- END: OpenAI API call with raw request/response capture ---
+
             GPTResponse = CleanAIText(GPTResponse);
             LogToFile("Applied CleanAIText() to GPT response (webhook).", "DEBUG");
             if (string.IsNullOrWhiteSpace(GPTResponse))
@@ -1728,15 +1918,42 @@ public class CPHInline
             string outboundWebhookMode = CPH.GetGlobalVar<string>("outbound_webhook_mode", true);
             if (!string.IsNullOrWhiteSpace(outboundWebhookUrl))
             {
-                string payload = outboundWebhookMode?.ToLower() == "clean"
-                    ? JsonConvert.SerializeObject(new { response = GPTResponse })
-                    : JsonConvert.SerializeObject(new { prompt = prompt, response = GPTResponse });
+                string payload = null;
+                if ((outboundWebhookMode ?? "").ToLower() == "clean")
+                {
+                    // Send only plain GPT response text, no JSON, no quotes
+                    payload = GPTResponse ?? "";
+                }
+                else if ((outboundWebhookMode ?? "").ToLower() == "full")
+                {
+                    // Send full API call data
+                    var fullPayloadObj = new
+                    {
+                        prompt = prompt,
+                        contextBody = contextBody,
+                        completionsRequestJSON = completionsRequestJSON,
+                        completionsResponseContent = completionsResponseContent
+                    };
+                    payload = JsonConvert.SerializeObject(fullPayloadObj);
+                }
+                else
+                {
+                    // Default: send JSON with response only
+                    payload = JsonConvert.SerializeObject(new { response = GPTResponse });
+                }
                 LogToFile($"Sending outbound webhook payload: {payload}", "INFO");
                 try
                 {
                     var request = WebRequest.Create(outboundWebhookUrl);
                     request.Method = "POST";
-                    request.ContentType = "application/json";
+                    if ((outboundWebhookMode ?? "").ToLower() == "clean")
+                    {
+                        request.ContentType = "text/plain";
+                    }
+                    else
+                    {
+                        request.ContentType = "application/json";
+                    }
                     byte[] payloadBytes = Encoding.UTF8.GetBytes(payload);
                     using (var stream = request.GetRequestStream())
                     {
