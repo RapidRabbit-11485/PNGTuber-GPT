@@ -40,17 +40,19 @@ public class CPHInline
 
         public string LoggingLevel { get; set; }
         public string TextCleanMode { get; set; }
+        public string HateThreshold { get; set; }
+        public string HateThreateningThreshold { get; set; }
+        public string HarassmentThreshold { get; set; }
+        public string HarassmentThreateningThreshold { get; set; }
+        public string SexualThreshold { get; set; }
+        public string ViolenceThreshold { get; set; }
+        public string ViolenceGraphicThreshold { get; set; }
+        public string SelfHarmThreshold { get; set; }
+        public string SelfHarmIntentThreshold { get; set; }
+        public string SelfHarmInstructionsThreshold { get; set; }
+        public string IllicitThreshold { get; set; }
+        public string IllicitViolentThreshold { get; set; }
         public string Version { get; set; }
-        public string HateAllowed { get; set; }
-        public string HateThreateningAllowed { get; set; }
-        public string SelfHarmAllowed { get; set; }
-        public string ViolenceAllowed { get; set; }
-        public string SelfHarmIntentAllowed { get; set; }
-        public string SelfHarmInstructionsAllowed { get; set; }
-        public string HarassmentAllowed { get; set; }
-        public string HarassmentThreateningAllowed { get; set; }
-        public string IllicitAllowed { get; set; }
-        public string IllicitViolentAllowed { get; set; }
         public string LogGptQuestionsToDiscord { get; set; }
         public string DiscordWebhookUrl { get; set; }
         public string DiscordBotUsername { get; set; }
@@ -1000,63 +1002,69 @@ public class CPHInline
 
         LogToFile($"Message for moderation: {input}", "INFO");
 
-        var preferences = LoadModerationPreferences();
-        var excludedCategories = preferences
-            .Where(p => p.Value)
-            .Select(p => p.Key)
-            .ToList();
-        LogToFile($"Excluded categories for moderation: {string.Join(", ", excludedCategories)}", "DEBUG");
         try
         {
-
-            List<string> flaggedCategories = CallModerationEndpoint(input, excludedCategories.ToArray());
-            if (flaggedCategories == null)
+            var response = CallModerationEndpoint(input);
+            if (response?.Results == null || response.Results.Count == 0)
             {
-                LogToFile("Moderation endpoint failed to respond or responded with an error.", "ERROR");
+                LogToFile("Moderation endpoint failed to respond or returned no results.", "ERROR");
                 return false;
             }
 
-            bool moderationResult = HandleModerationResponse(flaggedCategories, input);
-            LogToFile($"Moderation result: {(moderationResult ? "Passed" : "Failed")}", "INFO");
-            return moderationResult;
+            var result = response.Results[0];
+            var scores = result.Category_scores ?? new Dictionary<string, double>();
+
+            var flaggedCategories = new List<string>();
+
+            LogToFile("Moderation Results (using local thresholds)", "INFO");
+            LogToFile("--------------------------------------------------", "INFO");
+            LogToFile($"{"Category",-25}{"Score",-10}{"Threshold",-12}{"Flagged",-8}", "INFO");
+            LogToFile("--------------------------------------------------", "INFO");
+
+            foreach (var kvp in scores)
+            {
+                string category = kvp.Key;
+                double score = kvp.Value;
+
+                double threshold = category switch
+                {
+                    "violence" => ParseThreshold(appSettings.ViolenceThreshold, 0.5),
+                    "violence/graphic" => ParseThreshold(appSettings.ViolenceGraphicThreshold, 0.5),
+                    "self-harm" => ParseThreshold(appSettings.SelfHarmThreshold, 0.4),
+                    "self-harm/intent" => ParseThreshold(appSettings.SelfHarmIntentThreshold, 0.4),
+                    "self-harm/instructions" => ParseThreshold(appSettings.SelfHarmInstructionsThreshold, 0.4),
+                    "harassment" => ParseThreshold(appSettings.HarassmentThreshold, 0.5),
+                    "harassment/threatening" => ParseThreshold(appSettings.HarassmentThreateningThreshold, 0.5),
+                    "hate" => ParseThreshold(appSettings.HateThreshold, 0.5),
+                    "hate/threatening" => ParseThreshold(appSettings.HateThreateningThreshold, 0.5),
+                    "illicit" => ParseThreshold(appSettings.IllicitThreshold, 0.5),
+                    "illicit/violent" => ParseThreshold(appSettings.IllicitViolentThreshold, 0.5),
+                    "sexual" => ParseThreshold(appSettings.SexualThreshold, 0.5),
+                    _ => 0.5
+                };
+
+                bool flagged = score >= threshold;
+                if (flagged)
+                    flaggedCategories.Add(category);
+
+                LogToFile($"{category,-25}{score,-10:F3}{threshold,-12:F2}{(flagged ? "Yes" : "No"),-8}", "INFO");
+            }
+
+            LogToFile("--------------------------------------------------", "INFO");
+            if (flaggedCategories.Any())
+                LogToFile($"Flagged Categories: {string.Join(", ", flaggedCategories)}", "INFO");
+            else
+                LogToFile("Flagged Categories: None", "INFO");
+
+            bool passed = !flaggedCategories.Any() || HandleModerationResponse(flaggedCategories, input);
+            LogToFile($"Moderation result: {(passed ? "Passed" : "Failed")}", "INFO");
+            return passed;
         }
         catch (Exception ex)
         {
-
             LogToFile($"An error occurred in PerformModeration: {ex.Message}", "ERROR");
             return false;
         }
-    }
-
-    private Dictionary<string, bool> LoadModerationPreferences()
-    {
-        LogToFile("Loading moderation preferences.", "DEBUG");
-
-        var keyMap = new Dictionary<string, string>
-        {
-            { "hate_allowed", "hate" },
-            { "hate_threatening_allowed", "hate/threatening" },
-            { "harassment_allowed", "harassment" },
-            { "harassment_threatening_allowed", "harassment/threatening" },
-            { "sexual_allowed", "sexual" },
-            { "violence_allowed", "violence" },
-            { "violence_graphic_allowed", "violence/graphic" },
-            { "self_harm_allowed", "self-harm" },
-            { "self_harm_intent_allowed", "self-harm/intent" },
-            { "self_harm_instructions_allowed", "self-harm/instructions" },
-            { "illicit_allowed", "illicit" },
-            { "illicit_violent_allowed", "illicit/violent" }
-        };
-
-        var preferences = new Dictionary<string, bool>();
-        foreach (var kvp in keyMap)
-        {
-            bool value = CPH.GetGlobalVar<bool>(kvp.Key, true);
-            preferences.Add(kvp.Value, value);
-            LogToFile($"Loaded moderation preference: {kvp.Key} (API: {kvp.Value}) = {value}", "DEBUG");
-        }
-
-        return preferences;
     }
 
     private bool HandleModerationResponse(List<string> flaggedCategories, string input)
@@ -1089,7 +1097,7 @@ public class CPHInline
         }
     }
 
-    private List<string> CallModerationEndpoint(string prompt, string[] excludedCategories)
+    private ModerationResponse CallModerationEndpoint(string prompt)
     {
         LogToFile("Entering CallModerationEndpoint method.", "DEBUG");
 
@@ -1102,7 +1110,6 @@ public class CPHInline
 
         try
         {
-
             string moderationEndpoint = "https://api.openai.com/v1/moderations";
 
             var moderationRequestBody = new
@@ -1127,53 +1134,48 @@ public class CPHInline
             }
 
             using (WebResponse moderationWebResponse = moderationWebRequest.GetResponse())
+            using (Stream responseStream = moderationWebResponse.GetResponseStream())
+            using (StreamReader responseReader = new StreamReader(responseStream))
             {
-                using (Stream responseStream = moderationWebResponse.GetResponseStream())
+                string moderationResponseContent = responseReader.ReadToEnd();
+
+                var moderationJsonResponse = JsonConvert.DeserializeObject<ModerationResponse>(moderationResponseContent);
+
+                if (moderationJsonResponse?.Results == null || !moderationJsonResponse.Results.Any())
                 {
-                    using (StreamReader responseReader = new StreamReader(responseStream))
-                    {
-
-                        string moderationResponseContent = responseReader.ReadToEnd();
-                        LogToFile($"Received moderation response: {moderationResponseContent}", "DEBUG");
-
-                        var moderationJsonResponse = JsonConvert.DeserializeObject<ModerationResponse>(moderationResponseContent);
-
-                        if (moderationJsonResponse?.Results == null || !moderationJsonResponse.Results.Any())
-                        {
-                            LogToFile("No moderation results were returned from the API.", "ERROR");
-                            return null;
-                        }
-
-                        List<string> flaggedCategories = moderationJsonResponse.Results[0].Categories.Where(category => category.Value && !excludedCategories.Contains(category.Key)).Select(category => category.Key).ToList();
-
-                        if (flaggedCategories != null && flaggedCategories.Any())
-                        {
-                            LogToFile($"Flagged categories: {string.Join(", ", flaggedCategories)}", "INFO");
-                        }
-
-                        return flaggedCategories;
-                    }
+                    LogToFile("No moderation results were returned from the API.", "ERROR");
+                    return null;
                 }
+
+                return moderationJsonResponse;
             }
         }
         catch (WebException webEx)
         {
-
             using (var stream = webEx.Response?.GetResponseStream())
             using (var reader = new StreamReader(stream ?? new MemoryStream()))
             {
                 string responseContent = reader.ReadToEnd();
                 LogToFile($"A WebException was caught during the moderation request: {responseContent}", "ERROR");
             }
-
             return null;
         }
         catch (Exception ex)
         {
-
             LogToFile($"An exception occurred while calling the moderation endpoint: {ex.Message}", "ERROR");
             return null;
         }
+    }
+
+    private double ParseThreshold(string raw, double fallback)
+    {
+        double t;
+        if (!double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out t))
+            t = fallback;
+
+        if (t < 0.0) t = 0.0;
+        if (t > 1.0) t = 1.0;
+        return t;
     }
 
     public bool Speak()
@@ -2136,16 +2138,19 @@ public class CPHInline
                 LoggingLevel = CPH.GetGlobalVar<string>("Logging Level", true),
                 Version = CPH.GetGlobalVar<string>("Version", true),
 
-                HateAllowed = CPH.GetGlobalVar<bool>("hate_allowed", true).ToString(),
-                HateThreateningAllowed = CPH.GetGlobalVar<bool>("hate_threatening_allowed", true).ToString(),
-                SelfHarmAllowed = CPH.GetGlobalVar<bool>("self_harm_allowed", true).ToString(),
-                ViolenceAllowed = CPH.GetGlobalVar<bool>("violence_allowed", true).ToString(),
-                SelfHarmIntentAllowed = CPH.GetGlobalVar<bool>("self_harm_intent_allowed", true).ToString(),
-                SelfHarmInstructionsAllowed = CPH.GetGlobalVar<bool>("self_harm_instructions_allowed", true).ToString(),
-                HarassmentAllowed = CPH.GetGlobalVar<bool>("harassment_allowed", true).ToString(),
-                HarassmentThreateningAllowed = CPH.GetGlobalVar<bool>("harassment_threatening_allowed", true).ToString(),
-                IllicitAllowed = CPH.GetGlobalVar<bool>("illicit_allowed", true).ToString(),
-                IllicitViolentAllowed = CPH.GetGlobalVar<bool>("illicit_violent_allowed", true).ToString(),
+                HateThreshold = CPH.GetGlobalVar<string>("hate_threshold", true),
+                HateThreateningThreshold = CPH.GetGlobalVar<string>("hate_threatening_threshold", true),
+                HarassmentThreshold = CPH.GetGlobalVar<string>("harassment_threshold", true),
+                HarassmentThreateningThreshold = CPH.GetGlobalVar<string>("harassment_threatening_threshold", true),
+                SexualThreshold = CPH.GetGlobalVar<string>("sexual_threshold", true),
+                ViolenceThreshold = CPH.GetGlobalVar<string>("violence_threshold", true),
+                ViolenceGraphicThreshold = CPH.GetGlobalVar<string>("violence_graphic_threshold", true),
+                SelfHarmThreshold = CPH.GetGlobalVar<string>("self_harm_threshold", true),
+                SelfHarmIntentThreshold = CPH.GetGlobalVar<string>("self_harm_intent_threshold", true),
+                SelfHarmInstructionsThreshold = CPH.GetGlobalVar<string>("self_harm_instructions_threshold", true),
+                IllicitThreshold = CPH.GetGlobalVar<string>("illicit_threshold", true),
+                IllicitViolentThreshold = CPH.GetGlobalVar<string>("illicit_violent_threshold", true),
+
                 PostToChat = CPH.GetGlobalVar<bool>("Post To Chat", true).ToString(),
                 LogGptQuestionsToDiscord = CPH.GetGlobalVar<string>("Log GPT Questions to Discord", true),
                 DiscordWebhookUrl = CPH.GetGlobalVar<string>("Discord Webhook URL", true),
@@ -2204,8 +2209,20 @@ public class CPHInline
 
             LogToFile($"Settings saved successfully. Settings: {json}", "INFO");
 
-            LogToFile("Encryption of OpenAI API Key successful.", "INFO");
+            CPH.SetGlobalVar("hate_threshold", settings.HateThreshold, true);
+            CPH.SetGlobalVar("hate_threatening_threshold", settings.HateThreateningThreshold, true);
+            CPH.SetGlobalVar("harassment_threshold", settings.HarassmentThreshold, true);
+            CPH.SetGlobalVar("harassment_threatening_threshold", settings.HarassmentThreateningThreshold, true);
+            CPH.SetGlobalVar("sexual_threshold", settings.SexualThreshold, true);
+            CPH.SetGlobalVar("violence_threshold", settings.ViolenceThreshold, true);
+            CPH.SetGlobalVar("violence_graphic_threshold", settings.ViolenceGraphicThreshold, true);
+            CPH.SetGlobalVar("self_harm_threshold", settings.SelfHarmThreshold, true);
+            CPH.SetGlobalVar("self_harm_intent_threshold", settings.SelfHarmIntentThreshold, true);
+            CPH.SetGlobalVar("self_harm_instructions_threshold", settings.SelfHarmInstructionsThreshold, true);
+            CPH.SetGlobalVar("illicit_threshold", settings.IllicitThreshold, true);
+            CPH.SetGlobalVar("illicit_violent_threshold", settings.IllicitViolentThreshold, true);
 
+            LogToFile("Encryption of OpenAI API Key successful.", "INFO");
             LogToFile("Exiting SaveSettings method.", "DEBUG");
             return true;
         }
@@ -2248,16 +2265,20 @@ public class CPHInline
             CPH.SetGlobalVar("Text Clean Mode", settings.TextCleanMode, true);
             CPH.SetGlobalVar("Logging Level", settings.LoggingLevel, true);
             CPH.SetGlobalVar("Version", settings.Version, true);
-            CPH.SetGlobalVar("hate_allowed", settings.HateAllowed, true);
-            CPH.SetGlobalVar("hate_threatening_allowed", settings.HateThreateningAllowed, true);
-            CPH.SetGlobalVar("self_harm_allowed", settings.SelfHarmAllowed, true);
-            CPH.SetGlobalVar("violence_allowed", settings.ViolenceAllowed, true);
-            CPH.SetGlobalVar("self_harm_intent_allowed", settings.SelfHarmIntentAllowed, true);
-            CPH.SetGlobalVar("self_harm_instructions_allowed", settings.SelfHarmInstructionsAllowed, true);
-            CPH.SetGlobalVar("harassment_allowed", settings.HarassmentAllowed, true);
-            CPH.SetGlobalVar("harassment_threatening_allowed", settings.HarassmentThreateningAllowed, true);
-            CPH.SetGlobalVar("illicit_allowed", settings.IllicitAllowed, true);
-            CPH.SetGlobalVar("illicit_violent_allowed", settings.IllicitViolentAllowed, true);
+
+            CPH.SetGlobalVar("hate_threshold", settings.HateThreshold, true);
+            CPH.SetGlobalVar("hate_threatening_threshold", settings.HateThreateningThreshold, true);
+            CPH.SetGlobalVar("harassment_threshold", settings.HarassmentThreshold, true);
+            CPH.SetGlobalVar("harassment_threatening_threshold", settings.HarassmentThreateningThreshold, true);
+            CPH.SetGlobalVar("sexual_threshold", settings.SexualThreshold, true);
+            CPH.SetGlobalVar("violence_threshold", settings.ViolenceThreshold, true);
+            CPH.SetGlobalVar("violence_graphic_threshold", settings.ViolenceGraphicThreshold, true);
+            CPH.SetGlobalVar("self_harm_threshold", settings.SelfHarmThreshold, true);
+            CPH.SetGlobalVar("self_harm_intent_threshold", settings.SelfHarmIntentThreshold, true);
+            CPH.SetGlobalVar("self_harm_instructions_threshold", settings.SelfHarmInstructionsThreshold, true);
+            CPH.SetGlobalVar("illicit_threshold", settings.IllicitThreshold, true);
+            CPH.SetGlobalVar("illicit_violent_threshold", settings.IllicitViolentThreshold, true);
+
             CPH.SetGlobalVar("Post To Chat", settings.PostToChat, true);
             CPH.SetGlobalVar("Log GPT Questions to Discord", settings.LogGptQuestionsToDiscord, true);
             CPH.SetGlobalVar("Discord Webhook URL", settings.DiscordWebhookUrl, true);
@@ -2281,7 +2302,6 @@ public class CPHInline
         }
         catch (Exception ex)
         {
-
             LogToFile($"Error reading settings: {ex.Message}", "ERROR");
             return false;
         }
