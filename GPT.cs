@@ -58,6 +58,11 @@ public class CPHInline
         public string DiscordBotUsername { get; set; }
         public string DiscordAvatarUrl { get; set; }
         public string PostToChat { get; set; }
+
+        // v1.6 additions
+        public string VoiceEnabled { get; set; }
+        public string OutboundWebhookUrl { get; set; }
+        public string OutboundWebhookMode { get; set; }
     }
 
     public class ChatCompletionsResponse
@@ -1602,6 +1607,164 @@ public class CPHInline
         }
     }
 
+public bool AskGPTWebhook()
+{
+    LogToFile("Entering AskGPTWebhook method.", "DEBUG");
+
+    // Simplified input — no nickname or pronoun validation
+    string fullMessage = args.ContainsKey("moderatedMessage") && !string.IsNullOrWhiteSpace(args["moderatedMessage"]?.ToString())
+        ? args["moderatedMessage"].ToString()
+        : args.ContainsKey("rawInput") && !string.IsNullOrWhiteSpace(args["rawInput"]?.ToString())
+            ? args["rawInput"].ToString()
+            : null;
+
+    if (string.IsNullOrWhiteSpace(fullMessage))
+    {
+        LogToFile("Both 'moderatedMessage' and 'rawInput' are missing or empty.", "ERROR");
+        return false;
+    }
+
+    int characterNumber = 1;
+    try
+    {
+        characterNumber = CPH.GetGlobalVar<int>("character", true);
+        LogToFile($"Active character number set to {characterNumber}.", "INFO");
+    }
+    catch
+    {
+        LogToFile("No active 'character' variable found. Defaulting to 1.", "WARN");
+    }
+
+    string voiceAlias = CPH.GetGlobalVar<string>($"character_voice_alias_{characterNumber}", true);
+    if (string.IsNullOrWhiteSpace(voiceAlias))
+    {
+        string err = $"No voice alias configured for Character {characterNumber}. Please set 'character_voice_alias_{characterNumber}'.";
+        LogToFile(err, "ERROR");
+        CPH.SendMessage(err, true);
+        return false;
+    }
+
+    string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
+    if (string.IsNullOrWhiteSpace(databasePath))
+    {
+        LogToFile("'Database Path' global variable is not found or invalid.", "ERROR");
+        return false;
+    }
+
+    string characterFileName = CPH.GetGlobalVar<string>($"character_file_{characterNumber}", true);
+    if (string.IsNullOrWhiteSpace(characterFileName))
+    {
+        characterFileName = "context.txt";
+        LogToFile($"Character file not set for {characterNumber}, defaulting to context.txt", "WARN");
+    }
+
+    string ContextFilePath = Path.Combine(databasePath, characterFileName);
+    string keywordContextFilePath = Path.Combine(databasePath, "keyword_contexts.json");
+    Dictionary<string, string> keywordContexts = File.Exists(keywordContextFilePath)
+        ? JsonConvert.DeserializeObject<Dictionary<string, string>>(File.ReadAllText(keywordContextFilePath))
+        : new Dictionary<string, string>();
+
+    string context = File.Exists(ContextFilePath) ? File.ReadAllText(ContextFilePath) : "";
+    string broadcaster = CPH.GetGlobalVar<string>("broadcaster", false);
+    string currentTitle = CPH.GetGlobalVar<string>("currentTitle", false);
+    string currentGame = CPH.GetGlobalVar<string>("currentGame", false);
+    string contextBody = $"{context}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}";
+
+    string prompt = $"User asks: {fullMessage}";
+    LogToFile($"Constructed prompt for GPT Webhook: {prompt}", "DEBUG");
+
+    // Keyword and user-specific context
+    foreach (var kvp in keywordContexts)
+    {
+        if (prompt.IndexOf(kvp.Key, StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            contextBody += $"\nSomething you know about {kvp.Key} is: {kvp.Value}\n";
+        }
+    }
+
+    try
+    {
+        string GPTResponse = GenerateChatCompletion(prompt, contextBody);
+        GPTResponse = CleanAIText(GPTResponse);
+        LogToFile("Applied CleanAIText() to GPT response (webhook).", "DEBUG");
+
+        if (string.IsNullOrWhiteSpace(GPTResponse))
+        {
+            LogToFile("GPT model did not return a response.", "ERROR");
+            return false;
+        }
+
+        // Store for reuse
+        CPH.SetGlobalVar("Response", GPTResponse, true);
+
+        // Voice handling (if enabled)
+        bool voiceEnabled = CPH.GetGlobalVar<bool>("voice_enabled", true);
+        if (voiceEnabled)
+        {
+            CPH.TtsSpeak(voiceAlias, GPTResponse, false);
+            LogToFile("Spoke GPT response via TTS.", "INFO");
+        }
+
+        // Post to chat (if enabled)
+        bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+        if (postToChat)
+        {
+            if (GPTResponse.Length > 500)
+            {
+                int startIndex = 0;
+                while (startIndex < GPTResponse.Length)
+                {
+                    int chunkSize = Math.Min(500, GPTResponse.Length - startIndex);
+                    int endIndex = startIndex + chunkSize;
+                    if (endIndex < GPTResponse.Length)
+                    {
+                        int lastSpace = GPTResponse.LastIndexOf(' ', endIndex, chunkSize);
+                        if (lastSpace > startIndex) endIndex = lastSpace;
+                    }
+                    string chunk = GPTResponse.Substring(startIndex, endIndex - startIndex).Trim();
+                    CPH.SendMessage(chunk, true);
+                    startIndex = endIndex;
+                    System.Threading.Thread.Sleep(1000);
+                }
+            }
+            else
+            {
+                CPH.SendMessage(GPTResponse, true);
+            }
+        }
+
+        // Post to Discord (if enabled)
+        bool logDiscord = CPH.GetGlobalVar<bool>("Log GPT Questions to Discord", true);
+        if (logDiscord)
+        {
+            PostToDiscord(prompt, GPTResponse);
+            LogToFile("Posted webhook GPT result to Discord.", "INFO");
+        }
+
+        // Outbound webhook (if configured)
+        string outboundWebhookUrl = CPH.GetGlobalVar<string>("outbound_webhook_url", true);
+        string outboundWebhookMode = CPH.GetGlobalVar<string>("outbound_webhook_mode", true);
+        if (!string.IsNullOrWhiteSpace(outboundWebhookUrl))
+        {
+            string payload = outboundWebhookMode?.ToLower() == "clean"
+                ? JsonConvert.SerializeObject(new { response = GPTResponse })
+                : JsonConvert.SerializeObject(new { prompt = prompt, response = GPTResponse });
+
+            LogToFile($"Sending outbound webhook payload: {payload}", "INFO");
+            CPH.HttpPostJson(outboundWebhookUrl, payload);
+        }
+
+        CPH.SetGlobalVar("character", 1, true);
+        LogToFile("Reset 'character' global to 1 after AskGPTWebhook.", "DEBUG");
+
+        return true;
+    }
+    catch (Exception ex)
+    {
+        LogToFile($"AskGPTWebhook encountered an error: {ex.Message}", "ERROR");
+        return false;
+    }
+}
     private string CleanAIText(string text)
     {
         LogToFile("Entering CleanAIText method.", "DEBUG");
@@ -2170,6 +2333,11 @@ public class CPHInline
                 CharacterFile_5 = CPH.GetGlobalVar<string>("character_file_5", true),
 
                 CompletionsEndpoint = CPH.GetGlobalVar<string>("Completions Endpoint", true),
+
+                // New settings
+                VoiceEnabled = CPH.GetGlobalVar<bool>("voice_enabled", true).ToString(),
+                OutboundWebhookUrl = CPH.GetGlobalVar<string>("outbound_webhook_url", true),
+                OutboundWebhookMode = CPH.GetGlobalVar<string>("outbound_webhook_mode", true),
             };
 
             LogToFile($"OpenApiKey: {settings.OpenApiKey}", "DEBUG");
@@ -2221,6 +2389,11 @@ public class CPHInline
             CPH.SetGlobalVar("self_harm_instructions_threshold", settings.SelfHarmInstructionsThreshold, true);
             CPH.SetGlobalVar("illicit_threshold", settings.IllicitThreshold, true);
             CPH.SetGlobalVar("illicit_violent_threshold", settings.IllicitViolentThreshold, true);
+
+            // New settings global variable assignments
+            CPH.SetGlobalVar("voice_enabled", settings.VoiceEnabled, true);
+            CPH.SetGlobalVar("outbound_webhook_url", settings.OutboundWebhookUrl, true);
+            CPH.SetGlobalVar("outbound_webhook_mode", settings.OutboundWebhookMode, true);
 
             LogToFile("Encryption of OpenAI API Key successful.", "INFO");
             LogToFile("Exiting SaveSettings method.", "DEBUG");
@@ -2295,6 +2468,11 @@ public class CPHInline
             CPH.SetGlobalVar("character_file_4", settings.CharacterFile_4, true);
             CPH.SetGlobalVar("character_file_5", settings.CharacterFile_5, true);
             CPH.SetGlobalVar("Completions Endpoint", settings.CompletionsEndpoint, true);
+
+            // Restore new settings added in SaveSettings()
+            CPH.SetGlobalVar("voice_enabled", settings.VoiceEnabled, true);
+            CPH.SetGlobalVar("outbound_webhook_url", settings.OutboundWebhookUrl, true);
+            CPH.SetGlobalVar("outbound_webhook_mode", settings.OutboundWebhookMode, true);
 
             LogToFile($"Settings loaded successfully. Settings: {json}", "INFO");
             LogToFile("Exiting ReadSettings method.", "DEBUG");
