@@ -38,8 +38,8 @@ public class CPHInline
 
         public string CompletionsEndpoint { get; set; }
 
-        public string StripEmojisFromResponse { get; set; }
         public string LoggingLevel { get; set; }
+        public string TextCleanMode { get; set; }
         public string Version { get; set; }
         public string HateAllowed { get; set; }
         public string HateThreateningAllowed { get; set; }
@@ -1233,7 +1233,6 @@ public class CPHInline
                 return false;
             }
 
-            // Reset to default character after speaking
             CPH.SetGlobalVar("character", 1, true);
             LogToFile("Reset 'character' global to 1 after speaking.", "DEBUG");
             return true;
@@ -1399,7 +1398,6 @@ public class CPHInline
     {
         LogToFile("Entering AskGPT method (multi-character model).", "DEBUG");
 
-        // --- Character Context and Voice Selection ---
         int characterNumber = 1;
         try
         {
@@ -1532,6 +1530,9 @@ public class CPHInline
         try
         {
             string GPTResponse = GenerateChatCompletion(prompt, contextBody);
+
+            GPTResponse = CleanAIText(GPTResponse);
+            LogToFile("Applied CleanAIText() to GPT response.", "DEBUG");
             if (string.IsNullOrWhiteSpace(GPTResponse))
             {
                 LogToFile("GPT model did not return a response.", "ERROR");
@@ -1586,7 +1587,6 @@ public class CPHInline
                 LogToFile("Sent GPT response to chat.", "INFO");
             }
 
-            // Reset character to default
             CPH.SetGlobalVar("character", 1, true);
             LogToFile("Reset 'character' global to 1 after AskGPT.", "DEBUG");
 
@@ -1600,24 +1600,86 @@ public class CPHInline
         }
     }
 
-    private string RemoveEmojis(string text)
+    private string CleanAIText(string text)
     {
-        LogToFile("Entering RemoveEmojis method.", "DEBUG");
+        LogToFile("Entering CleanAIText method.", "DEBUG");
+        LogToFile($"Original text: {text}", "DEBUG");
 
-        LogToFile($"Original text before removing emojis: {text}", "DEBUG");
+        string mode = CPH.GetGlobalVar<string>("Text Clean Mode", true);
+        LogToFile($"Text Clean Mode: {mode}", "DEBUG");
 
-        string emojiPattern = @"[\uD83C-\uDBFF\uDC00-\uDFFF]";  
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            LogToFile("Input text is null or whitespace.", "DEBUG");
+            return string.Empty;
+        }
 
-        LogToFile($"Using regex pattern to remove emojis: {emojiPattern}", "DEBUG");
+        string cleaned = text;
+        switch ((mode ?? "").Trim())
+        {
+            case "Off":
+                cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
+                LogToFile($"Text Clean Mode is Off. Returning original text: {cleaned}", "DEBUG");
+                return cleaned;
 
-        string sanitizedText = Regex.Replace(text, emojiPattern, "");
+            case "StripEmojis":
+                var sbEmoji = new System.Text.StringBuilder();
+                foreach (var ch in cleaned.Normalize(NormalizationForm.FormD))
+                {
+                    var uc = CharUnicodeInfo.GetUnicodeCategory(ch);
+                    if (uc != UnicodeCategory.OtherSymbol && uc != UnicodeCategory.Surrogate && uc != UnicodeCategory.NonSpacingMark)
+                        sbEmoji.Append(ch);
+                }
+                cleaned = sbEmoji.ToString();
+                break;
 
-        LogToFile($"Text after removing emojis: {sanitizedText}", "DEBUG");
+            case "HumanFriendly":
+                string citationPattern = @"\s*\(\[.*?\]\(https?:\/\/[^\)]+\)\)";
+                cleaned = Regex.Replace(cleaned, citationPattern, "").Trim();
+                LogToFile("Removed markdown-style citations from text.", "DEBUG");
 
-        sanitizedText = Regex.Replace(sanitizedText, @"\s+", " ").Trim();
+                var sbHuman = new System.Text.StringBuilder();
+                foreach (var ch in cleaned.Normalize(NormalizationForm.FormD))
+                {
+                    var uc = CharUnicodeInfo.GetUnicodeCategory(ch);
 
-        LogToFile($"Sanitized text without emojis: {sanitizedText}", "INFO");
-        return sanitizedText;
+                    if (uc == UnicodeCategory.LowercaseLetter || uc == UnicodeCategory.UppercaseLetter ||
+                        uc == UnicodeCategory.TitlecaseLetter || uc == UnicodeCategory.ModifierLetter ||
+                        uc == UnicodeCategory.OtherLetter || uc == UnicodeCategory.DecimalDigitNumber ||
+                        uc == UnicodeCategory.SpaceSeparator ||
+                        ".!?,:'\"()-".Contains(ch))
+                    {
+                        sbHuman.Append(ch);
+                    }
+                }
+                cleaned = sbHuman.ToString();
+                break;
+
+            case "Strict":
+                string citationPatternStrict = @"\s*\(\[.*?\]\(https?:\/\/[^\)]+\)\)";
+                cleaned = Regex.Replace(cleaned, citationPatternStrict, "").Trim();
+                LogToFile("Removed markdown-style citations from text.", "DEBUG");
+
+                var sbStrict = new System.Text.StringBuilder();
+                foreach (var ch in cleaned)
+                {
+                    if (char.IsLetterOrDigit(ch) || " .!?,\'".Contains(ch))
+                        sbStrict.Append(ch);
+                }
+                cleaned = sbStrict.ToString();
+                break;
+
+            default:
+                LogToFile($"Unknown Text Clean Mode '{mode}'. Defaulting to 'Off'.", "DEBUG");
+                cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
+                return cleaned;
+        }
+
+        string beforeFinal = cleaned;
+        cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
+        LogToFile($"Text before whitespace normalization: {beforeFinal}", "DEBUG");
+        LogToFile($"Text after cleaning: {cleaned}", "DEBUG");
+        return cleaned;
     }
 
     public string GenerateChatCompletion(string prompt, string contextBody)
@@ -1713,25 +1775,6 @@ public class CPHInline
                     LogToFile($"Response JSON: {completionsResponseContent}", "DEBUG");
                     var completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
                     generatedText = completionsJsonResponse?.Choices?.FirstOrDefault()?.Message?.content ?? string.Empty;
-                }
-
-                // Regex to find and remove markdown-style citations like ([source](url))
-                string citationPattern = @"\s*\(\[.*?\]\(https?:\/\/[^\)]+\)\)";
-                generatedText = Regex.Replace(generatedText, citationPattern, "").Trim();
-                LogToFile("Removed markdown citations from the response.", "DEBUG");
-
-                // Replace common non-ASCII punctuation with their ASCII equivalents before stripping emojis.
-                generatedText = generatedText.Replace('’', '\''); // Curly apostrophe
-                generatedText = generatedText.Replace('‘', '\''); // Curly single quote
-                generatedText = generatedText.Replace('“', '"');  // Curly double quote
-                generatedText = generatedText.Replace('”', '"');  // Curly double quote
-                LogToFile("Replaced non-ASCII punctuation with ASCII equivalents.", "DEBUG");
-
-                bool stripEmojis = CPH.GetGlobalVar<bool>("Strip Emojis From Response", true);
-                if (stripEmojis)
-                {
-                    generatedText = RemoveEmojis(generatedText);
-                    LogToFile("Emojis have been removed from the response.", "INFO");
                 }
             }
         }
@@ -2089,7 +2132,7 @@ public class CPHInline
                 OpenAiModel = CPH.GetGlobalVar<string>("OpenAI Model", true),
                 DatabasePath = CPH.GetGlobalVar<string>("Database Path", true),
                 IgnoreBotUsernames = CPH.GetGlobalVar<string>("Ignore Bot Usernames", true),
-                StripEmojisFromResponse = CPH.GetGlobalVar<string>("Strip Emojis From Response", true),
+                TextCleanMode = CPH.GetGlobalVar<string>("Text Clean Mode", true),
                 LoggingLevel = CPH.GetGlobalVar<string>("Logging Level", true),
                 Version = CPH.GetGlobalVar<string>("Version", true),
 
@@ -2202,8 +2245,7 @@ public class CPHInline
             CPH.SetGlobalVar("OpenAI Model", settings.OpenAiModel, true);
             CPH.SetGlobalVar("Database Path", settings.DatabasePath, true);
             CPH.SetGlobalVar("Ignore Bot Usernames", settings.IgnoreBotUsernames, true);
-            // CPH.SetGlobalVar("Voice Alias", settings.VoiceAlias, true); // REMOVE this line per instructions
-            CPH.SetGlobalVar("Strip Emojis From Response", settings.StripEmojisFromResponse, true);
+            CPH.SetGlobalVar("Text Clean Mode", settings.TextCleanMode, true);
             CPH.SetGlobalVar("Logging Level", settings.LoggingLevel, true);
             CPH.SetGlobalVar("Version", settings.Version, true);
             CPH.SetGlobalVar("hate_allowed", settings.HateAllowed, true);
@@ -2221,20 +2263,16 @@ public class CPHInline
             CPH.SetGlobalVar("Discord Webhook URL", settings.DiscordWebhookUrl, true);
             CPH.SetGlobalVar("Discord Bot Username", settings.DiscordBotUsername, true);
             CPH.SetGlobalVar("Discord Avatar Url", settings.DiscordAvatarUrl, true);
-
-            // Add new global variable assignments for each per-character property and the completions endpoint:
             CPH.SetGlobalVar("character_voice_alias_1", settings.CharacterVoiceAlias_1, true);
             CPH.SetGlobalVar("character_voice_alias_2", settings.CharacterVoiceAlias_2, true);
             CPH.SetGlobalVar("character_voice_alias_3", settings.CharacterVoiceAlias_3, true);
             CPH.SetGlobalVar("character_voice_alias_4", settings.CharacterVoiceAlias_4, true);
             CPH.SetGlobalVar("character_voice_alias_5", settings.CharacterVoiceAlias_5, true);
-
             CPH.SetGlobalVar("character_file_1", settings.CharacterFile_1, true);
             CPH.SetGlobalVar("character_file_2", settings.CharacterFile_2, true);
             CPH.SetGlobalVar("character_file_3", settings.CharacterFile_3, true);
             CPH.SetGlobalVar("character_file_4", settings.CharacterFile_4, true);
             CPH.SetGlobalVar("character_file_5", settings.CharacterFile_5, true);
-
             CPH.SetGlobalVar("Completions Endpoint", settings.CompletionsEndpoint, true);
 
             LogToFile($"Settings loaded successfully. Settings: {json}", "INFO");
