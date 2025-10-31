@@ -1028,18 +1028,18 @@ public class CPHInline
 
                 double threshold = category switch
                 {
-                    "violence" => ParseThreshold(appSettings.ViolenceThreshold, 0.5),
-                    "violence/graphic" => ParseThreshold(appSettings.ViolenceGraphicThreshold, 0.5),
-                    "self-harm" => ParseThreshold(appSettings.SelfHarmThreshold, 0.4),
-                    "self-harm/intent" => ParseThreshold(appSettings.SelfHarmIntentThreshold, 0.4),
-                    "self-harm/instructions" => ParseThreshold(appSettings.SelfHarmInstructionsThreshold, 0.4),
-                    "harassment" => ParseThreshold(appSettings.HarassmentThreshold, 0.5),
-                    "harassment/threatening" => ParseThreshold(appSettings.HarassmentThreateningThreshold, 0.5),
-                    "hate" => ParseThreshold(appSettings.HateThreshold, 0.5),
-                    "hate/threatening" => ParseThreshold(appSettings.HateThreateningThreshold, 0.5),
-                    "illicit" => ParseThreshold(appSettings.IllicitThreshold, 0.5),
-                    "illicit/violent" => ParseThreshold(appSettings.IllicitViolentThreshold, 0.5),
-                    "sexual" => ParseThreshold(appSettings.SexualThreshold, 0.5),
+                    "violence" => ParseThreshold(settings.ViolenceThreshold, 0.5),
+                    "violence/graphic" => ParseThreshold(settings.ViolenceGraphicThreshold, 0.5),
+                    "self-harm" => ParseThreshold(settings.SelfHarmThreshold, 0.4),
+                    "self-harm/intent" => ParseThreshold(settings.SelfHarmIntentThreshold, 0.4),
+                    "self-harm/instructions" => ParseThreshold(settings.SelfHarmInstructionsThreshold, 0.4),
+                    "harassment" => ParseThreshold(settings.HarassmentThreshold, 0.5),
+                    "harassment/threatening" => ParseThreshold(settings.HarassmentThreateningThreshold, 0.5),
+                    "hate" => ParseThreshold(settings.HateThreshold, 0.5),
+                    "hate/threatening" => ParseThreshold(settings.HateThreateningThreshold, 0.5),
+                    "illicit" => ParseThreshold(settings.IllicitThreshold, 0.5),
+                    "illicit/violent" => ParseThreshold(settings.IllicitViolentThreshold, 0.5),
+                    "sexual" => ParseThreshold(settings.SexualThreshold, 0.5),
                     _ => 0.5
                 };
 
