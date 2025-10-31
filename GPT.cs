@@ -1490,6 +1490,8 @@ public class CPHInline
             }
 
             LogToFile($"GPT model response: {GPTResponse}", "DEBUG");
+            CPH.SetGlobalVar("Response", GPTResponse, true);
+            LogToFile("Stored GPT response in global variable 'Response'.", "INFO");
 
             bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
             if (!postToChat)
@@ -1667,6 +1669,18 @@ public class CPHInline
                     var completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
                     generatedText = completionsJsonResponse?.Choices?.FirstOrDefault()?.Message?.content ?? string.Empty;
                 }
+
+                // Regex to find and remove markdown-style citations like ([source](url))
+                string citationPattern = @"\s*\(\[.*?\]\(https?:\/\/[^\)]+\)\)";
+                generatedText = Regex.Replace(generatedText, citationPattern, "").Trim();
+                LogToFile("Removed markdown citations from the response.", "DEBUG");
+
+                // Replace common non-ASCII punctuation with their ASCII equivalents before stripping emojis.
+                generatedText = generatedText.Replace('’', '\''); // Curly apostrophe
+                generatedText = generatedText.Replace('‘', '\''); // Curly single quote
+                generatedText = generatedText.Replace('“', '"');  // Curly double quote
+                generatedText = generatedText.Replace('”', '"');  // Curly double quote
+                LogToFile("Replaced non-ASCII punctuation with ASCII equivalents.", "DEBUG");
 
                 bool stripEmojis = CPH.GetGlobalVar<bool>("Strip Emojis From Response", true);
                 if (stripEmojis)
