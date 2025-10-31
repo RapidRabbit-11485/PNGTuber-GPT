@@ -1004,6 +1004,7 @@ public class CPHInline
 
         try
         {
+            var settings = LoadSettings();
             var response = CallModerationEndpoint(input);
             if (response?.Results == null || response.Results.Count == 0)
             {
