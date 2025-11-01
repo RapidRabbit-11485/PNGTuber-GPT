@@ -35,7 +35,7 @@ public class CPHInline
             var userProfiles = _db.GetCollection<UserProfile>("user_profiles");
             var keywords = _db.GetCollection<Keyword>("keywords");
 
-            userProfiles.EnsureIndex(x => x.Username, true);
+            userProfiles.EnsureIndex(x => x.UserName, true);
             userProfiles.EnsureIndex(x => x.PreferredName, false);
 
             LogToFile("LiteDB initialized with collections: settings, user_profiles, keywords.", "INFO");
