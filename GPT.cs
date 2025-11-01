@@ -32,7 +32,6 @@ public class CPHInline
             _db = new LiteDatabase(dbFilePath);
             LogToFile($"LiteDB initialized successfully at {dbFilePath}.", "INFO");
 
-            // Ensure collections exist
             _db.GetCollection<AppSettings>("settings");
             _db.GetCollection<BsonDocument>("keywords");
             _db.GetCollection<BsonDocument>("usernames");
@@ -1579,13 +1578,13 @@ public class CPHInline
 
         try
         {
-            // --- BEGIN: OpenAI API call with raw request/response capture ---
+
             string completionsRequestJSON = null;
             string completionsResponseContent = null;
             string GPTResponse = null;
             try
             {
-                // Prepare OpenAI API call as in GenerateChatCompletion, but inline for capturing JSON
+
                 string apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
                 string voiceAliasLocal = CPH.GetGlobalVar<string>("Voice Alias", true);
                 string AIModel = CPH.GetGlobalVar<string>("OpenAI Model", true);
@@ -1654,7 +1653,6 @@ public class CPHInline
                 LogToFile($"An error occurred during OpenAI API call: {ex.Message}", "ERROR");
                 GPTResponse = null;
             }
-            // --- END: OpenAI API call with raw request/response capture ---
 
             GPTResponse = CleanAIText(GPTResponse);
             LogToFile("Applied CleanAIText() to GPT response.", "DEBUG");
@@ -1669,7 +1667,6 @@ public class CPHInline
             CPH.SetGlobalVar("Response", GPTResponse, true);
             LogToFile("Stored GPT response in global variable 'Response'.", "INFO");
 
-            // Outbound webhook logic
             string outboundWebhookUrl = CPH.GetGlobalVar<string>("outbound_webhook_url", true);
             string outboundWebhookMode = CPH.GetGlobalVar<string>("outbound_webhook_mode", true);
             if (!string.IsNullOrWhiteSpace(outboundWebhookUrl))
@@ -1677,12 +1674,12 @@ public class CPHInline
                 string payload = null;
                 if ((outboundWebhookMode ?? "").ToLower() == "clean")
                 {
-                    // Send only plain GPT response text, no JSON, no quotes
+
                     payload = GPTResponse ?? "";
                 }
                 else if ((outboundWebhookMode ?? "").ToLower() == "full")
                 {
-                    // Send full API call data
+
                     var fullPayloadObj = new
                     {
                         prompt = prompt,
@@ -1694,7 +1691,7 @@ public class CPHInline
                 }
                 else
                 {
-                    // Default: send JSON with response only
+
                     payload = JsonConvert.SerializeObject(new { response = GPTResponse });
                 }
                 LogToFile($"Sending outbound webhook payload: {payload}", "INFO");
@@ -1848,7 +1845,7 @@ public class CPHInline
         }
         try
         {
-            // --- BEGIN: OpenAI API call with raw request/response capture ---
+
             string completionsRequestJSON = null;
             string completionsResponseContent = null;
             string GPTResponse = null;
@@ -1876,7 +1873,7 @@ public class CPHInline
                         content = "OK"
                     }
                 };
-                // ChatLog and GPTLog logic omitted for webhook, but can be added if needed
+
                 messages.Add(new chatMessage { role = "user", content = $"{prompt} You must respond in less than 500 characters." });
                 completionsRequestJSON = JsonConvert.SerializeObject(new { model = AIModel, messages = messages }, Formatting.Indented);
                 LogToFile($"Request JSON: {completionsRequestJSON}", "DEBUG");
@@ -1905,7 +1902,6 @@ public class CPHInline
                 LogToFile($"An error occurred during OpenAI API call: {ex.Message}", "ERROR");
                 GPTResponse = null;
             }
-            // --- END: OpenAI API call with raw request/response capture ---
 
             GPTResponse = CleanAIText(GPTResponse);
             LogToFile("Applied CleanAIText() to GPT response (webhook).", "DEBUG");
@@ -1965,12 +1961,12 @@ public class CPHInline
                 string payload = null;
                 if ((outboundWebhookMode ?? "").ToLower() == "clean")
                 {
-                    // Send only plain GPT response text, no JSON, no quotes
+
                     payload = GPTResponse ?? "";
                 }
                 else if ((outboundWebhookMode ?? "").ToLower() == "full")
                 {
-                    // Send full API call data
+
                     var fullPayloadObj = new
                     {
                         prompt = prompt,
@@ -1982,7 +1978,7 @@ public class CPHInline
                 }
                 else
                 {
-                    // Default: send JSON with response only
+
                     payload = JsonConvert.SerializeObject(new { response = GPTResponse });
                 }
                 LogToFile($"Sending outbound webhook payload: {payload}", "INFO");
@@ -2023,7 +2019,7 @@ public class CPHInline
             return false;
         }
     }
-    
+
     private string CleanAIText(string text)
     {
         LogToFile("Entering CleanAIText method.", "DEBUG");
@@ -2628,7 +2624,6 @@ public class CPHInline
                 return false;
             }
 
-            // Persist settings to LiteDB instead of JSON file
             var settingsCollection = _db.GetCollection<AppSettings>("settings");
             settingsCollection.Upsert("singleton", settings);
             LogToFile("Settings saved successfully to LiteDB.", "INFO");
@@ -2667,7 +2662,6 @@ public class CPHInline
         {
             LogToFile("Entering ReadSettings method.", "DEBUG");
 
-            // Read settings from LiteDB
             var settingsCollection = _db.GetCollection<AppSettings>("settings");
             var settings = settingsCollection.FindById("singleton");
             if (settings == null)
