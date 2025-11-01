@@ -678,22 +678,31 @@ public class CPHInline
 
     public bool GetMemory()
     {
+        LogToFile("Entering GetMemory method.", "DEBUG");
         try
         {
-            string userName = CPH.GetGlobalVar<string>("userName", false);
+            // Prefer runtime arg; fall back to non-persisted global only if needed
+            string userName = null;
+            if (!CPH.TryGetArg("userName", out userName) || string.IsNullOrWhiteSpace(userName))
+            {
+                userName = CPH.GetGlobalVar<string>("userName", false);
+                LogToFile($"TryGetArg('userName') empty; fallback global returned: '{userName}'", "DEBUG");
+            }
+
             if (string.IsNullOrWhiteSpace(userName))
             {
                 LogToFile("GetMemory called with no valid username.", "WARN");
                 return false;
             }
 
-            var col = _db.GetCollection<UserProfile>("user_profiles");
-            var profile = col.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
-
+            // Always use the canonical profile (enforces PreferredName fallback)
+            // But for lookup and messaging, use userName only, not PreferredName
+            var userCollection = _db.GetCollection<UserProfile>("user_profiles");
+            var profile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
             if (profile != null && profile.Knowledge != null && profile.Knowledge.Count > 0)
             {
                 var combinedMemory = string.Join(", ", profile.Knowledge);
-                var message = $"{profile.PreferredName ?? profile.UserName}'s memory: {combinedMemory}.";
+                var message = $"Something I remember about {userName} is: {combinedMemory}.";
                 CPH.SendMessage(message, true);
                 LogToFile($"Memory retrieved for {userName}: {combinedMemory}", "DEBUG");
             }
