@@ -572,12 +572,11 @@ public class CPHInline
         }
     }
 
-    public bool GetMemory(Dictionary<string, object> args)
+    public bool GetMemory()
     {
         try
         {
-
-            var userName = args.ContainsKey("userName") ? args["userName"].ToString() : "UnknownUser";
+            string userName = CPH.GetGlobalVar<string>("userName", true);
             if (string.IsNullOrWhiteSpace(userName))
             {
                 LogToFile("GetMemory called with no valid username.", "WARN");
@@ -585,7 +584,7 @@ public class CPHInline
             }
 
             var col = _db.GetCollection<UserProfile>("UserProfiles");
-            var profile = col.FindOne(x => x.UserName.ToLower() == userName.ToLower());
+            var profile = col.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
 
             if (profile != null && profile.Knowledge != null && profile.Knowledge.Count > 0)
             {
@@ -596,7 +595,6 @@ public class CPHInline
             }
             else
             {
-
                 var message = $"I don’t have any saved memories for {userName} yet!";
                 CPH.SendMessage(message, true);
                 LogToFile($"No memory found for {userName}.", "DEBUG");
