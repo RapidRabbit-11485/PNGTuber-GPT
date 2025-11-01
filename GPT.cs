@@ -105,6 +105,54 @@ public class CPHInline
         public string VoiceEnabled { get; set; }
         public string OutboundWebhookUrl { get; set; }
         public string OutboundWebhookMode { get; set; }
+
+        public bool moderation_enabled { get; set; } = true;
+        public bool moderation_rebuke_enabled { get; set; } = true;
+        public int max_chat_history { get; set; } = 20;
+        public int max_prompt_history { get; set; } = 10;
+    }
+
+    public void SaveSettings(AppSettings appSettings)
+    {
+        try
+        {
+            var settingsCol = _db.GetCollection<BsonDocument>("settings");
+            var settings = new BsonDocument();
+
+            settings["moderation_enabled"] = new BsonValue(appSettings.moderation_enabled);
+            settings["moderation_rebuke_enabled"] = new BsonValue(appSettings.moderation_rebuke_enabled);
+            settings["max_chat_history"] = new BsonValue(appSettings.max_chat_history);
+            settings["max_prompt_history"] = new BsonValue(appSettings.max_prompt_history);
+
+            settingsCol.Upsert(settings);
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"Error in SaveSettings: {ex.Message}", "ERROR");
+        }
+    }
+
+    public AppSettings ReadSettings()
+    {
+        var appSettings = new AppSettings();
+        try
+        {
+            var settingsCol = _db.GetCollection<BsonDocument>("settings");
+            var settings = settingsCol.FindAll().FirstOrDefault();
+            if (settings != null)
+            {
+
+                appSettings.moderation_enabled = settings.ContainsKey("moderation_enabled") ? settings["moderation_enabled"].AsBoolean : true;
+                appSettings.moderation_rebuke_enabled = settings.ContainsKey("moderation_rebuke_enabled") ? settings["moderation_rebuke_enabled"].AsBoolean : true;
+                appSettings.max_chat_history = settings.ContainsKey("max_chat_history") ? settings["max_chat_history"].AsInt32 : 20;
+                appSettings.max_prompt_history = settings.ContainsKey("max_prompt_history") ? settings["max_prompt_history"].AsInt32 : 10;
+            }
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"Error in ReadSettings: {ex.Message}", "ERROR");
+        }
+        return appSettings;
     }
 
     public class ChatCompletionsResponse
@@ -186,21 +234,15 @@ public class CPHInline
         }
     }
 
-    // Represents a single stored user profile.
     public class UserProfile
     {
         public string UserName { get; set; }
         public string PreferredName { get; set; }
         public string Pronouns { get; set; }
-        // New property to store multiple factoids/memories per user
+
         public List<string> Knowledge { get; set; } = new List<string>();
     }
 
-    /// <summary>
-    /// Retrieves or creates a user profile from LiteDB. 
-    /// If missing, a new one is created with safe defaults.
-    /// Automatically updates pronouns if Streamer.bot variables are present.
-    /// </summary>
     public UserProfile GetOrCreateUserProfile(string userName, Dictionary<string, object> args)
     {
         try
@@ -209,7 +251,6 @@ public class CPHInline
             userCollection.EnsureIndex(x => x.UserName, true);
             var profile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
 
-            // Create a new entry if the user doesn't exist
             if (profile == null)
             {
                 profile = new UserProfile
@@ -223,11 +264,10 @@ public class CPHInline
                 LogToFile($"[UserProfile] Created new profile for {userName}.", "DEBUG");
             }
 
-            // Extract pronouns if Streamer.bot provided them
             string pronouns = "";
             if (args != null)
             {
-                // Streamer.bot pronoun variable names
+
                 string subject = args.ContainsKey("pronounSubject") ? args["pronounSubject"]?.ToString() : "";
                 string objectP = args.ContainsKey("pronounObject") ? args["pronounObject"]?.ToString() : "";
 
@@ -235,7 +275,6 @@ public class CPHInline
                     pronouns = $"({subject}/{objectP})";
             }
 
-            // If new pronouns were found and differ, update the record
             if (!string.IsNullOrEmpty(pronouns) && pronouns != profile.Pronouns)
             {
                 profile.Pronouns = pronouns;
@@ -250,7 +289,6 @@ public class CPHInline
         {
             LogToFile($"[UserProfile] Error retrieving or creating user profile for {userName}: {ex.Message}", "ERROR");
 
-            // Fallback object to avoid null returns
             return new UserProfile
             {
                 UserName = userName,
@@ -261,35 +299,30 @@ public class CPHInline
     }
     private void QueueMessage(chatMessage chatMsg)
     {
-
         LogToFile($"Entering QueueMessage with chatMsg: {chatMsg}", "DEBUG");
         try
         {
-
             LogToFile($"Enqueuing chat message: {chatMsg}", "INFO");
             ChatLog.Enqueue(chatMsg);
 
             LogToFile($"ChatLog Count after enqueuing: {ChatLog.Count}", "DEBUG");
-            if (ChatLog.Count > 20)
+            var appSettings = ReadSettings();
+            if (ChatLog.Count > appSettings.max_chat_history)
             {
-
-                chatMessage dequeuedMessage = ChatLog.Peek(); 
+                chatMessage dequeuedMessage = ChatLog.Peek();
                 LogToFile($"Dequeuing chat message to maintain queue size: {dequeuedMessage}", "DEBUG");
                 ChatLog.Dequeue();
-
                 LogToFile($"ChatLog Count after dequeuing: {ChatLog.Count}", "DEBUG");
             }
         }
         catch (Exception ex)
         {
-
             LogToFile($"An error occurred while enqueuing or dequeuing a chat message: {ex.Message}", "ERROR");
         }
     }
 
     private void QueueGPTMessage(string userContent, string assistantContent)
     {
-
         LogToFile("Entering QueueGPTMessage with paired messages.", "DEBUG");
 
         chatMessage userMessage = new chatMessage
@@ -304,25 +337,24 @@ public class CPHInline
         };
         try
         {
-
             GPTLog.Enqueue(userMessage);
             GPTLog.Enqueue(assistantMessage);
 
             LogToFile($"Enqueuing user message: {userMessage}", "INFO");
             LogToFile($"Enqueuing assistant message: {assistantMessage}", "INFO");
 
-            if (GPTLog.Count > 10)
+            var appSettings = ReadSettings();
+            if (GPTLog.Count > appSettings.max_prompt_history * 2)
             {
                 LogToFile("GPTLog limit exceeded. Dequeuing the oldest pair of messages.", "DEBUG");
-                GPTLog.Dequeue(); 
-                GPTLog.Dequeue(); 
+                GPTLog.Dequeue();
+                GPTLog.Dequeue();
             }
 
             LogToFile($"GPTLog Count after enqueueing/dequeueing: {GPTLog.Count}", "DEBUG");
         }
         catch (Exception ex)
         {
-
             LogToFile($"An error occurred while enqueuing GPT messages: {ex.Message}", "ERROR");
         }
     }
@@ -357,11 +389,6 @@ public class CPHInline
         return true;
     }
 
-
-    /// <summary>
-    /// Retrieves a user profile from LiteDB and formats nickname with pronouns for chat.
-    /// Replaces GetNicknamewPronouns.
-    /// </summary>
     public bool GetUserProfileFromArgs()
     {
         LogToFile("Entering GetUserProfileFromArgs method.", "DEBUG");
@@ -403,10 +430,6 @@ public class CPHInline
         }
     }
 
-    /// <summary>
-    /// Updates the preferred display name for a user in LiteDB.
-    /// Replaces SetPreferredUsername.
-    /// </summary>
     public bool UpdateUserPreferredName()
     {
         LogToFile("Entering UpdateUserPreferredName method.", "DEBUG");
@@ -446,10 +469,6 @@ public class CPHInline
         }
     }
 
-    /// <summary>
-    /// Removes or resets a user's preferred nickname.
-    /// Replaces RemoveNick.
-    /// </summary>
     public bool DeleteUserProfile()
     {
         LogToFile("Entering DeleteUserProfile method.", "DEBUG");
@@ -486,10 +505,6 @@ public class CPHInline
         }
     }
 
-    /// <summary>
-    /// Displays a user's current preferred nickname and pronouns.
-    /// Replaces GetCurrentNickname.
-    /// </summary>
     public bool ShowCurrentUserProfile()
     {
         LogToFile("Entering ShowCurrentUserProfile method.", "DEBUG");
@@ -525,7 +540,6 @@ public class CPHInline
             return false;
         }
     }
-
 
     public bool ForgetThis()
     {
@@ -601,15 +615,11 @@ public class CPHInline
         }
     }
 
-    /// <summary>
-    /// Retrieves the stored memory (knowledge) for the triggering user from LiteDB 
-    /// and posts it in chat. If no memory exists, a friendly fallback message is sent.
-    /// </summary>
     public bool GetMemory(Dictionary<string, object> args)
     {
         try
         {
-            // --- Step 1: Get the username from the triggering event ---
+
             var userName = args.ContainsKey("userName") ? args["userName"].ToString() : "UnknownUser";
             if (string.IsNullOrWhiteSpace(userName))
             {
@@ -617,11 +627,9 @@ public class CPHInline
                 return false;
             }
 
-            // --- Step 2: Open the UserProfiles collection ---
             var col = _db.GetCollection<UserProfile>("UserProfiles");
             var profile = col.FindOne(x => x.UserName.ToLower() == userName.ToLower());
 
-            // --- Step 3: Check if the user has stored knowledge ---
             if (profile != null && profile.Knowledge != null && profile.Knowledge.Count > 0)
             {
                 var combinedMemory = string.Join(", ", profile.Knowledge);
@@ -631,7 +639,7 @@ public class CPHInline
             }
             else
             {
-                // --- Step 4: No memory found ---
+
                 var message = $"I don’t have any saved memories for {userName} yet!";
                 CPH.SendMessage(message, true);
                 LogToFile($"No memory found for {userName}.", "DEBUG");
@@ -743,11 +751,20 @@ public class CPHInline
     {
         LogToFile("Entering PerformModeration method.", "DEBUG");
 
+        var appSettings = ReadSettings();
+
         string input = args["rawInput"]?.ToString();
         if (string.IsNullOrWhiteSpace(input))
         {
             LogToFile("'rawInput' value is either not found or not a valid string.", "ERROR");
             return false;
+        }
+
+        if (!appSettings.moderation_enabled)
+        {
+            LogToFile("Moderation is globally disabled by settings.", "INFO");
+            CPH.SetArgument("moderatedMessage", args["rawInput"]?.ToString());
+            return true;
         }
 
         LogToFile($"Message for moderation: {input}", "INFO");
@@ -806,7 +823,7 @@ public class CPHInline
             else
                 LogToFile("Flagged Categories: None", "INFO");
 
-            bool passed = !flaggedCategories.Any() || HandleModerationResponse(flaggedCategories, input);
+            bool passed = !flaggedCategories.Any() || HandleModerationResponse(flaggedCategories, input, appSettings.moderation_rebuke_enabled);
             LogToFile($"Moderation result: {(passed ? "Passed" : "Failed")}", "INFO");
             return passed;
         }
@@ -817,7 +834,7 @@ public class CPHInline
         }
     }
 
-    private bool HandleModerationResponse(List<string> flaggedCategories, string input)
+    private bool HandleModerationResponse(List<string> flaggedCategories, string input, bool rebukeEnabled)
     {
         if (flaggedCategories.Any())
         {
@@ -825,22 +842,28 @@ public class CPHInline
             string outputMessage = $"This message was flagged in the following categories: {flaggedCategoriesString}. Repeated attempts at abuse may result in a ban.";
             LogToFile(outputMessage, "INFO");
 
-            string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
-            if (string.IsNullOrWhiteSpace(voiceAlias))
+            if (rebukeEnabled)
             {
-                LogToFile("'Voice Alias' global variable is not found or not a valid string.", "ERROR");
-                return false;
+                string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
+                if (string.IsNullOrWhiteSpace(voiceAlias))
+                {
+                    LogToFile("'Voice Alias' global variable is not found or not a valid string.", "ERROR");
+                    return false;
+                }
+
+                int speakResult = CPH.TtsSpeak(voiceAlias, outputMessage, false);
+                LogToFile($"TTS speak result: {speakResult}", "DEBUG");
+
+                CPH.SendMessage(outputMessage, true);
             }
-
-            int speakResult = CPH.TtsSpeak(voiceAlias, outputMessage, false);
-            LogToFile($"TTS speak result: {speakResult}", "DEBUG");
-
-            CPH.SendMessage(outputMessage, true);
+            else
+            {
+                LogToFile("Moderation rebuke is disabled by settings. Skipping TTS and chat output.", "INFO");
+            }
             return false;
         }
         else
         {
-
             CPH.SetArgument("moderatedMessage", input);
             LogToFile("Message passed moderation.", "DEBUG");
             return true;
@@ -928,17 +951,13 @@ public class CPHInline
         return t;
     }
 
-    /// <summary>
-    /// Speaks a message using the active character’s voice alias.
-    /// Automatically incorporates nickname and pronouns for the user.
-    /// </summary>
     public bool Speak()
     {
         LogToFile("Entering Speak method (LiteDB + Pronoun integration).", "DEBUG");
 
         try
         {
-            // Retrieve character number
+
             int characterNumber = 1;
             try
             {
@@ -950,7 +969,6 @@ public class CPHInline
                 LogToFile("No active 'character' variable found. Defaulting to 1.", "WARN");
             }
 
-            // Retrieve voice alias
             string voiceAlias = CPH.GetGlobalVar<string>($"character_voice_alias_{characterNumber}", true);
             if (string.IsNullOrWhiteSpace(voiceAlias))
             {
@@ -960,7 +978,6 @@ public class CPHInline
                 return false;
             }
 
-            // Determine text to speak
             string messageToSpeak =
                 args.ContainsKey("moderatedMessage") && !string.IsNullOrWhiteSpace(args["moderatedMessage"]?.ToString())
                     ? args["moderatedMessage"].ToString()
@@ -975,7 +992,6 @@ public class CPHInline
                 return false;
             }
 
-            // Retrieve userName strictly from args["userName"]
             string userName = args.ContainsKey("userName") ? args["userName"]?.ToString() : null;
             if (string.IsNullOrWhiteSpace(userName))
             {
@@ -984,14 +1000,21 @@ public class CPHInline
             }
             var profile = GetOrCreateUserProfile(userName, args);
 
-            // Determine display name (no pronouns)
-            string formattedUser = profile.PreferredName;
+            string formattedUser;
+            if (!string.IsNullOrWhiteSpace(profile.PreferredName))
+            {
+                formattedUser = profile.PreferredName;
+                LogToFile($"Speak(): Using PreferredName '{formattedUser}' for user '{userName}'.", "DEBUG");
+            }
+            else
+            {
+                formattedUser = profile.UserName;
+                LogToFile($"Speak(): PreferredName is empty, falling back to UserName '{formattedUser}'.", "DEBUG");
+            }
 
-            // Compose message
             string outputMessage = $"{formattedUser} said: {messageToSpeak}";
             LogToFile($"Character {characterNumber} ({voiceAlias}) speaking message: {outputMessage}", "INFO");
 
-            // Speak message
             int speakResult = CPH.TtsSpeak(voiceAlias, outputMessage, false);
             if (speakResult != 0)
             {
@@ -999,7 +1022,6 @@ public class CPHInline
                 return false;
             }
 
-            // Reset character global
             CPH.SetGlobalVar("character", 1, true);
             LogToFile("Reset 'character' global to 1 after speaking.", "DEBUG");
             return true;
@@ -1049,11 +1071,10 @@ public class CPHInline
 
             var keywordsCol = _db.GetCollection<BsonDocument>("Keywords");
 
-            // Try to find existing keyword (case-insensitive)
             var existing = keywordsCol.FindOne(Query.EQ("Keyword", keyword));
             if (existing == null)
             {
-                // Try case-insensitive search
+
                 existing = keywordsCol.FindAll().FirstOrDefault(doc => string.Equals(doc["Keyword"]?.AsString, keyword, StringComparison.OrdinalIgnoreCase));
             }
 
@@ -1108,7 +1129,7 @@ public class CPHInline
 
         try
         {
-            // Retrieve or create the user profile
+
             var profile = GetOrCreateUserProfile(userName, args);
             if (profile == null)
             {
@@ -1117,7 +1138,6 @@ public class CPHInline
                 return false;
             }
 
-            // Add the new memory if not already present
             if (profile.Knowledge == null)
                 profile.Knowledge = new List<string>();
             if (!profile.Knowledge.Contains(messageToRemember))
@@ -1130,12 +1150,10 @@ public class CPHInline
                 LogToFile($"Memory already exists for user '{userName}': {messageToRemember}", "DEBUG");
             }
 
-            // Update the user profile in LiteDB
             var userCollection = _db.GetCollection<UserProfile>("UserProfiles");
             userCollection.Update(profile);
             LogToFile($"Updated UserProfile for '{userName}' in LiteDB.", "DEBUG");
 
-            // Use preferred name for confirmation
             string userToConfirm = !string.IsNullOrWhiteSpace(profile.PreferredName) ? profile.PreferredName : userName;
             string outputMessage = $"OK, {userToConfirm}, I will remember {messageToRemember} about you.";
             CPH.SendMessage(outputMessage, true);
@@ -1215,7 +1233,6 @@ public class CPHInline
             LogToFile($"ChatLog Content before asking GPT: {Environment.NewLine}{chatLogAsString}", "INFO");
         }
 
-        // Username
         if (!args.TryGetValue("userName", out object userNameObj) || string.IsNullOrWhiteSpace(userNameObj?.ToString()))
         {
             LogToFile("'userName' argument is not found or not a valid string.", "ERROR");
@@ -1225,7 +1242,6 @@ public class CPHInline
         string userName = userNameObj.ToString();
         LogToFile("Retrieved and validated 'userName' argument.", "DEBUG");
 
-        // Pronouns from streamer.bot variables
         string pronounSubject = CPH.GetGlobalVar<string>("pronounSubject", false);
         string pronounObject = CPH.GetGlobalVar<string>("pronounObject", false);
         string pronounPossessive = CPH.GetGlobalVar<string>("pronounPossessive", false);
@@ -1239,14 +1255,12 @@ public class CPHInline
             pronounDescription += ")";
         }
 
-        // Compose display name with pronouns if available
         string userToSpeak = userName;
         if (!string.IsNullOrWhiteSpace(pronounDescription))
             userToSpeak = $"{userName} {pronounDescription}";
         else if (args.TryGetValue("nicknamePronouns", out object nicknameObj) && !string.IsNullOrWhiteSpace(nicknameObj?.ToString()))
             userToSpeak = nicknameObj.ToString();
 
-        // Get the message to send
         string fullMessage = "";
         if (args.TryGetValue("moderatedMessage", out object moderatedMessageObj) && !string.IsNullOrWhiteSpace(moderatedMessageObj?.ToString()))
             fullMessage = moderatedMessageObj.ToString();
@@ -1262,7 +1276,6 @@ public class CPHInline
         string prompt = $"{userToSpeak} asks: {fullMessage}";
         LogToFile($"Constructed prompt for GPT: {prompt}", "DEBUG");
 
-        // Stream info
         string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
         if (string.IsNullOrWhiteSpace(databasePath))
         {
@@ -1282,16 +1295,14 @@ public class CPHInline
         string currentTitle = CPH.GetGlobalVar<string>("currentTitle", false);
         string currentGame = CPH.GetGlobalVar<string>("currentGame", false);
 
-        // --- LiteDB context enrichment ---
         var userCollection = _db.GetCollection<UserProfile>("UserProfiles");
         var keywordsCol = _db.GetCollection<BsonDocument>("Keywords");
 
-        // Detect users mentioned in the prompt (by @username or username)
         List<string> mentionedUsers = new List<string>();
-        // Always add the asker
+
         if (!mentionedUsers.Contains(userName, StringComparer.OrdinalIgnoreCase))
             mentionedUsers.Add(userName);
-        // Add broadcaster if mentioned
+
         if (!string.IsNullOrWhiteSpace(broadcaster))
         {
             if (fullMessage.IndexOf(broadcaster, StringComparison.OrdinalIgnoreCase) >= 0 ||
@@ -1301,7 +1312,7 @@ public class CPHInline
                     mentionedUsers.Add(broadcaster);
             }
         }
-        // Find @mentions in prompt
+
         var mentionMatches = System.Text.RegularExpressions.Regex.Matches(fullMessage, @"@(\w+)");
         foreach (System.Text.RegularExpressions.Match match in mentionMatches)
         {
@@ -1310,11 +1321,9 @@ public class CPHInline
                 mentionedUsers.Add(muser);
         }
 
-        // Build dynamic context enrichment
         var enrichmentSections = new List<string>();
         enrichmentSections.Add($"{context}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}");
 
-        // User profiles, pronouns, memories (for all relevant)
         foreach (string uname in mentionedUsers.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var prof = userCollection.FindOne(x => x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
@@ -1322,7 +1331,7 @@ public class CPHInline
             {
                 string preferred = string.IsNullOrWhiteSpace(prof.PreferredName) ? prof.UserName : prof.PreferredName;
                 string pronouns = "";
-                // Try to get pronouns from streamer.bot variables if this is the asker
+
                 if (uname.Equals(userName, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(pronounDescription))
                     pronouns = $" (pronouns: {pronounDescription})";
                 else if (!string.IsNullOrWhiteSpace(prof.Pronouns))
@@ -1333,7 +1342,6 @@ public class CPHInline
             }
         }
 
-        // Keywords: scan for any keyword appearing in the prompt, and include their definitions
         var keywordDocs = keywordsCol.FindAll().ToList();
         foreach (var doc in keywordDocs)
         {
@@ -1345,7 +1353,7 @@ public class CPHInline
                     enrichmentSections.Add($"Something you know about {keyword}: {definition}");
             }
         }
-        // Also if any mentioned user is a keyword
+
         foreach (var doc in keywordDocs)
         {
             string keyword = doc["Keyword"]?.AsString;
@@ -1362,6 +1370,8 @@ public class CPHInline
 
         try
         {
+
+            var appSettings = ReadSettings();
             string completionsRequestJSON = null;
             string completionsResponseContent = null;
             string GPTResponse = null;
@@ -1369,14 +1379,14 @@ public class CPHInline
             {
                 string apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
                 string AIModel = CPH.GetGlobalVar<string>("OpenAI Model", true);
-                // Use dynamic completions endpoint from settings
+
                 string completionsUrl = CPH.GetGlobalVar<string>("openai_completions_url", "https://api.openai.com/v1/chat/completions");
                 LogToFile($"Using completions endpoint: {completionsUrl}", "DEBUG");
 
                 var messages = new List<chatMessage>();
-                // Character/system prompt and context
+
                 messages.Add(new chatMessage { role = "system", content = contextBody });
-                // Inject chat log context (same as before)
+
                 messages.Add(new chatMessage
                 {
                     role = "user",
@@ -1385,7 +1395,8 @@ public class CPHInline
                 messages.Add(new chatMessage { role = "assistant", content = "OK" });
                 if (ChatLog != null)
                 {
-                    foreach (var chatMessage in ChatLog)
+
+                    foreach (var chatMessage in ChatLog.Reverse().Take(appSettings.max_chat_history).Reverse())
                     {
                         messages.Add(chatMessage);
                         messages.Add(new chatMessage { role = "assistant", content = "OK" });
@@ -1395,7 +1406,8 @@ public class CPHInline
                 messages.Add(new chatMessage { role = "assistant", content = "OK" });
                 if (GPTLog != null)
                 {
-                    foreach (var gptMessage in GPTLog)
+
+                    foreach (var gptMessage in GPTLog.Reverse().Take(appSettings.max_prompt_history).Reverse())
                     {
                         messages.Add(gptMessage);
                     }
@@ -1442,7 +1454,6 @@ public class CPHInline
             CPH.SetGlobalVar("Response", GPTResponse, true);
             LogToFile("Stored GPT response in global variable 'Response'.", "INFO");
 
-            // Outbound webhook (same as AskGPTWebhook)
             string outboundWebhookUrl = CPH.GetGlobalVar<string>("outbound_webhook_url", true);
             string outboundWebhookMode = CPH.GetGlobalVar<string>("outbound_webhook_mode", true);
             if (!string.IsNullOrWhiteSpace(outboundWebhookUrl))
@@ -1492,7 +1503,6 @@ public class CPHInline
                 }
             }
 
-            // TTS: use global variable voice_enabled
             bool voiceEnabled = CPH.GetGlobalVar<bool>("voice_enabled", true);
             if (voiceEnabled)
             {
@@ -1500,7 +1510,6 @@ public class CPHInline
                 LogToFile($"Character {characterNumber} spoke GPT's response.", "INFO");
             }
 
-            // Chat posting: match AskGPTWebhook (single message if enabled)
             bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
             if (postToChat)
             {
@@ -1512,7 +1521,6 @@ public class CPHInline
                 LogToFile("Posting GPT responses to chat is disabled by settings.", "INFO");
             }
 
-            // Discord logging
             bool logDiscord = CPH.GetGlobalVar<bool>("Log GPT Questions to Discord", true);
             if (logDiscord)
             {
@@ -1536,7 +1544,6 @@ public class CPHInline
     {
         LogToFile("Entering AskGPTWebhook (LiteDB context enrichment, outbound webhook, pronoun support, TTS/chat/discord parity).", "DEBUG");
 
-        // Get the message from moderated or raw input
         string fullMessage = args.ContainsKey("moderatedMessage") && !string.IsNullOrWhiteSpace(args["moderatedMessage"]?.ToString())
             ? args["moderatedMessage"].ToString()
             : args.ContainsKey("rawInput") && !string.IsNullOrWhiteSpace(args["rawInput"]?.ToString())
@@ -1547,6 +1554,8 @@ public class CPHInline
             LogToFile("Both 'moderatedMessage' and 'rawInput' are missing or empty.", "ERROR");
             return false;
         }
+
+        var appSettings = ReadSettings();
 
         int characterNumber = 1;
         try
@@ -1586,11 +1595,9 @@ public class CPHInline
         string currentTitle = CPH.GetGlobalVar<string>("currentTitle", false);
         string currentGame = CPH.GetGlobalVar<string>("currentGame", false);
 
-        // --- LiteDB context enrichment ---
         var userCollection = _db.GetCollection<UserProfile>("UserProfiles");
         var keywordsCol = _db.GetCollection<BsonDocument>("Keywords");
 
-        // Try to get pronouns from streamer.bot global vars
         string pronounSubject = CPH.GetGlobalVar<string>("pronounSubject", false);
         string pronounObject = CPH.GetGlobalVar<string>("pronounObject", false);
         string pronounPossessive = CPH.GetGlobalVar<string>("pronounPossessive", false);
@@ -1604,16 +1611,14 @@ public class CPHInline
             pronounDescription += ")";
         }
 
-        // Try to get nickname (with pronouns) if available
         string userToSpeak = "User";
         if (args.TryGetValue("nicknamePronouns", out object nicknameObj) && !string.IsNullOrWhiteSpace(nicknameObj?.ToString()))
             userToSpeak = nicknameObj.ToString();
         else if (!string.IsNullOrWhiteSpace(pronounDescription))
             userToSpeak = $"User {pronounDescription}";
 
-        // Detect users mentioned in the prompt (by @username or username)
         List<string> mentionedUsers = new List<string>();
-        // Add broadcaster if mentioned
+
         if (!string.IsNullOrWhiteSpace(broadcaster))
         {
             if (fullMessage.IndexOf(broadcaster, StringComparison.OrdinalIgnoreCase) >= 0 ||
@@ -1623,7 +1628,7 @@ public class CPHInline
                     mentionedUsers.Add(broadcaster);
             }
         }
-        // Find @mentions in prompt
+
         var mentionMatches = System.Text.RegularExpressions.Regex.Matches(fullMessage, @"@(\w+)");
         foreach (System.Text.RegularExpressions.Match match in mentionMatches)
         {
@@ -1632,10 +1637,9 @@ public class CPHInline
                 mentionedUsers.Add(muser);
         }
 
-        // Build dynamic context enrichment (same schema as AskGPT)
         var enrichmentSections = new List<string>();
         enrichmentSections.Add($"{context}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}");
-        // User profiles, pronouns, memories (for all relevant)
+
         foreach (string uname in mentionedUsers.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var prof = userCollection.FindOne(x => x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
@@ -1650,7 +1654,7 @@ public class CPHInline
                     enrichmentSections.Add($"Memories about {preferred}: {string.Join("; ", prof.Knowledge)}");
             }
         }
-        // Keywords: scan for any keyword appearing in the prompt, and include their definitions
+
         var keywordDocs = keywordsCol.FindAll().ToList();
         foreach (var doc in keywordDocs)
         {
@@ -1662,7 +1666,7 @@ public class CPHInline
                     enrichmentSections.Add($"Something you know about {keyword}: {definition}");
             }
         }
-        // Also if any mentioned user is a keyword
+
         foreach (var doc in keywordDocs)
         {
             string keyword = doc["Keyword"]?.AsString;
@@ -1677,7 +1681,6 @@ public class CPHInline
         string prompt = $"{userToSpeak} asks: {fullMessage}";
         LogToFile($"Assembled enriched context for webhook:\n{contextBody}", "DEBUG");
 
-        // --- OpenAI API call and outbound webhook ---
         string completionsRequestJSON = null;
         string completionsResponseContent = null;
         string GPTResponse = null;
@@ -1685,13 +1688,13 @@ public class CPHInline
         {
             string apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
             string AIModel = CPH.GetGlobalVar<string>("OpenAI Model", true);
-            // Use dynamic completions endpoint from settings
+
             string completionsUrl = CPH.GetGlobalVar<string>("openai_completions_url", "https://api.openai.com/v1/chat/completions");
             LogToFile($"Using completions endpoint: {completionsUrl}", "DEBUG");
             var messages = new List<chatMessage>();
-            // System/context prompt
+
             messages.Add(new chatMessage { role = "system", content = contextBody });
-            // No chat log for webhook, just the prompt
+
             messages.Add(new chatMessage { role = "user", content = $"{prompt} You must respond in less than 500 characters." });
             completionsRequestJSON = JsonConvert.SerializeObject(new { model = AIModel, messages = messages }, Formatting.Indented);
             LogToFile($"Request JSON: {completionsRequestJSON}", "DEBUG");
@@ -1730,7 +1733,6 @@ public class CPHInline
         CPH.SetGlobalVar("Response", GPTResponse, true);
         LogToFile("Stored GPT response in global variable 'Response'.", "INFO");
 
-        // Outbound webhook support (parity with AskGPT)
         string outboundWebhookUrl = CPH.GetGlobalVar<string>("outbound_webhook_url", true);
         string outboundWebhookMode = CPH.GetGlobalVar<string>("outbound_webhook_mode", true);
         if (!string.IsNullOrWhiteSpace(outboundWebhookUrl))
@@ -1780,7 +1782,6 @@ public class CPHInline
             }
         }
 
-        // TTS: use global variable voice_enabled
         bool voiceEnabled = CPH.GetGlobalVar<bool>("voice_enabled", true);
         if (voiceEnabled)
         {
@@ -1788,7 +1789,6 @@ public class CPHInline
             LogToFile($"Character {characterNumber} spoke GPT's response.", "INFO");
         }
 
-        // Chat posting: match AskGPT (single message if enabled)
         bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
         if (postToChat)
         {
@@ -1800,7 +1800,6 @@ public class CPHInline
             LogToFile("Posting GPT responses to chat is disabled by settings.", "INFO");
         }
 
-        // Discord logging (parity with AskGPT)
         bool logDiscord = CPH.GetGlobalVar<bool>("Log GPT Questions to Discord", true);
         if (logDiscord)
         {
@@ -1915,7 +1914,6 @@ public class CPHInline
 
         LogToFile("All configuration values are valid and present.", "DEBUG");
 
-        // Use dynamic completions endpoint from settings
         string completionsUrl = CPH.GetGlobalVar<string>("openai_completions_url", "https://api.openai.com/v1/chat/completions");
         LogToFile("All configuration values are valid and present.", "DEBUG");
         LogToFile($"Using completions endpoint: {completionsUrl}", "DEBUG");
@@ -2296,10 +2294,6 @@ public class CPHInline
         return true;
     }
 
-    /// <summary>
-    /// Fetches the preferred nickname for the given userName from LiteDB UserProfiles.
-    /// If no profile exists, creates one with default values.
-    /// </summary>
     public bool SaveSettings()
     {
         try
