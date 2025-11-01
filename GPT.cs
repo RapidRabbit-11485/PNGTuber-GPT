@@ -45,7 +45,7 @@ public class CPHInline
         }
     }
 
-    public void Dispose()
+    public bool Dispose()
     {
         try
         {
