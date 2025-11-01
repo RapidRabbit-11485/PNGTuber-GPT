@@ -2628,12 +2628,10 @@ public class CPHInline
                 return false;
             }
 
-            var json = Newtonsoft.Json.JsonConvert.SerializeObject(settings);
-
-            var filePath = Path.Combine(settings.DatabasePath, "settings.json");
-            File.WriteAllText(filePath, json);
-
-            LogToFile($"Settings saved successfully. Settings: {json}", "INFO");
+            // Persist settings to LiteDB instead of JSON file
+            var settingsCollection = _db.GetCollection<AppSettings>("settings");
+            settingsCollection.Upsert("singleton", settings);
+            LogToFile("Settings saved successfully to LiteDB.", "INFO");
 
             CPH.SetGlobalVar("hate_threshold", settings.HateThreshold, true);
             CPH.SetGlobalVar("hate_threatening_threshold", settings.HateThreateningThreshold, true);
@@ -2669,24 +2667,14 @@ public class CPHInline
         {
             LogToFile("Entering ReadSettings method.", "DEBUG");
 
-            string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
-            if (string.IsNullOrWhiteSpace(databasePath))
+            // Read settings from LiteDB
+            var settingsCollection = _db.GetCollection<AppSettings>("settings");
+            var settings = settingsCollection.FindById("singleton");
+            if (settings == null)
             {
-                LogToFile("'Database Path' value is either not found or not a valid string.", "ERROR");
+                LogToFile("Settings record not found in LiteDB.", "WARN");
                 return false;
             }
-
-            string filePath = Path.Combine(databasePath, "settings.json");
-
-            if (!File.Exists(filePath))
-            {
-                LogToFile("Settings file not found.", "WARN");
-                return false;
-            }
-
-            string json = File.ReadAllText(filePath);
-
-            AppSettings settings = Newtonsoft.Json.JsonConvert.DeserializeObject<AppSettings>(json);
 
             CPH.SetGlobalVar("OpenAI API Key", DecryptData(settings.OpenApiKey), true);
             CPH.SetGlobalVar("OpenAI Model", settings.OpenAiModel, true);
@@ -2730,7 +2718,7 @@ public class CPHInline
             CPH.SetGlobalVar("outbound_webhook_url", settings.OutboundWebhookUrl, true);
             CPH.SetGlobalVar("outbound_webhook_mode", settings.OutboundWebhookMode, true);
 
-            LogToFile($"Settings loaded successfully. Settings: {json}", "INFO");
+            LogToFile("Settings loaded successfully from LiteDB.", "INFO");
             LogToFile("Exiting ReadSettings method.", "DEBUG");
             return true;
         }
