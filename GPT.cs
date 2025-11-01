@@ -802,6 +802,7 @@ public class CPHInline
 
     public bool PerformModeration()
     {
+        LogToFile("==== Begin Moderation Evaluation ====", "INFO");
         LogToFile("Entering PerformModeration method.", "DEBUG");
 
         bool moderationEnabled = CPH.GetGlobalVar<bool>("moderation_enabled", true);
@@ -809,7 +810,9 @@ public class CPHInline
 
         if (!CPH.TryGetArg("rawInput", out string input) || string.IsNullOrWhiteSpace(input))
         {
-            LogToFile("'rawInput' value is either not found or not a valid string.", "ERROR");
+            LogToFile("PerformModeration failed: missing or invalid rawInput", "ERROR");
+            CPH.SendMessage("Moderation failed — message could not be processed.", true);
+            LogToFile("==== End Moderation Evaluation ====", "INFO");
             return false;
         }
 
@@ -817,6 +820,7 @@ public class CPHInline
         {
             LogToFile("Moderation is globally disabled by settings.", "INFO");
             CPH.SetArgument("moderatedMessage", input);
+            LogToFile("==== End Moderation Evaluation ====", "INFO");
             return true;
         }
 
@@ -827,7 +831,9 @@ public class CPHInline
             var response = CallModerationEndpoint(input);
             if (response?.Results == null || response.Results.Count == 0)
             {
-                LogToFile("Moderation endpoint failed to respond or returned no results.", "ERROR");
+                LogToFile("PerformModeration failed: moderation endpoint returned null or empty results", "ERROR");
+                CPH.SendMessage("Moderation failed — message could not be processed.", true);
+                LogToFile("==== End Moderation Evaluation ====", "INFO");
                 return false;
             }
 
@@ -878,11 +884,19 @@ public class CPHInline
 
             bool passed = !flaggedCategories.Any() || HandleModerationResponse(flaggedCategories, input, moderationRebukeEnabled);
             LogToFile($"Moderation result: {(passed ? "Passed" : "Failed")}", "INFO");
+            if (!passed)
+            {
+                CPH.SendMessage("Moderation failed — message could not be processed.", true);
+            }
+            LogToFile("==== End Moderation Evaluation ====", "INFO");
             return passed;
         }
         catch (Exception ex)
         {
             LogToFile($"An error occurred in PerformModeration: {ex.Message}", "ERROR");
+            LogToFile($"Exception stack trace: {ex.StackTrace}", "DEBUG");
+            CPH.SendMessage("Moderation failed — message could not be processed.", true);
+            LogToFile("==== End Moderation Evaluation ====", "INFO");
             return false;
         }
     }
@@ -912,6 +926,7 @@ public class CPHInline
             else
             {
                 LogToFile("Moderation rebuke is disabled by settings. Skipping TTS and chat output.", "INFO");
+                CPH.SendMessage("Message flagged but moderation responses are disabled.", true);
             }
             return false;
         }
@@ -978,17 +993,39 @@ public class CPHInline
         }
         catch (WebException webEx)
         {
-            using (var stream = webEx.Response?.GetResponseStream())
-            using (var reader = new StreamReader(stream ?? new MemoryStream()))
+            // Log status and response content separately
+            if (webEx.Response != null)
             {
-                string responseContent = reader.ReadToEnd();
-                LogToFile($"A WebException was caught during the moderation request: {responseContent}", "ERROR");
+                try
+                {
+                    var httpResp = webEx.Response as HttpWebResponse;
+                    if (httpResp != null)
+                    {
+                        LogToFile($"HTTP Status: {httpResp.StatusCode}", "ERROR");
+                    }
+                    using (var stream = webEx.Response.GetResponseStream())
+                    using (var reader = new StreamReader(stream ?? new MemoryStream()))
+                    {
+                        string responseContent = reader.ReadToEnd();
+                        LogToFile($"A WebException was caught during the moderation request: {responseContent}", "ERROR");
+                    }
+                }
+                catch (Exception ex2)
+                {
+                    LogToFile($"Failed to read WebException response: {ex2.Message}", "ERROR");
+                }
+            }
+            else
+            {
+                LogToFile($"A WebException was caught during the moderation request: {webEx.Status}", "ERROR");
             }
             return null;
         }
         catch (Exception ex)
         {
             LogToFile($"An exception occurred while calling the moderation endpoint: {ex.Message}", "ERROR");
+            if (ex.InnerException != null)
+                LogToFile($"Inner exception: {ex.InnerException.Message}", "ERROR");
             return null;
         }
     }
@@ -1275,6 +1312,7 @@ public class CPHInline
 
     public bool AskGPT()
     {
+        LogToFile("==== Begin AskGPT Execution ====", "INFO");
         LogToFile("Entering AskGPT method (streamer.bot pronouns, LiteDB context, webhook/discord sync).", "DEBUG");
 
         int characterNumber = 1;
@@ -1294,6 +1332,7 @@ public class CPHInline
             string err = $"No voice alias configured for Character {characterNumber}. Please set 'character_voice_alias_{characterNumber}'.";
             LogToFile(err, "ERROR");
             CPH.SendMessage(err, true);
+            LogToFile("==== End AskGPT Execution ====", "INFO");
             return false;
         }
 
@@ -1312,6 +1351,7 @@ public class CPHInline
         {
             LogToFile("'userName' argument is not found or not a valid string.", "ERROR");
             CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            LogToFile("==== End AskGPT Execution ====", "INFO");
             return false;
         }
         LogToFile("Retrieved and validated 'userName' argument.", "DEBUG");
@@ -1342,6 +1382,7 @@ public class CPHInline
         {
             LogToFile("Both 'moderatedMessage' and 'rawInput' are not found or are empty strings.", "ERROR");
             CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            LogToFile("==== End AskGPT Execution ====", "INFO");
             return false;
         }
 
@@ -1353,6 +1394,7 @@ public class CPHInline
         {
             LogToFile("'Database Path' global variable is not found or not a valid string.", "ERROR");
             CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            LogToFile("==== End AskGPT Execution ====", "INFO");
             return false;
         }
         string characterFileName = CPH.GetGlobalVar<string>($"character_file_{characterNumber}", true);
@@ -1367,8 +1409,11 @@ public class CPHInline
         string currentTitle = CPH.GetGlobalVar<string>("currentTitle", false);
         string currentGame = CPH.GetGlobalVar<string>("currentGame", false);
 
+        // Load user_profiles and Keywords collections into memory
         var userCollection = _db.GetCollection<UserProfile>("user_profiles");
+        var allUserProfiles = userCollection.FindAll().ToList();
         var keywordsCol = _db.GetCollection<BsonDocument>("Keywords");
+        var keywordDocs = keywordsCol.FindAll().ToList();
 
         List<string> mentionedUsers = new List<string>();
         if (!mentionedUsers.Contains(userName, StringComparer.OrdinalIgnoreCase))
@@ -1391,22 +1436,18 @@ public class CPHInline
         }
 
         var pronounContextEntries = new List<string>();
-
-        var askerProfile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
+        var askerProfile = allUserProfiles.FirstOrDefault(x => x.UserName != null && x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
         if (askerProfile != null && !string.IsNullOrWhiteSpace(askerProfile.Pronouns))
             pronounContextEntries.Add($"{askerProfile.PreferredName} uses pronouns {askerProfile.Pronouns}.");
-
-        var broadcasterProfile = userCollection.FindOne(x => x.UserName.Equals(broadcaster, StringComparison.OrdinalIgnoreCase));
+        var broadcasterProfile = allUserProfiles.FirstOrDefault(x => x.UserName != null && x.UserName.Equals(broadcaster, StringComparison.OrdinalIgnoreCase));
         if (broadcasterProfile != null && !string.IsNullOrWhiteSpace(broadcasterProfile.Pronouns))
             pronounContextEntries.Add($"{broadcasterProfile.PreferredName} uses pronouns {broadcasterProfile.Pronouns}.");
-
         foreach (var uname in mentionedUsers.Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            var mentionedProfile = userCollection.FindOne(x => x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
+            var mentionedProfile = allUserProfiles.FirstOrDefault(x => x.UserName != null && x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
             if (mentionedProfile != null && !string.IsNullOrWhiteSpace(mentionedProfile.Pronouns))
                 pronounContextEntries.Add($"{mentionedProfile.PreferredName} uses pronouns {mentionedProfile.Pronouns}.");
         }
-
         var enrichmentSections = new List<string>();
         if (pronounContextEntries.Count > 0)
         {
@@ -1415,10 +1456,9 @@ public class CPHInline
             LogToFile($"Added pronoun context system message: {pronounContext}", "DEBUG");
         }
         enrichmentSections.Add($"{context}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}");
-
         foreach (string uname in mentionedUsers.Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            var mentionedProfile = userCollection.FindOne(x => x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
+            var mentionedProfile = allUserProfiles.FirstOrDefault(x => x.UserName != null && x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
             if (mentionedProfile != null)
             {
                 string preferred = mentionedProfile.PreferredName;
@@ -1432,8 +1472,6 @@ public class CPHInline
                     enrichmentSections.Add($"Memories about {preferred}: {string.Join("; ", mentionedProfile.Knowledge)}");
             }
         }
-
-        var keywordDocs = keywordsCol.FindAll().ToList();
         foreach (var doc in keywordDocs)
         {
             string keyword = doc["Keyword"]?.AsString;
@@ -1444,7 +1482,6 @@ public class CPHInline
                     enrichmentSections.Add($"Something you know about {keyword}: {definition}");
             }
         }
-
         foreach (var doc in keywordDocs)
         {
             string keyword = doc["Keyword"]?.AsString;
@@ -1455,403 +1492,159 @@ public class CPHInline
                     enrichmentSections.Add($"Something you know about {keyword}: {definition}");
             }
         }
-
         string contextBody = string.Join("\n", enrichmentSections);
         LogToFile("Assembled dynamic context body for GPT prompt (LiteDB):\n" + contextBody, "DEBUG");
 
-        try
-        {
+        System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
+        sw.Start();
 
-            var appSettings = ReadSettings();
-            int maxChatHistory = CPH.GetGlobalVar<int>("max_chat_history", true);
-            int maxPromptHistory = CPH.GetGlobalVar<int>("max_prompt_history", true);
-            string completionsRequestJSON = null;
-            string completionsResponseContent = null;
-            string GPTResponse = null;
+        string completionsRequestJSON = null;
+        string completionsResponseContent = null;
+        string GPTResponse = null;
+        int maxChatHistory = CPH.GetGlobalVar<int>("max_chat_history", true);
+        int maxPromptHistory = CPH.GetGlobalVar<int>("max_prompt_history", true);
+        string completionsUrl = CPH.GetGlobalVar<string>("openai_completions_url", true);
+        if (string.IsNullOrWhiteSpace(completionsUrl))
+            completionsUrl = "https://api.openai.com/v1/chat/completions";
+        string apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
+        string AIModel = CPH.GetGlobalVar<string>("OpenAI Model", true);
+        var messages = new List<chatMessage>();
+        messages.Add(new chatMessage { role = "system", content = contextBody });
+        messages.Add(new chatMessage
+        {
+            role = "user",
+            content = "I am going to send you the chat log from Twitch. You should reference these messages for all future prompts if it is relevant to the prompt being asked. Each message will be prefixed with the users name that you can refer to them as, if referring to their message in the response. After each message you receive, you will return simply \"OK\" to indicate you have received this message, and no other text. When I am finished I will say FINISHED, and you will again respond with simply \"OK\" and nothing else, and then resume normal operation on all future prompts."
+        });
+        messages.Add(new chatMessage { role = "assistant", content = "OK" });
+        if (ChatLog != null)
+        {
+            foreach (var chatMessage in ChatLog.Reverse().Take(maxChatHistory).Reverse())
+            {
+                messages.Add(chatMessage);
+                messages.Add(new chatMessage { role = "assistant", content = "OK" });
+            }
+        }
+        messages.Add(new chatMessage { role = "user", content = "FINISHED" });
+        messages.Add(new chatMessage { role = "assistant", content = "OK" });
+        if (GPTLog != null)
+        {
+            foreach (var gptMessage in GPTLog.Reverse().Take(maxPromptHistory).Reverse())
+            {
+                messages.Add(gptMessage);
+            }
+        }
+        messages.Add(new chatMessage { role = "user", content = $"{prompt} You must respond in less than 500 characters." });
+        completionsRequestJSON = JsonConvert.SerializeObject(new { model = AIModel, messages = messages }, Formatting.Indented);
+        LogToFile($"Request JSON: {completionsRequestJSON}", "DEBUG");
+
+        // Retry logic for OpenAI API call
+        int maxAttempts = 3;
+        int attempt = 0;
+        bool apiSuccess = false;
+        Exception lastException = null;
+        int[] backoffSeconds = { 1, 2, 4 };
+        for (attempt = 0; attempt < maxAttempts && !apiSuccess; attempt++)
+        {
             try
             {
-                string apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
-                string AIModel = CPH.GetGlobalVar<string>("OpenAI Model", true);
-
-                string completionsUrl = CPH.GetGlobalVar<string>("openai_completions_url", true);
-                if (string.IsNullOrWhiteSpace(completionsUrl))
-                    completionsUrl = "https://api.openai.com/v1/chat/completions";
-                LogToFile($"Using completions endpoint: {completionsUrl}", "DEBUG");
-
-                var messages = new List<chatMessage>();
-
-                messages.Add(new chatMessage { role = "system", content = contextBody });
-
-                messages.Add(new chatMessage
+                using (var completionsWebRequest = WebRequest.Create(completionsUrl) as HttpWebRequest)
                 {
-                    role = "user",
-                    content = "I am going to send you the chat log from Twitch. You should reference these messages for all future prompts if it is relevant to the prompt being asked. Each message will be prefixed with the users name that you can refer to them as, if referring to their message in the response. After each message you receive, you will return simply \"OK\" to indicate you have received this message, and no other text. When I am finished I will say FINISHED, and you will again respond with simply \"OK\" and nothing else, and then resume normal operation on all future prompts."
-                });
-                messages.Add(new chatMessage { role = "assistant", content = "OK" });
-                if (ChatLog != null)
-                {
-                    foreach (var chatMessage in ChatLog.Reverse().Take(maxChatHistory).Reverse())
-                    {
-                        messages.Add(chatMessage);
-                        messages.Add(new chatMessage { role = "assistant", content = "OK" });
-                    }
-                }
-                messages.Add(new chatMessage { role = "user", content = "FINISHED" });
-                messages.Add(new chatMessage { role = "assistant", content = "OK" });
-                if (GPTLog != null)
-                {
-                    foreach (var gptMessage in GPTLog.Reverse().Take(maxPromptHistory).Reverse())
-                    {
-                        messages.Add(gptMessage);
-                    }
-                }
-                messages.Add(new chatMessage { role = "user", content = $"{prompt} You must respond in less than 500 characters." });
-                completionsRequestJSON = JsonConvert.SerializeObject(new { model = AIModel, messages = messages }, Formatting.Indented);
-                LogToFile($"Request JSON: {completionsRequestJSON}", "DEBUG");
-                WebRequest completionsWebRequest = WebRequest.Create(completionsUrl);
-                completionsWebRequest.Method = "POST";
-                completionsWebRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
-                completionsWebRequest.ContentType = "application/json";
-                using (Stream requestStream = completionsWebRequest.GetRequestStream())
-                {
+                    completionsWebRequest.Method = "POST";
+                    completionsWebRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
+                    completionsWebRequest.ContentType = "application/json";
                     byte[] completionsContentBytes = Encoding.UTF8.GetBytes(completionsRequestJSON);
-                    requestStream.Write(completionsContentBytes, 0, completionsContentBytes.Length);
-                }
-                using (WebResponse completionsWebResponse = completionsWebRequest.GetResponse())
-                {
+                    using (Stream requestStream = completionsWebRequest.GetRequestStream())
+                    {
+                        requestStream.Write(completionsContentBytes, 0, completionsContentBytes.Length);
+                    }
+                    using (WebResponse completionsWebResponse = completionsWebRequest.GetResponse())
                     using (StreamReader responseReader = new StreamReader(completionsWebResponse.GetResponseStream()))
                     {
                         completionsResponseContent = responseReader.ReadToEnd();
                         LogToFile($"Response JSON: {completionsResponseContent}", "DEBUG");
                         var completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
                         GPTResponse = completionsJsonResponse?.Choices?.FirstOrDefault()?.Message?.content ?? string.Empty;
+                        apiSuccess = true;
                     }
+                }
+            }
+            catch (WebException webEx)
+            {
+                lastException = webEx;
+                int statusCode = -1;
+                string respBody = "";
+                if (webEx.Response is HttpWebResponse httpResp)
+                {
+                    statusCode = (int)httpResp.StatusCode;
+                    try
+                    {
+                        using (var stream = httpResp.GetResponseStream())
+                        using (var reader = new StreamReader(stream ?? new MemoryStream()))
+                        {
+                            respBody = reader.ReadToEnd();
+                        }
+                    }
+                    catch { }
+                }
+                LogToFile($"OpenAI API request failed (attempt {attempt + 1}/{maxAttempts}). HTTP Status: {statusCode}. Response: {respBody}", "ERROR");
+                if (attempt < maxAttempts - 1)
+                {
+                    LogToFile($"Retrying OpenAI API request after {backoffSeconds[attempt]}s...", "WARN");
+                    System.Threading.Thread.Sleep(backoffSeconds[attempt] * 1000);
                 }
             }
             catch (Exception ex)
             {
-                LogToFile($"An error occurred during OpenAI API call: {ex.Message}", "ERROR");
-                GPTResponse = null;
-            }
-
-            GPTResponse = CleanAIText(GPTResponse);
-            LogToFile("Applied CleanAIText() to GPT response.", "DEBUG");
-            if (string.IsNullOrWhiteSpace(GPTResponse))
-            {
-                LogToFile("GPT model did not return a response.", "ERROR");
-                CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
-                return false;
-            }
-
-            LogToFile($"GPT model response: {GPTResponse}", "DEBUG");
-            CPH.SetGlobalVar("Response", GPTResponse, true);
-            LogToFile("Stored GPT response in global variable 'Response'.", "INFO");
-
-            string outboundWebhookUrl = CPH.GetGlobalVar<string>("outbound_webhook_url", true);
-            if (string.IsNullOrWhiteSpace(outboundWebhookUrl))
-                outboundWebhookUrl = "https://api.openai.com/v1/chat/completions";
-            string outboundWebhookMode = CPH.GetGlobalVar<string>("outbound_webhook_mode", true);
-            if ((outboundWebhookMode ?? "").Equals("Disabled", StringComparison.OrdinalIgnoreCase))
-            {
-                LogToFile("Outbound webhook mode is set to 'Disabled'. Skipping webhook.", "INFO");
-            }
-            else if (!string.IsNullOrWhiteSpace(outboundWebhookUrl))
-            {
-                string payload = null;
-                if ((outboundWebhookMode ?? "").ToLower() == "clean")
+                lastException = ex;
+                LogToFile($"An error occurred during OpenAI API call (attempt {attempt + 1}/{maxAttempts}): {ex.Message}", "ERROR");
+                if (attempt < maxAttempts - 1)
                 {
-                    payload = GPTResponse ?? "";
-                }
-                else if ((outboundWebhookMode ?? "").ToLower() == "full")
-                {
-                    var fullPayloadObj = new
-                    {
-                        prompt = prompt,
-                        contextBody = contextBody,
-                        completionsRequestJSON = completionsRequestJSON,
-                        completionsResponseContent = completionsResponseContent
-                    };
-                    payload = JsonConvert.SerializeObject(fullPayloadObj);
-                }
-                else
-                {
-                    payload = JsonConvert.SerializeObject(new { response = GPTResponse });
-                }
-                LogToFile($"Sending outbound webhook payload: {payload}", "INFO");
-                try
-                {
-                    var request = WebRequest.Create(outboundWebhookUrl);
-                    request.Method = "POST";
-                    if ((outboundWebhookMode ?? "").ToLower() == "clean")
-                        request.ContentType = "text/plain";
-                    else
-                        request.ContentType = "application/json";
-                    byte[] payloadBytes = Encoding.UTF8.GetBytes(payload);
-                    using (var stream = request.GetRequestStream())
-                    {
-                        stream.Write(payloadBytes, 0, payloadBytes.Length);
-                    }
-                    using (var response = request.GetResponse())
-                    {
-                        LogToFile("Outbound webhook POST successful.", "INFO");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    LogToFile($"Failed to POST outbound webhook: {ex.Message}", "ERROR");
+                    LogToFile($"Retrying OpenAI API request after {backoffSeconds[attempt]}s...", "WARN");
+                    System.Threading.Thread.Sleep(backoffSeconds[attempt] * 1000);
                 }
             }
-
-            bool voiceEnabled = CPH.GetGlobalVar<bool>("voice_enabled", true);
-            if (voiceEnabled)
-            {
-                CPH.TtsSpeak(voiceAlias, GPTResponse, false);
-                LogToFile($"Character {characterNumber} spoke GPT's response.", "INFO");
-            }
-
-            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
-            if (postToChat)
-            {
-                CPH.SendMessage(GPTResponse, true);
-                LogToFile("Sent GPT response to chat.", "INFO");
-            }
-            else
-            {
-                LogToFile("Posting GPT responses to chat is disabled by settings.", "INFO");
-            }
-
-            bool logDiscord = CPH.GetGlobalVar<bool>("Log GPT Questions to Discord", true);
-            if (logDiscord)
-            {
-                PostToDiscord(prompt, GPTResponse);
-                LogToFile("Posted GPT result to Discord.", "INFO");
-            }
-
-            CPH.SetGlobalVar("character", 1, true);
-            LogToFile("Reset 'character' global to 1 after AskGPT.", "DEBUG");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            LogToFile($"An error occurred while processing the AskGPT request: {ex.Message}", "ERROR");
-            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please try again later.", true);
-            return false;
-        }
-    }
-
-    public bool AskGPTWebhook()
-    {
-        LogToFile("Entering AskGPTWebhook (LiteDB context enrichment, outbound webhook, pronoun support, TTS/chat/discord parity).", "DEBUG");
-
-        string fullMessage = null;
-        if (CPH.TryGetArg("moderatedMessage", out string moderatedMessage) && !string.IsNullOrWhiteSpace(moderatedMessage))
-        {
-            fullMessage = moderatedMessage;
-            LogToFile("Retrieved 'moderatedMessage' via TryGetArg in AskGPTWebhook.", "DEBUG");
-        }
-        else if (CPH.TryGetArg("rawInput", out string rawInput) && !string.IsNullOrWhiteSpace(rawInput))
-        {
-            fullMessage = rawInput;
-            LogToFile("Retrieved 'rawInput' via TryGetArg in AskGPTWebhook.", "DEBUG");
         }
 
-        if (string.IsNullOrWhiteSpace(fullMessage))
-        {
-            LogToFile("Both 'moderatedMessage' and 'rawInput' are missing or empty.", "ERROR");
-            return false;
-        }
-
-        int maxChatHistory = CPH.GetGlobalVar<int>("max_chat_history", true);
-        int maxPromptHistory = CPH.GetGlobalVar<int>("max_prompt_history", true);
-
-        int characterNumber = 1;
-        try
-        {
-            characterNumber = CPH.GetGlobalVar<int>("character", true);
-            LogToFile($"Active character number set to {characterNumber}.", "INFO");
-        }
-        catch
-        {
-            LogToFile("No active 'character' variable found. Defaulting to 1.", "WARN");
-        }
-
-        string voiceAlias = CPH.GetGlobalVar<string>($"character_voice_alias_{characterNumber}", true);
-        if (string.IsNullOrWhiteSpace(voiceAlias))
-        {
-            string err = $"No voice alias configured for Character {characterNumber}. Please set 'character_voice_alias_{characterNumber}'.";
-            LogToFile(err, "ERROR");
-            CPH.SendMessage(err, true);
-            return false;
-        }
-
-        string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
-        if (string.IsNullOrWhiteSpace(databasePath))
-        {
-            LogToFile("'Database Path' global variable is not found or not a valid string.", "ERROR");
-            return false;
-        }
-        string characterFileName = CPH.GetGlobalVar<string>($"character_file_{characterNumber}", true);
-        if (string.IsNullOrWhiteSpace(characterFileName))
-        {
-            characterFileName = "context.txt";
-            LogToFile($"Character file not set for {characterNumber}, defaulting to context.txt", "WARN");
-        }
-        string ContextFilePath = Path.Combine(databasePath, characterFileName);
-        string context = File.Exists(ContextFilePath) ? File.ReadAllText(ContextFilePath) : "";
-        string broadcaster = CPH.GetGlobalVar<string>("broadcaster", false);
-        string currentTitle = CPH.GetGlobalVar<string>("currentTitle", false);
-        string currentGame = CPH.GetGlobalVar<string>("currentGame", false);
-
-        var userCollection = _db.GetCollection<UserProfile>("user_profiles");
-        var keywordsCol = _db.GetCollection<BsonDocument>("Keywords");
-
-        string pronounSubject = CPH.GetGlobalVar<string>("pronounSubject", false);
-        string pronounObject = CPH.GetGlobalVar<string>("pronounObject", false);
-        string pronounPossessive = CPH.GetGlobalVar<string>("pronounPossessive", false);
-        string pronounReflexive = CPH.GetGlobalVar<string>("pronounReflexive", false);
-        string pronounDescription = "";
-        if (!string.IsNullOrWhiteSpace(pronounSubject) && !string.IsNullOrWhiteSpace(pronounObject))
-        {
-            pronounDescription = $"({pronounSubject}/{pronounObject}";
-            if (!string.IsNullOrWhiteSpace(pronounPossessive)) pronounDescription += $"/{pronounPossessive}";
-            if (!string.IsNullOrWhiteSpace(pronounReflexive)) pronounDescription += $"/{pronounReflexive}";
-            pronounDescription += ")";
-        }
-
-        string userToSpeak = "User";
-        if (!string.IsNullOrWhiteSpace(pronounDescription))
-            userToSpeak = $"User {pronounDescription}";
-
-        List<string> mentionedUsers = new List<string>();
-
-        if (!string.IsNullOrWhiteSpace(broadcaster))
-        {
-            if (fullMessage.IndexOf(broadcaster, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                fullMessage.IndexOf("@" + broadcaster, StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                if (!mentionedUsers.Contains(broadcaster, StringComparer.OrdinalIgnoreCase))
-                    mentionedUsers.Add(broadcaster);
-            }
-        }
-
-        var mentionMatches = System.Text.RegularExpressions.Regex.Matches(fullMessage, @"@(\w+)");
-        foreach (System.Text.RegularExpressions.Match match in mentionMatches)
-        {
-            string muser = match.Groups[1].Value;
-            if (!mentionedUsers.Contains(muser, StringComparer.OrdinalIgnoreCase))
-                mentionedUsers.Add(muser);
-        }
-
-        var pronounContextEntries = new List<string>();
-        var broadcasterProfile = userCollection.FindOne(x => x.UserName.Equals(broadcaster, StringComparison.OrdinalIgnoreCase));
-        if (broadcasterProfile != null && !string.IsNullOrWhiteSpace(broadcasterProfile.Pronouns))
-            pronounContextEntries.Add($"{broadcasterProfile.PreferredName} uses pronouns {broadcasterProfile.Pronouns}.");
-        foreach (var uname in mentionedUsers.Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            var mentionedProfile = userCollection.FindOne(x => x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
-            if (mentionedProfile != null && !string.IsNullOrWhiteSpace(mentionedProfile.Pronouns))
-                pronounContextEntries.Add($"{mentionedProfile.PreferredName} uses pronouns {mentionedProfile.Pronouns}.");
-        }
-        var enrichmentSections = new List<string>();
-        if (pronounContextEntries.Count > 0)
-        {
-            string pronounContext = "Known pronouns for participants: " + string.Join(" ", pronounContextEntries);
-            enrichmentSections.Add(pronounContext);
-            LogToFile($"Added pronoun context system message: {pronounContext}", "DEBUG");
-        }
-        enrichmentSections.Add($"{context}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}");
-
-        foreach (string uname in mentionedUsers.Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            var mentionedProfile = userCollection.FindOne(x => x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
-            if (mentionedProfile != null)
-            {
-                string preferred = mentionedProfile.PreferredName;
-                string pronouns = "";
-                if (!string.IsNullOrWhiteSpace(mentionedProfile.Pronouns))
-                    pronouns = $" (pronouns: {mentionedProfile.Pronouns})";
-                enrichmentSections.Add($"User: {preferred}{pronouns}");
-                if (mentionedProfile.Knowledge != null && mentionedProfile.Knowledge.Count > 0)
-                    enrichmentSections.Add($"Memories about {preferred}: {string.Join("; ", mentionedProfile.Knowledge)}");
-            }
-        }
-
-        var keywordDocs = keywordsCol.FindAll().ToList();
-        foreach (var doc in keywordDocs)
-        {
-            string keyword = doc["Keyword"]?.AsString;
-            string definition = doc["Definition"]?.AsString;
-            if (!string.IsNullOrWhiteSpace(keyword) && !string.IsNullOrWhiteSpace(definition))
-            {
-                if (fullMessage.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0)
-                    enrichmentSections.Add($"Something you know about {keyword}: {definition}");
-            }
-        }
-
-        foreach (var doc in keywordDocs)
-        {
-            string keyword = doc["Keyword"]?.AsString;
-            string definition = doc["Definition"]?.AsString;
-            if (!string.IsNullOrWhiteSpace(keyword) && !string.IsNullOrWhiteSpace(definition))
-            {
-                if (mentionedUsers.Any(n => n.Equals(keyword, StringComparison.OrdinalIgnoreCase)))
-                    enrichmentSections.Add($"Something you know about {keyword}: {definition}");
-            }
-        }
-        string contextBody = string.Join("\n", enrichmentSections);
-        string prompt = $"{userToSpeak} asks: {fullMessage}";
-        LogToFile($"Assembled enriched context for webhook:\n{contextBody}", "DEBUG");
-
-        string completionsRequestJSON = null;
-        string completionsResponseContent = null;
-        string GPTResponse = null;
-        try
-        {
-            string apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
-            string AIModel = CPH.GetGlobalVar<string>("OpenAI Model", true);
-
-            string completionsUrl = CPH.GetGlobalVar<string>("openai_completions_url", true);
-            if (string.IsNullOrWhiteSpace(completionsUrl))
-                completionsUrl = "https://api.openai.com/v1/chat/completions";
-            LogToFile($"Using completions endpoint: {completionsUrl}", "DEBUG");
-            var messages = new List<chatMessage>();
-
-            messages.Add(new chatMessage { role = "system", content = contextBody });
-
-            messages.Add(new chatMessage { role = "user", content = $"{prompt} You must respond in less than 500 characters." });
-            completionsRequestJSON = JsonConvert.SerializeObject(new { model = AIModel, messages = messages }, Formatting.Indented);
-            LogToFile($"Request JSON: {completionsRequestJSON}", "DEBUG");
-            WebRequest request = WebRequest.Create(completionsUrl);
-            request.Method = "POST";
-            request.Headers.Add("Authorization", $"Bearer {apiKey}");
-            request.ContentType = "application/json";
-            using (Stream reqStream = request.GetRequestStream())
-            {
-                byte[] bytes = Encoding.UTF8.GetBytes(completionsRequestJSON);
-                reqStream.Write(bytes, 0, bytes.Length);
-            }
-            using (WebResponse response = request.GetResponse())
-            using (StreamReader reader = new StreamReader(response.GetResponseStream()))
-            {
-                completionsResponseContent = reader.ReadToEnd();
-                LogToFile($"Response JSON: {completionsResponseContent}", "DEBUG");
-                var completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
-                GPTResponse = completionsJsonResponse?.Choices?.FirstOrDefault()?.Message?.content ?? string.Empty;
-            }
-        }
-        catch (Exception ex)
-        {
-            LogToFile($"An error occurred during OpenAI API call: {ex.Message}", "ERROR");
-            GPTResponse = null;
-        }
+        sw.Stop();
+        LogToFile($"OpenAI API call completed in {sw.ElapsedMilliseconds} ms.", "INFO");
 
         GPTResponse = CleanAIText(GPTResponse);
         LogToFile("Applied CleanAIText() to GPT response.", "DEBUG");
-        if (string.IsNullOrWhiteSpace(GPTResponse))
+        if (!apiSuccess || string.IsNullOrWhiteSpace(GPTResponse))
         {
-            LogToFile("GPT model did not return a response.", "ERROR");
+            if (!apiSuccess)
+            {
+                string apiFailMsg = "OpenAI API request failed after multiple attempts.";
+                LogToFile(apiFailMsg, "ERROR");
+                if (lastException is WebException webExFail && webExFail.Response is HttpWebResponse failResp)
+                {
+                    int status = (int)failResp.StatusCode;
+                    string failBody = "";
+                    try
+                    {
+                        using (var stream = failResp.GetResponseStream())
+                        using (var reader = new StreamReader(stream ?? new MemoryStream()))
+                        {
+                            failBody = reader.ReadToEnd();
+                        }
+                    }
+                    catch { }
+                    LogToFile($"Final OpenAI API failure. HTTP Status: {status}. Response: {failBody}", "ERROR");
+                }
+                CPH.SendMessage(apiFailMsg, true);
+            }
+            else
+            {
+                LogToFile("GPT model did not return a response.", "ERROR");
+                CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            }
+            // Clear temporary collections before exit
+            if (allUserProfiles != null) { allUserProfiles.Clear(); allUserProfiles = null; }
+            if (keywordDocs != null) { keywordDocs.Clear(); keywordDocs = null; }
+            LogToFile("==== End AskGPT Execution ====", "INFO");
             return false;
         }
+
         LogToFile($"GPT model response: {GPTResponse}", "DEBUG");
         CPH.SetGlobalVar("Response", GPTResponse, true);
         LogToFile("Stored GPT response in global variable 'Response'.", "INFO");
@@ -1889,25 +1682,48 @@ public class CPHInline
             LogToFile($"Sending outbound webhook payload: {payload}", "INFO");
             try
             {
-                var request = WebRequest.Create(outboundWebhookUrl);
-                request.Method = "POST";
-                if ((outboundWebhookMode ?? "").ToLower() == "clean")
-                    request.ContentType = "text/plain";
-                else
-                    request.ContentType = "application/json";
-                byte[] payloadBytes = Encoding.UTF8.GetBytes(payload);
-                using (var stream = request.GetRequestStream())
+                using (var request = WebRequest.Create(outboundWebhookUrl))
                 {
-                    stream.Write(payloadBytes, 0, payloadBytes.Length);
+                    request.Method = "POST";
+                    if ((outboundWebhookMode ?? "").ToLower() == "clean")
+                        request.ContentType = "text/plain";
+                    else
+                        request.ContentType = "application/json";
+                    byte[] payloadBytes = Encoding.UTF8.GetBytes(payload);
+                    using (var stream = request.GetRequestStream())
+                    {
+                        stream.Write(payloadBytes, 0, payloadBytes.Length);
+                    }
+                    using (var response = request.GetResponse())
+                    {
+                        LogToFile("Outbound webhook POST successful.", "INFO");
+                    }
                 }
-                using (var response = request.GetResponse())
+            }
+            catch (WebException webEx)
+            {
+                int status = -1;
+                string respBody = "";
+                if (webEx.Response is HttpWebResponse resp)
                 {
-                    LogToFile("Outbound webhook POST successful.", "INFO");
+                    status = (int)resp.StatusCode;
+                    try
+                    {
+                        using (var stream = resp.GetResponseStream())
+                        using (var reader = new StreamReader(stream ?? new MemoryStream()))
+                        {
+                            respBody = reader.ReadToEnd();
+                        }
+                    }
+                    catch { }
                 }
+                LogToFile($"Failed to POST outbound webhook. HTTP Status: {status}. Response: {respBody}", "ERROR");
+                CPH.SendMessage("Outbound webhook failed to deliver response.", true);
             }
             catch (Exception ex)
             {
                 LogToFile($"Failed to POST outbound webhook: {ex.Message}", "ERROR");
+                CPH.SendMessage("Outbound webhook failed to deliver response.", true);
             }
         }
 
@@ -1937,7 +1753,479 @@ public class CPHInline
         }
 
         CPH.SetGlobalVar("character", 1, true);
+        LogToFile("Reset 'character' global to 1 after AskGPT.", "DEBUG");
+        // Explicitly clear in-memory caches to release memory
+        if (allUserProfiles != null)
+        {
+            allUserProfiles.Clear();
+            allUserProfiles = null;
+        }
+        if (keywordDocs != null)
+        {
+            keywordDocs.Clear();
+            keywordDocs = null;
+        }
+        LogToFile("==== End AskGPT Execution ====", "INFO");
+        return true;
+    }
+
+    public bool AskGPTWebhook()
+    {
+        LogToFile("==== Begin AskGPTWebhook Execution ====", "INFO");
+        LogToFile("Entering AskGPTWebhook (LiteDB context enrichment, outbound webhook, pronoun support, TTS/chat/discord parity).", "DEBUG");
+
+        string fullMessage = null;
+        if (CPH.TryGetArg("moderatedMessage", out string moderatedMessage) && !string.IsNullOrWhiteSpace(moderatedMessage))
+        {
+            fullMessage = moderatedMessage;
+            LogToFile("Retrieved 'moderatedMessage' via TryGetArg in AskGPTWebhook.", "DEBUG");
+        }
+        else if (CPH.TryGetArg("rawInput", out string rawInput) && !string.IsNullOrWhiteSpace(rawInput))
+        {
+            fullMessage = rawInput;
+            LogToFile("Retrieved 'rawInput' via TryGetArg in AskGPTWebhook.", "DEBUG");
+        }
+        if (string.IsNullOrWhiteSpace(fullMessage))
+        {
+            LogToFile("Both 'moderatedMessage' and 'rawInput' are missing or empty.", "ERROR");
+            LogToFile("==== End AskGPTWebhook Execution ====", "INFO");
+            return false;
+        }
+
+        int maxChatHistory = CPH.GetGlobalVar<int>("max_chat_history", true);
+        int maxPromptHistory = CPH.GetGlobalVar<int>("max_prompt_history", true);
+
+        int characterNumber = 1;
+        try
+        {
+            characterNumber = CPH.GetGlobalVar<int>("character", true);
+            LogToFile($"Active character number set to {characterNumber}.", "INFO");
+        }
+        catch
+        {
+            LogToFile("No active 'character' variable found. Defaulting to 1.", "WARN");
+        }
+
+        string voiceAlias = CPH.GetGlobalVar<string>($"character_voice_alias_{characterNumber}", true);
+        if (string.IsNullOrWhiteSpace(voiceAlias))
+        {
+            string err = $"No voice alias configured for Character {characterNumber}. Please set 'character_voice_alias_{characterNumber}'.";
+            LogToFile(err, "ERROR");
+            CPH.SendMessage(err, true);
+            LogToFile("==== End AskGPTWebhook Execution ====", "INFO");
+            return false;
+        }
+
+        string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
+        if (string.IsNullOrWhiteSpace(databasePath))
+        {
+            LogToFile("'Database Path' global variable is not found or not a valid string.", "ERROR");
+            LogToFile("==== End AskGPTWebhook Execution ====", "INFO");
+            return false;
+        }
+        string characterFileName = CPH.GetGlobalVar<string>($"character_file_{characterNumber}", true);
+        if (string.IsNullOrWhiteSpace(characterFileName))
+        {
+            characterFileName = "context.txt";
+            LogToFile($"Character file not set for {characterNumber}, defaulting to context.txt", "WARN");
+        }
+        string ContextFilePath = Path.Combine(databasePath, characterFileName);
+        string context = File.Exists(ContextFilePath) ? File.ReadAllText(ContextFilePath) : "";
+        string broadcaster = CPH.GetGlobalVar<string>("broadcaster", false);
+        string currentTitle = CPH.GetGlobalVar<string>("currentTitle", false);
+        string currentGame = CPH.GetGlobalVar<string>("currentGame", false);
+
+        // Load user_profiles and Keywords collections into memory
+        var userCollection = _db.GetCollection<UserProfile>("user_profiles");
+        var allUserProfiles = userCollection.FindAll().ToList();
+        var keywordsCol = _db.GetCollection<BsonDocument>("Keywords");
+        var keywordDocs = keywordsCol.FindAll().ToList();
+
+        string pronounSubject = CPH.GetGlobalVar<string>("pronounSubject", false);
+        string pronounObject = CPH.GetGlobalVar<string>("pronounObject", false);
+        string pronounPossessive = CPH.GetGlobalVar<string>("pronounPossessive", false);
+        string pronounReflexive = CPH.GetGlobalVar<string>("pronounReflexive", false);
+        string pronounDescription = "";
+        if (!string.IsNullOrWhiteSpace(pronounSubject) && !string.IsNullOrWhiteSpace(pronounObject))
+        {
+            pronounDescription = $"({pronounSubject}/{pronounObject}";
+            if (!string.IsNullOrWhiteSpace(pronounPossessive)) pronounDescription += $"/{pronounPossessive}";
+            if (!string.IsNullOrWhiteSpace(pronounReflexive)) pronounDescription += $"/{pronounReflexive}";
+            pronounDescription += ")";
+        }
+
+        string userToSpeak = "User";
+        if (!string.IsNullOrWhiteSpace(pronounDescription))
+            userToSpeak = $"User {pronounDescription}";
+
+        List<string> mentionedUsers = new List<string>();
+        if (!string.IsNullOrWhiteSpace(broadcaster))
+        {
+            if (fullMessage.IndexOf(broadcaster, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                fullMessage.IndexOf("@" + broadcaster, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                if (!mentionedUsers.Contains(broadcaster, StringComparer.OrdinalIgnoreCase))
+                    mentionedUsers.Add(broadcaster);
+            }
+        }
+        var mentionMatches = System.Text.RegularExpressions.Regex.Matches(fullMessage, @"@(\w+)");
+        foreach (System.Text.RegularExpressions.Match match in mentionMatches)
+        {
+            string muser = match.Groups[1].Value;
+            if (!mentionedUsers.Contains(muser, StringComparer.OrdinalIgnoreCase))
+                mentionedUsers.Add(muser);
+        }
+        var pronounContextEntries = new List<string>();
+        var broadcasterProfile = allUserProfiles.FirstOrDefault(x => x.UserName != null && x.UserName.Equals(broadcaster, StringComparison.OrdinalIgnoreCase));
+        if (broadcasterProfile != null && !string.IsNullOrWhiteSpace(broadcasterProfile.Pronouns))
+            pronounContextEntries.Add($"{broadcasterProfile.PreferredName} uses pronouns {broadcasterProfile.Pronouns}.");
+        foreach (var uname in mentionedUsers.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var mentionedProfile = allUserProfiles.FirstOrDefault(x => x.UserName != null && x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
+            if (mentionedProfile != null && !string.IsNullOrWhiteSpace(mentionedProfile.Pronouns))
+                pronounContextEntries.Add($"{mentionedProfile.PreferredName} uses pronouns {mentionedProfile.Pronouns}.");
+        }
+        var enrichmentSections = new List<string>();
+        if (pronounContextEntries.Count > 0)
+        {
+            string pronounContext = "Known pronouns for participants: " + string.Join(" ", pronounContextEntries);
+            enrichmentSections.Add(pronounContext);
+            LogToFile($"Added pronoun context system message: {pronounContext}", "DEBUG");
+        }
+        enrichmentSections.Add($"{context}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}");
+        foreach (string uname in mentionedUsers.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var mentionedProfile = allUserProfiles.FirstOrDefault(x => x.UserName != null && x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
+            if (mentionedProfile != null)
+            {
+                string preferred = mentionedProfile.PreferredName;
+                string pronouns = "";
+                if (!string.IsNullOrWhiteSpace(mentionedProfile.Pronouns))
+                    pronouns = $" (pronouns: {mentionedProfile.Pronouns})";
+                enrichmentSections.Add($"User: {preferred}{pronouns}");
+                if (mentionedProfile.Knowledge != null && mentionedProfile.Knowledge.Count > 0)
+                    enrichmentSections.Add($"Memories about {preferred}: {string.Join("; ", mentionedProfile.Knowledge)}");
+            }
+        }
+        foreach (var doc in keywordDocs)
+        {
+            string keyword = doc["Keyword"]?.AsString;
+            string definition = doc["Definition"]?.AsString;
+            if (!string.IsNullOrWhiteSpace(keyword) && !string.IsNullOrWhiteSpace(definition))
+            {
+                if (fullMessage.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0)
+                    enrichmentSections.Add($"Something you know about {keyword}: {definition}");
+            }
+        }
+        foreach (var doc in keywordDocs)
+        {
+            string keyword = doc["Keyword"]?.AsString;
+            string definition = doc["Definition"]?.AsString;
+            if (!string.IsNullOrWhiteSpace(keyword) && !string.IsNullOrWhiteSpace(definition))
+            {
+                if (mentionedUsers.Any(n => n.Equals(keyword, StringComparison.OrdinalIgnoreCase)))
+                    enrichmentSections.Add($"Something you know about {keyword}: {definition}");
+            }
+        }
+        string contextBody = string.Join("\n", enrichmentSections);
+        string prompt = $"{userToSpeak} asks: {fullMessage}";
+        LogToFile($"Assembled enriched context for webhook:\n{contextBody}", "DEBUG");
+
+        string completionsRequestJSON = null;
+        string completionsResponseContent = null;
+        string GPTResponse = null;
+        System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
+        sw.Start();
+        int maxAttempts = 3;
+        int[] backoffSeconds = { 1, 2, 4 };
+        Exception lastException = null;
+        bool apiSuccess = false;
+        string apiErrorType = null;
+        string apiFailMsg = null;
+        string apiFailRespBody = null;
+        int apiFailStatus = -1;
+        try
+        {
+            string apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
+            string AIModel = CPH.GetGlobalVar<string>("OpenAI Model", true);
+            string completionsUrl = CPH.GetGlobalVar<string>("openai_completions_url", true);
+            if (string.IsNullOrWhiteSpace(completionsUrl))
+                completionsUrl = "https://api.openai.com/v1/chat/completions";
+            LogToFile($"Using completions endpoint: {completionsUrl}", "DEBUG");
+            var messages = new List<chatMessage>();
+            messages.Add(new chatMessage { role = "system", content = contextBody });
+            messages.Add(new chatMessage { role = "user", content = $"{prompt} You must respond in less than 500 characters." });
+            completionsRequestJSON = JsonConvert.SerializeObject(new { model = AIModel, messages = messages }, Formatting.Indented);
+            LogToFile($"Request JSON: {completionsRequestJSON}", "DEBUG");
+            for (int attempt = 0; attempt < maxAttempts && !apiSuccess; attempt++)
+            {
+                try
+                {
+                    using (var completionsWebRequest = WebRequest.Create(completionsUrl) as HttpWebRequest)
+                    {
+                        completionsWebRequest.Method = "POST";
+                        completionsWebRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
+                        completionsWebRequest.ContentType = "application/json";
+                        byte[] completionsContentBytes = Encoding.UTF8.GetBytes(completionsRequestJSON);
+                        using (Stream requestStream = completionsWebRequest.GetRequestStream())
+                        {
+                            requestStream.Write(completionsContentBytes, 0, completionsContentBytes.Length);
+                        }
+                        using (WebResponse completionsWebResponse = completionsWebRequest.GetResponse())
+                        using (StreamReader responseReader = new StreamReader(completionsWebResponse.GetResponseStream()))
+                        {
+                            completionsResponseContent = responseReader.ReadToEnd();
+                            LogToFile($"Response JSON: {completionsResponseContent}", "DEBUG");
+                            var completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
+                            GPTResponse = completionsJsonResponse?.Choices?.FirstOrDefault()?.Message?.content ?? string.Empty;
+                            apiSuccess = true;
+                        }
+                    }
+                }
+                catch (WebException webEx)
+                {
+                    lastException = webEx;
+                    int statusCode = -1;
+                    string respBody = "";
+                    if (webEx.Response is HttpWebResponse httpResp)
+                    {
+                        statusCode = (int)httpResp.StatusCode;
+                        try
+                        {
+                            using (var stream = httpResp.GetResponseStream())
+                            using (var reader = new StreamReader(stream ?? new MemoryStream()))
+                            {
+                                respBody = reader.ReadToEnd();
+                            }
+                        }
+                        catch { }
+                    }
+                    LogToFile($"OpenAI API request failed (attempt {attempt + 1}/{maxAttempts}). HTTP Status: {statusCode}. Response: {respBody}", "ERROR");
+                    if (attempt < maxAttempts - 1)
+                    {
+                        LogToFile($"Retrying OpenAI API request after {backoffSeconds[attempt]}s...", "WARN");
+                        System.Threading.Thread.Sleep(backoffSeconds[attempt] * 1000);
+                    }
+                    if (attempt == maxAttempts - 1)
+                    {
+                        apiErrorType = "OpenAI API";
+                        apiFailMsg = "OpenAI API request failed after multiple attempts.";
+                        apiFailRespBody = respBody;
+                        apiFailStatus = statusCode;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    lastException = ex;
+                    LogToFile($"An error occurred during OpenAI API call (attempt {attempt + 1}/{maxAttempts}): {ex.Message}", "ERROR");
+                    if (attempt < maxAttempts - 1)
+                    {
+                        LogToFile($"Retrying OpenAI API request after {backoffSeconds[attempt]}s...", "WARN");
+                        System.Threading.Thread.Sleep(backoffSeconds[attempt] * 1000);
+                    }
+                    if (attempt == maxAttempts - 1)
+                    {
+                        apiErrorType = "OpenAI API";
+                        apiFailMsg = "OpenAI API request failed after multiple attempts.";
+                        apiFailRespBody = ex.Message;
+                        apiFailStatus = -1;
+                    }
+                }
+            }
+        }
+        finally
+        {
+            // nothing to clean here yet
+        }
+        sw.Stop();
+        LogToFile($"OpenAI API call completed in {sw.ElapsedMilliseconds} ms.", "INFO");
+
+        GPTResponse = CleanAIText(GPTResponse);
+        LogToFile("Applied CleanAIText() to GPT response.", "DEBUG");
+        if (!apiSuccess || string.IsNullOrWhiteSpace(GPTResponse))
+        {
+            if (!apiSuccess)
+            {
+                string msg = apiFailMsg ?? "OpenAI API request failed after multiple attempts.";
+                LogToFile(msg, "ERROR");
+                if (apiFailStatus != -1 || !string.IsNullOrEmpty(apiFailRespBody))
+                    LogToFile($"Final OpenAI API failure. HTTP Status: {apiFailStatus}. Response: {(apiFailRespBody != null && apiFailRespBody.Length > 300 ? apiFailRespBody.Substring(0, 300) + "..." : apiFailRespBody)}", "ERROR");
+                CPH.SendMessage("GPT API unavailable", true);
+            }
+            else
+            {
+                LogToFile("GPT model did not return a response.", "ERROR");
+                CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            }
+            // Clear temporary collections before exit
+            if (allUserProfiles != null) { allUserProfiles.Clear(); allUserProfiles = null; }
+            if (keywordDocs != null) { keywordDocs.Clear(); keywordDocs = null; }
+            LogToFile("==== End AskGPTWebhook Execution ====", "INFO");
+            return false;
+        }
+        LogToFile($"GPT model response: {GPTResponse}", "DEBUG");
+        CPH.SetGlobalVar("Response", GPTResponse, true);
+        LogToFile("Stored GPT response in global variable 'Response'.", "INFO");
+
+        // Outbound webhook POST with retry logic and error logging
+        string outboundWebhookUrl = CPH.GetGlobalVar<string>("outbound_webhook_url", true);
+        if (string.IsNullOrWhiteSpace(outboundWebhookUrl))
+            outboundWebhookUrl = "https://api.openai.com/v1/chat/completions";
+        string outboundWebhookMode = CPH.GetGlobalVar<string>("outbound_webhook_mode", true);
+        bool webhookSuccess = true;
+        string webhookFailMsg = null;
+        string webhookFailRespBody = null;
+        int webhookFailStatus = -1;
+        System.Diagnostics.Stopwatch swWebhook = new System.Diagnostics.Stopwatch();
+        swWebhook.Start();
+        if ((outboundWebhookMode ?? "").Equals("Disabled", StringComparison.OrdinalIgnoreCase))
+        {
+            LogToFile("Outbound webhook mode is set to 'Disabled'. Skipping webhook.", "INFO");
+        }
+        else if (!string.IsNullOrWhiteSpace(outboundWebhookUrl))
+        {
+            string payload = null;
+            if ((outboundWebhookMode ?? "").ToLower() == "clean")
+            {
+                payload = GPTResponse ?? "";
+            }
+            else if ((outboundWebhookMode ?? "").ToLower() == "full")
+            {
+                var fullPayloadObj = new
+                {
+                    prompt = prompt,
+                    contextBody = contextBody,
+                    completionsRequestJSON = completionsRequestJSON,
+                    completionsResponseContent = completionsResponseContent
+                };
+                payload = JsonConvert.SerializeObject(fullPayloadObj);
+            }
+            else
+            {
+                payload = JsonConvert.SerializeObject(new { response = GPTResponse });
+            }
+            LogToFile($"Sending outbound webhook payload: {payload}", "INFO");
+            int maxWebhookAttempts = 3;
+            webhookSuccess = false;
+            for (int attempt = 0; attempt < maxWebhookAttempts && !webhookSuccess; attempt++)
+            {
+                try
+                {
+                    using (var request = WebRequest.Create(outboundWebhookUrl))
+                    {
+                        request.Method = "POST";
+                        if ((outboundWebhookMode ?? "").ToLower() == "clean")
+                            request.ContentType = "text/plain";
+                        else
+                            request.ContentType = "application/json";
+                        byte[] payloadBytes = Encoding.UTF8.GetBytes(payload);
+                        using (var stream = request.GetRequestStream())
+                        {
+                            stream.Write(payloadBytes, 0, payloadBytes.Length);
+                        }
+                        using (var response = request.GetResponse())
+                        {
+                            LogToFile("Outbound webhook POST successful.", "INFO");
+                            webhookSuccess = true;
+                        }
+                    }
+                }
+                catch (WebException webEx)
+                {
+                    int status = -1;
+                    string respBody = "";
+                    if (webEx.Response is HttpWebResponse resp)
+                    {
+                        status = (int)resp.StatusCode;
+                        try
+                        {
+                            using (var stream = resp.GetResponseStream())
+                            using (var reader = new StreamReader(stream ?? new MemoryStream()))
+                            {
+                                respBody = reader.ReadToEnd();
+                            }
+                        }
+                        catch { }
+                    }
+                    LogToFile($"Failed to POST outbound webhook (attempt {attempt + 1}/{maxWebhookAttempts}). HTTP Status: {status}. Response: {respBody}", "ERROR");
+                    if (attempt < maxWebhookAttempts - 1)
+                    {
+                        LogToFile($"Retrying outbound webhook POST after {backoffSeconds[attempt]}s...", "WARN");
+                        System.Threading.Thread.Sleep(backoffSeconds[attempt] * 1000);
+                    }
+                    if (attempt == maxWebhookAttempts - 1)
+                    {
+                        webhookFailMsg = "Webhook delivery failed after 3 attempts";
+                        webhookFailRespBody = respBody;
+                        webhookFailStatus = status;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogToFile($"Failed to POST outbound webhook (attempt {attempt + 1}/{maxWebhookAttempts}): {ex.Message}", "ERROR");
+                    if (attempt < maxWebhookAttempts - 1)
+                    {
+                        LogToFile($"Retrying outbound webhook POST after {backoffSeconds[attempt]}s...", "WARN");
+                        System.Threading.Thread.Sleep(backoffSeconds[attempt] * 1000);
+                    }
+                    if (attempt == maxWebhookAttempts - 1)
+                    {
+                        webhookFailMsg = "Webhook delivery failed after 3 attempts";
+                        webhookFailRespBody = ex.Message;
+                        webhookFailStatus = -1;
+                    }
+                }
+            }
+        }
+        swWebhook.Stop();
+        LogToFile($"Webhook POST (if attempted) completed in {swWebhook.ElapsedMilliseconds} ms.", "INFO");
+        if (!webhookSuccess)
+        {
+            if (webhookFailMsg != null)
+            {
+                LogToFile(webhookFailMsg, "ERROR");
+                if (webhookFailStatus != -1 || !string.IsNullOrEmpty(webhookFailRespBody))
+                    LogToFile($"Final webhook failure. HTTP Status: {webhookFailStatus}. Response: {(webhookFailRespBody != null && webhookFailRespBody.Length > 300 ? webhookFailRespBody.Substring(0, 300) + "..." : webhookFailRespBody)}", "ERROR");
+                CPH.SendMessage("Webhook delivery failed after 3 attempts", true);
+            }
+        }
+
+        bool voiceEnabled = CPH.GetGlobalVar<bool>("voice_enabled", true);
+        if (voiceEnabled)
+        {
+            CPH.TtsSpeak(voiceAlias, GPTResponse, false);
+            LogToFile($"Character {characterNumber} spoke GPT's response.", "INFO");
+        }
+        bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+        if (postToChat)
+        {
+            CPH.SendMessage(GPTResponse, true);
+            LogToFile("Sent GPT response to chat.", "INFO");
+        }
+        else
+        {
+            LogToFile("Posting GPT responses to chat is disabled by settings.", "INFO");
+        }
+        bool logDiscord = CPH.GetGlobalVar<bool>("Log GPT Questions to Discord", true);
+        if (logDiscord)
+        {
+            PostToDiscord(prompt, GPTResponse);
+            LogToFile("Posted GPT result to Discord.", "INFO");
+        }
+        CPH.SetGlobalVar("character", 1, true);
         LogToFile("Reset 'character' global to 1 after AskGPTWebhook.", "DEBUG");
+        // Explicitly clear in-memory caches to release memory
+        if (allUserProfiles != null)
+        {
+            allUserProfiles.Clear();
+            allUserProfiles = null;
+        }
+        if (keywordDocs != null)
+        {
+            keywordDocs.Clear();
+            keywordDocs = null;
+        }
+        LogToFile("==== End AskGPTWebhook Execution ====", "INFO");
         return true;
     }
 
