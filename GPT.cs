@@ -2285,104 +2285,111 @@ public class CPHInline
         {
             LogToFile("Entering SaveSettings method.", "DEBUG");
 
-            AppSettings settings = new AppSettings
+            // Compose key:value pairs for settings
+            var settingsDict = new Dictionary<string, string>
             {
-                OpenApiKey = EncryptData(CPH.GetGlobalVar<string>("OpenAI API Key", true)),
-                OpenAiModel = CPH.GetGlobalVar<string>("OpenAI Model", true),
-                DatabasePath = CPH.GetGlobalVar<string>("Database Path", true),
-                IgnoreBotUsernames = CPH.GetGlobalVar<string>("Ignore Bot Usernames", true),
-                TextCleanMode = CPH.GetGlobalVar<string>("Text Clean Mode", true),
-                LoggingLevel = CPH.GetGlobalVar<string>("Logging Level", true),
-                Version = CPH.GetGlobalVar<string>("Version", true),
-
-                HateThreshold = CPH.GetGlobalVar<string>("hate_threshold", true),
-                HateThreateningThreshold = CPH.GetGlobalVar<string>("hate_threatening_threshold", true),
-                HarassmentThreshold = CPH.GetGlobalVar<string>("harassment_threshold", true),
-                HarassmentThreateningThreshold = CPH.GetGlobalVar<string>("harassment_threatening_threshold", true),
-                SexualThreshold = CPH.GetGlobalVar<string>("sexual_threshold", true),
-                ViolenceThreshold = CPH.GetGlobalVar<string>("violence_threshold", true),
-                ViolenceGraphicThreshold = CPH.GetGlobalVar<string>("violence_graphic_threshold", true),
-                SelfHarmThreshold = CPH.GetGlobalVar<string>("self_harm_threshold", true),
-                SelfHarmIntentThreshold = CPH.GetGlobalVar<string>("self_harm_intent_threshold", true),
-                SelfHarmInstructionsThreshold = CPH.GetGlobalVar<string>("self_harm_instructions_threshold", true),
-                IllicitThreshold = CPH.GetGlobalVar<string>("illicit_threshold", true),
-                IllicitViolentThreshold = CPH.GetGlobalVar<string>("illicit_violent_threshold", true),
-
-                PostToChat = CPH.GetGlobalVar<bool>("Post To Chat", true).ToString(),
-                LogGptQuestionsToDiscord = CPH.GetGlobalVar<string>("Log GPT Questions to Discord", true),
-                DiscordWebhookUrl = CPH.GetGlobalVar<string>("Discord Webhook URL", true),
-                DiscordBotUsername = CPH.GetGlobalVar<string>("Discord Bot Username", true),
-                DiscordAvatarUrl = CPH.GetGlobalVar<string>("Discord Avatar Url", true),
-
-                CharacterVoiceAlias_1 = CPH.GetGlobalVar<string>("character_voice_alias_1", true),
-                CharacterVoiceAlias_2 = CPH.GetGlobalVar<string>("character_voice_alias_2", true),
-                CharacterVoiceAlias_3 = CPH.GetGlobalVar<string>("character_voice_alias_3", true),
-                CharacterVoiceAlias_4 = CPH.GetGlobalVar<string>("character_voice_alias_4", true),
-                CharacterVoiceAlias_5 = CPH.GetGlobalVar<string>("character_voice_alias_5", true),
-
-                CharacterFile_1 = CPH.GetGlobalVar<string>("character_file_1", true),
-                CharacterFile_2 = CPH.GetGlobalVar<string>("character_file_2", true),
-                CharacterFile_3 = CPH.GetGlobalVar<string>("character_file_3", true),
-                CharacterFile_4 = CPH.GetGlobalVar<string>("character_file_4", true),
-                CharacterFile_5 = CPH.GetGlobalVar<string>("character_file_5", true),
-
-                CompletionsEndpoint = CPH.GetGlobalVar<string>("Completions Endpoint", true),
-
-                VoiceEnabled = CPH.GetGlobalVar<bool>("voice_enabled", true).ToString(),
-                OutboundWebhookUrl = CPH.GetGlobalVar<string>("outbound_webhook_url", true),
-                OutboundWebhookMode = CPH.GetGlobalVar<string>("outbound_webhook_mode", true),
+                ["OpenAI API Key"] = EncryptData(CPH.GetGlobalVar<string>("OpenAI API Key", true)),
+                ["OpenAI Model"] = CPH.GetGlobalVar<string>("OpenAI Model", true),
+                ["Database Path"] = CPH.GetGlobalVar<string>("Database Path", true),
+                ["Ignore Bot Usernames"] = CPH.GetGlobalVar<string>("Ignore Bot Usernames", true),
+                ["Text Clean Mode"] = CPH.GetGlobalVar<string>("Text Clean Mode", true),
+                ["Logging Level"] = CPH.GetGlobalVar<string>("Logging Level", true),
+                ["Version"] = CPH.GetGlobalVar<string>("Version", true),
+                ["hate_threshold"] = CPH.GetGlobalVar<string>("hate_threshold", true),
+                ["hate_threatening_threshold"] = CPH.GetGlobalVar<string>("hate_threatening_threshold", true),
+                ["harassment_threshold"] = CPH.GetGlobalVar<string>("harassment_threshold", true),
+                ["harassment_threatening_threshold"] = CPH.GetGlobalVar<string>("harassment_threatening_threshold", true),
+                ["sexual_threshold"] = CPH.GetGlobalVar<string>("sexual_threshold", true),
+                ["violence_threshold"] = CPH.GetGlobalVar<string>("violence_threshold", true),
+                ["violence_graphic_threshold"] = CPH.GetGlobalVar<string>("violence_graphic_threshold", true),
+                ["self_harm_threshold"] = CPH.GetGlobalVar<string>("self_harm_threshold", true),
+                ["self_harm_intent_threshold"] = CPH.GetGlobalVar<string>("self_harm_intent_threshold", true),
+                ["self_harm_instructions_threshold"] = CPH.GetGlobalVar<string>("self_harm_instructions_threshold", true),
+                ["illicit_threshold"] = CPH.GetGlobalVar<string>("illicit_threshold", true),
+                ["illicit_violent_threshold"] = CPH.GetGlobalVar<string>("illicit_violent_threshold", true),
+                ["Post To Chat"] = CPH.GetGlobalVar<bool>("Post To Chat", true).ToString(),
+                ["Log GPT Questions to Discord"] = CPH.GetGlobalVar<string>("Log GPT Questions to Discord", true),
+                ["Discord Webhook URL"] = CPH.GetGlobalVar<string>("Discord Webhook URL", true),
+                ["Discord Bot Username"] = CPH.GetGlobalVar<string>("Discord Bot Username", true),
+                ["Discord Avatar Url"] = CPH.GetGlobalVar<string>("Discord Avatar Url", true),
+                ["character_voice_alias_1"] = CPH.GetGlobalVar<string>("character_voice_alias_1", true),
+                ["character_voice_alias_2"] = CPH.GetGlobalVar<string>("character_voice_alias_2", true),
+                ["character_voice_alias_3"] = CPH.GetGlobalVar<string>("character_voice_alias_3", true),
+                ["character_voice_alias_4"] = CPH.GetGlobalVar<string>("character_voice_alias_4", true),
+                ["character_voice_alias_5"] = CPH.GetGlobalVar<string>("character_voice_alias_5", true),
+                ["character_file_1"] = CPH.GetGlobalVar<string>("character_file_1", true),
+                ["character_file_2"] = CPH.GetGlobalVar<string>("character_file_2", true),
+                ["character_file_3"] = CPH.GetGlobalVar<string>("character_file_3", true),
+                ["character_file_4"] = CPH.GetGlobalVar<string>("character_file_4", true),
+                ["character_file_5"] = CPH.GetGlobalVar<string>("character_file_5", true),
+                ["Completions Endpoint"] = CPH.GetGlobalVar<string>("Completions Endpoint", true),
+                ["voice_enabled"] = CPH.GetGlobalVar<bool>("voice_enabled", true).ToString(),
+                ["outbound_webhook_url"] = CPH.GetGlobalVar<string>("outbound_webhook_url", true),
+                ["outbound_webhook_mode"] = CPH.GetGlobalVar<string>("outbound_webhook_mode", true),
+                ["moderation_enabled"] = CPH.GetGlobalVar<string>("moderation_enabled", true),
+                ["moderation_rebuke_enabled"] = CPH.GetGlobalVar<string>("moderation_rebuke_enabled", true),
+                ["max_chat_history"] = CPH.GetGlobalVar<string>("max_chat_history", true),
+                ["max_prompt_history"] = CPH.GetGlobalVar<string>("max_prompt_history", true)
             };
 
-            LogToFile($"OpenApiKey: {settings.OpenApiKey}", "DEBUG");
-            LogToFile($"OpenAiModel: {settings.OpenAiModel}", "DEBUG");
-
-            if (
-                string.IsNullOrWhiteSpace(settings.OpenApiKey)
-                || string.IsNullOrWhiteSpace(settings.OpenAiModel)
-                || string.IsNullOrWhiteSpace(settings.DatabasePath)
-                || string.IsNullOrWhiteSpace(settings.IgnoreBotUsernames)
-                || string.IsNullOrWhiteSpace(settings.LoggingLevel)
-                || string.IsNullOrWhiteSpace(settings.Version)
-                || string.IsNullOrWhiteSpace(settings.DiscordWebhookUrl)
-                || string.IsNullOrWhiteSpace(settings.DiscordBotUsername)
-                || string.IsNullOrWhiteSpace(settings.DiscordAvatarUrl)
-                || string.IsNullOrWhiteSpace(settings.CharacterVoiceAlias_1)
-                || string.IsNullOrWhiteSpace(settings.CharacterVoiceAlias_2)
-                || string.IsNullOrWhiteSpace(settings.CharacterVoiceAlias_3)
-                || string.IsNullOrWhiteSpace(settings.CharacterVoiceAlias_4)
-                || string.IsNullOrWhiteSpace(settings.CharacterVoiceAlias_5)
-                || string.IsNullOrWhiteSpace(settings.CharacterFile_1)
-                || string.IsNullOrWhiteSpace(settings.CharacterFile_2)
-                || string.IsNullOrWhiteSpace(settings.CharacterFile_3)
-                || string.IsNullOrWhiteSpace(settings.CharacterFile_4)
-                || string.IsNullOrWhiteSpace(settings.CharacterFile_5)
-                || string.IsNullOrWhiteSpace(settings.CompletionsEndpoint)
-            )
+            // Check for required settings
+            string[] requiredKeys = new string[]
             {
-                LogToFile("One or more settings are null or empty.", "WARN");
-                return false;
+                "OpenAI API Key", "OpenAI Model", "Database Path", "Ignore Bot Usernames", "Logging Level", "Version",
+                "Discord Webhook URL", "Discord Bot Username", "Discord Avatar Url",
+                "character_voice_alias_1", "character_voice_alias_2", "character_voice_alias_3", "character_voice_alias_4", "character_voice_alias_5",
+                "character_file_1", "character_file_2", "character_file_3", "character_file_4", "character_file_5",
+                "Completions Endpoint"
+            };
+            foreach (var key in requiredKeys)
+            {
+                if (!settingsDict.ContainsKey(key) || string.IsNullOrWhiteSpace(settingsDict[key]))
+                {
+                    LogToFile($"One or more settings are null or empty: {key}", "WARN");
+                    return false;
+                }
             }
 
-            var settingsCollection = _db.GetCollection<AppSettings>("settings");
-            settingsCollection.Upsert("singleton", settings);
+            var settingsCol = _db.GetCollection<BsonDocument>("settings");
+            foreach (var kvp in settingsDict)
+            {
+                var doc = new LiteDB.BsonDocument
+                {
+                    ["Key"] = kvp.Key,
+                    ["Value"] = kvp.Value
+                };
+                // Upsert by Key
+                var existing = settingsCol.FindOne(x => x["Key"] == kvp.Key);
+                if (existing != null)
+                {
+                    existing["Value"] = kvp.Value;
+                    settingsCol.Update(existing);
+                }
+                else
+                {
+                    settingsCol.Insert(doc);
+                }
+                LogToFile($"Saved setting: {kvp.Key} = {kvp.Value}", "DEBUG");
+            }
             LogToFile("Settings saved successfully to LiteDB.", "INFO");
 
-            CPH.SetGlobalVar("hate_threshold", settings.HateThreshold, true);
-            CPH.SetGlobalVar("hate_threatening_threshold", settings.HateThreateningThreshold, true);
-            CPH.SetGlobalVar("harassment_threshold", settings.HarassmentThreshold, true);
-            CPH.SetGlobalVar("harassment_threatening_threshold", settings.HarassmentThreateningThreshold, true);
-            CPH.SetGlobalVar("sexual_threshold", settings.SexualThreshold, true);
-            CPH.SetGlobalVar("violence_threshold", settings.ViolenceThreshold, true);
-            CPH.SetGlobalVar("violence_graphic_threshold", settings.ViolenceGraphicThreshold, true);
-            CPH.SetGlobalVar("self_harm_threshold", settings.SelfHarmThreshold, true);
-            CPH.SetGlobalVar("self_harm_intent_threshold", settings.SelfHarmIntentThreshold, true);
-            CPH.SetGlobalVar("self_harm_instructions_threshold", settings.SelfHarmInstructionsThreshold, true);
-            CPH.SetGlobalVar("illicit_threshold", settings.IllicitThreshold, true);
-            CPH.SetGlobalVar("illicit_violent_threshold", settings.IllicitViolentThreshold, true);
+            // Also update global vars for thresholds and other values
+            CPH.SetGlobalVar("hate_threshold", settingsDict["hate_threshold"], true);
+            CPH.SetGlobalVar("hate_threatening_threshold", settingsDict["hate_threatening_threshold"], true);
+            CPH.SetGlobalVar("harassment_threshold", settingsDict["harassment_threshold"], true);
+            CPH.SetGlobalVar("harassment_threatening_threshold", settingsDict["harassment_threatening_threshold"], true);
+            CPH.SetGlobalVar("sexual_threshold", settingsDict["sexual_threshold"], true);
+            CPH.SetGlobalVar("violence_threshold", settingsDict["violence_threshold"], true);
+            CPH.SetGlobalVar("violence_graphic_threshold", settingsDict["violence_graphic_threshold"], true);
+            CPH.SetGlobalVar("self_harm_threshold", settingsDict["self_harm_threshold"], true);
+            CPH.SetGlobalVar("self_harm_intent_threshold", settingsDict["self_harm_intent_threshold"], true);
+            CPH.SetGlobalVar("self_harm_instructions_threshold", settingsDict["self_harm_instructions_threshold"], true);
+            CPH.SetGlobalVar("illicit_threshold", settingsDict["illicit_threshold"], true);
+            CPH.SetGlobalVar("illicit_violent_threshold", settingsDict["illicit_violent_threshold"], true);
 
-            CPH.SetGlobalVar("voice_enabled", settings.VoiceEnabled, true);
-            CPH.SetGlobalVar("outbound_webhook_url", settings.OutboundWebhookUrl, true);
-            CPH.SetGlobalVar("outbound_webhook_mode", settings.OutboundWebhookMode, true);
+            CPH.SetGlobalVar("voice_enabled", settingsDict["voice_enabled"], true);
+            CPH.SetGlobalVar("outbound_webhook_url", settingsDict["outbound_webhook_url"], true);
+            CPH.SetGlobalVar("outbound_webhook_mode", settingsDict["outbound_webhook_mode"], true);
 
             LogToFile("Encryption of OpenAI API Key successful.", "INFO");
             LogToFile("Exiting SaveSettings method.", "DEBUG");
@@ -2401,59 +2408,27 @@ public class CPHInline
         {
             LogToFile("Entering ReadSettings method.", "DEBUG");
 
-            var settingsCollection = _db.GetCollection<AppSettings>("settings");
-            var settings = settingsCollection.FindById("singleton");
-            if (settings == null)
+            var settingsCol = _db.GetCollection<BsonDocument>("settings");
+            var allSettings = settingsCol.FindAll().ToList();
+            if (allSettings == null || allSettings.Count == 0)
             {
                 LogToFile("Settings record not found in LiteDB.", "WARN");
                 return false;
             }
 
-            CPH.SetGlobalVar("OpenAI API Key", DecryptData(settings.OpenApiKey), true);
-            CPH.SetGlobalVar("OpenAI Model", settings.OpenAiModel, true);
-            CPH.SetGlobalVar("Database Path", settings.DatabasePath, true);
-            CPH.SetGlobalVar("Ignore Bot Usernames", settings.IgnoreBotUsernames, true);
-            CPH.SetGlobalVar("Text Clean Mode", settings.TextCleanMode, true);
-            CPH.SetGlobalVar("Logging Level", settings.LoggingLevel, true);
-            CPH.SetGlobalVar("Version", settings.Version, true);
-
-            CPH.SetGlobalVar("hate_threshold", settings.HateThreshold, true);
-            CPH.SetGlobalVar("hate_threatening_threshold", settings.HateThreateningThreshold, true);
-            CPH.SetGlobalVar("harassment_threshold", settings.HarassmentThreshold, true);
-            CPH.SetGlobalVar("harassment_threatening_threshold", settings.HarassmentThreateningThreshold, true);
-            CPH.SetGlobalVar("sexual_threshold", settings.SexualThreshold, true);
-            CPH.SetGlobalVar("violence_threshold", settings.ViolenceThreshold, true);
-            CPH.SetGlobalVar("violence_graphic_threshold", settings.ViolenceGraphicThreshold, true);
-            CPH.SetGlobalVar("self_harm_threshold", settings.SelfHarmThreshold, true);
-            CPH.SetGlobalVar("self_harm_intent_threshold", settings.SelfHarmIntentThreshold, true);
-            CPH.SetGlobalVar("self_harm_instructions_threshold", settings.SelfHarmInstructionsThreshold, true);
-            CPH.SetGlobalVar("illicit_threshold", settings.IllicitThreshold, true);
-            CPH.SetGlobalVar("illicit_violent_threshold", settings.IllicitViolentThreshold, true);
-
-            CPH.SetGlobalVar("Post To Chat", settings.PostToChat, true);
-            CPH.SetGlobalVar("Log GPT Questions to Discord", settings.LogGptQuestionsToDiscord, true);
-            CPH.SetGlobalVar("Discord Webhook URL", settings.DiscordWebhookUrl, true);
-            CPH.SetGlobalVar("Discord Bot Username", settings.DiscordBotUsername, true);
-            CPH.SetGlobalVar("Discord Avatar Url", settings.DiscordAvatarUrl, true);
-            CPH.SetGlobalVar("character_voice_alias_1", settings.CharacterVoiceAlias_1, true);
-            CPH.SetGlobalVar("character_voice_alias_2", settings.CharacterVoiceAlias_2, true);
-            CPH.SetGlobalVar("character_voice_alias_3", settings.CharacterVoiceAlias_3, true);
-            CPH.SetGlobalVar("character_voice_alias_4", settings.CharacterVoiceAlias_4, true);
-            CPH.SetGlobalVar("character_voice_alias_5", settings.CharacterVoiceAlias_5, true);
-            CPH.SetGlobalVar("character_file_1", settings.CharacterFile_1, true);
-            CPH.SetGlobalVar("character_file_2", settings.CharacterFile_2, true);
-            CPH.SetGlobalVar("character_file_3", settings.CharacterFile_3, true);
-            CPH.SetGlobalVar("character_file_4", settings.CharacterFile_4, true);
-            CPH.SetGlobalVar("character_file_5", settings.CharacterFile_5, true);
-            CPH.SetGlobalVar("Completions Endpoint", settings.CompletionsEndpoint, true);
-
-            CPH.SetGlobalVar("voice_enabled", settings.VoiceEnabled, true);
-            CPH.SetGlobalVar("outbound_webhook_url", settings.OutboundWebhookUrl, true);
-            CPH.SetGlobalVar("outbound_webhook_mode", settings.OutboundWebhookMode, true);
-            CPH.SetGlobalVar("moderation_enabled", settings.moderation_enabled, true);
-            CPH.SetGlobalVar("moderation_rebuke_enabled", settings.moderation_rebuke_enabled, true);
-            CPH.SetGlobalVar("max_chat_history", settings.max_chat_history, true);
-            CPH.SetGlobalVar("max_prompt_history", settings.max_prompt_history, true);
+            foreach (var doc in allSettings)
+            {
+                var key = doc["Key"]?.AsString;
+                var value = doc["Value"]?.AsString;
+                if (string.IsNullOrWhiteSpace(key))
+                    continue;
+                if (key == "OpenAI API Key")
+                {
+                    value = DecryptData(value);
+                }
+                CPH.SetGlobalVar(key, value, true);
+                LogToFile($"Loaded setting: {key} = {value}", "DEBUG");
+            }
 
             LogToFile("Settings loaded successfully from LiteDB.", "INFO");
             LogToFile("Exiting ReadSettings method.", "DEBUG");
