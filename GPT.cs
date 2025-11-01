@@ -11,9 +11,53 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
 using Newtonsoft.Json;
+using LiteDB;
 
 public class CPHInline
 {
+    private static LiteDatabase _db;
+
+    public bool Startup()
+    {
+        try
+        {
+            string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
+            if (string.IsNullOrWhiteSpace(databasePath))
+            {
+                LogToFile("'Database Path' global variable is not found or invalid.", "ERROR");
+                return false;
+            }
+
+            string dbFilePath = Path.Combine(databasePath, "PNGTuberGPT.db");
+            _db = new LiteDatabase(dbFilePath);
+            LogToFile($"LiteDB initialized successfully at {dbFilePath}.", "INFO");
+
+            // Ensure collections exist
+            _db.GetCollection<AppSettings>("settings");
+            _db.GetCollection<BsonDocument>("keywords");
+            _db.GetCollection<BsonDocument>("usernames");
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"Failed to initialize LiteDB: {ex.Message}", "ERROR");
+            return false;
+        }
+    }
+
+    public void Dispose()
+    {
+        try
+        {
+            _db?.Dispose();
+            LogToFile("LiteDB connection closed successfully.", "INFO");
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"Error while disposing LiteDB connection: {ex.Message}", "ERROR");
+        }
+    }
     public Queue<chatMessage> GPTLog { get; set; } = new Queue<chatMessage>(); 
     public Queue<chatMessage> ChatLog { get; set; } = new Queue<chatMessage>(); 
 
@@ -1979,6 +2023,7 @@ public class CPHInline
             return false;
         }
     }
+    
     private string CleanAIText(string text)
     {
         LogToFile("Entering CleanAIText method.", "DEBUG");
