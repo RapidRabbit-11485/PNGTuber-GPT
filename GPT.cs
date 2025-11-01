@@ -112,26 +112,6 @@ public class CPHInline
         public int max_prompt_history { get; set; } = 10;
     }
 
-    public void SaveSettings(AppSettings appSettings)
-    {
-        try
-        {
-            var settingsCol = _db.GetCollection<BsonDocument>("settings");
-            var settings = new BsonDocument();
-
-            settings["moderation_enabled"] = new BsonValue(appSettings.moderation_enabled);
-            settings["moderation_rebuke_enabled"] = new BsonValue(appSettings.moderation_rebuke_enabled);
-            settings["max_chat_history"] = new BsonValue(appSettings.max_chat_history);
-            settings["max_prompt_history"] = new BsonValue(appSettings.max_prompt_history);
-
-            settingsCol.Upsert(settings);
-        }
-        catch (Exception ex)
-        {
-            LogToFile($"Error in SaveSettings: {ex.Message}", "ERROR");
-        }
-    }
-
     public AppSettings ReadSettings()
     {
         var appSettings = new AppSettings();
