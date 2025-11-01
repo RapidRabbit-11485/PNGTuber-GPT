@@ -21,9 +21,9 @@ PNGTuber-GPT 2.0 turns chatbots into living characters that remember your viewer
 ## 💬 Output Flexibility
 
 ### 🔊 Speak, Post, Both, or Headless
-- **Speak:** Have the AI voice lines in real time for VTuber reactions.  
-- **Post:** Text-only chat replies for subtle engagement.  
-- **Both:** Talk *and* post simultaneously — perfect for highlight clips.  
+- **Speak:** Have the PNG character speak on your stream for TTS.
+- **Post:** Have the bot interact in chat only, via commands.
+- **Both:** Have the AI engage with chat via voice and text simultaneously. 
 - **Headless Webhooks:** Send responses silently to overlays, Discord, or other bots for layered integrations.
 
 ---
@@ -32,8 +32,8 @@ PNGTuber-GPT 2.0 turns chatbots into living characters that remember your viewer
 
 ### 💾 Persistent Memory
 - **LiteDB Engine:** Local storage for user profiles and knowledge — fast, private, portable.  
-- **Dynamic Recall:** The bot remembers names, quirks, inside jokes, and weaves them back naturally.  
-- **Editable:** Manage memories and keywords directly through Streamer.bot actions.
+- **Dynamic Recall:** The bot remembers user profiles and what they teach it about themselves.  
+- **Editable:** Manage memories and keywords directly through chat commands or LiteDB Studio.
 
 ### 🎭 Character Context System
 - **Behavior Templates:** Each mode defines tone, attitude, and emotion — not raw data.  
@@ -41,9 +41,9 @@ PNGTuber-GPT 2.0 turns chatbots into living characters that remember your viewer
 - **Pre-Built Modes:** Furry, Baby, Nerd, Oracle, Evil, Drunk, Gremlin, and more.
 
 ### 🗣️ Streamer.bot Native Integration
-- **Runtime Arg Handling:** Uses `TryGetArg` for safe, accurate argument capture.  
 - **Pronoun Awareness:** Syncs with Streamer.bot pronoun variables and auto-updates user profiles.  
 - **Webhook Support:** Send outputs or logs to Discord, OBS, or other automation flows.
+- **Speaker.bot Integration:** Send outputs to Speaker bot to use the TTS service of your choice. 
 
 ---
 
@@ -67,17 +67,18 @@ PNGTuber-GPT 2.0 turns chatbots into living characters that remember your viewer
 |-----------|--------------|
 | 🎭 **Stream Personalities** | Bring characters to life on screen with voice and personality. |
 | 🕹️ **Twitch Integration** | Context-aware reactions, lore references, and mood shifts. |
-| 💬 **Discord Sync** | Share memories and personalities across communities. |
+| 💬 **Discord Sync** | Keep a log of questions and answers. |
 | 👩‍💻 **Custom Modes** | Build your own personalities or emotional states. |
-| ⚡ **Automation** | Webhooks + Streamer.bot = full creative control. |
+| ⚡ **Automation** | Webhooks + your tools = full creative control. |
 
 ---
 
 ## 🧩 The Design Philosophy
-> *Memory is structure. Personality is performance.*
+> *Showcase what is possible at an entry level with AI characters and Twitch. By making it easier to get started,
+and building integrations into other tools; you can grow at your pace.*
 
 PNGTuber-GPT separates **knowledge** from **behavior**, making AI characters both intelligent and expressive.  
-Your data stays factual. Your performance stays fun.
+Your data stays factual. Your stream is more fun and engaging. 
 
 ---
 
