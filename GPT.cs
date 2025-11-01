@@ -30,11 +30,15 @@ public class CPHInline
 
             string dbFilePath = Path.Combine(databasePath, "PNGTuberGPT.db");
             _db = new LiteDatabase(dbFilePath);
-            LogToFile($"LiteDB initialized successfully at {dbFilePath}.", "INFO");
 
-            _db.GetCollection<AppSettings>("settings");
-            _db.GetCollection<BsonDocument>("Keywords");
-            _db.GetCollection<UserProfile>("UserProfiles");
+            var settings = _db.GetCollection<AppSettings>("settings");
+            var userProfiles = _db.GetCollection<UserProfile>("user_profiles");
+            var keywords = _db.GetCollection<Keyword>("keywords");
+
+            userProfiles.EnsureIndex(x => x.Username, true);
+            userProfiles.EnsureIndex(x => x.PreferredName, false);
+
+            LogToFile("LiteDB initialized with collections: settings, user_profiles, keywords.", "INFO");
 
             return true;
         }
