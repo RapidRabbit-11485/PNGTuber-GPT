@@ -594,7 +594,7 @@ public class CPHInline
                 return false;
             }
 
-            var col = _db.GetCollection<UserProfile>("UserProfiles");
+            var col = _db.GetCollection<UserProfile>("user_profiles");
             var profile = col.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
 
             if (profile != null && profile.Knowledge != null && profile.Knowledge.Count > 0)
