@@ -63,7 +63,13 @@ public class CPHInline
     }
     public Queue<chatMessage> GPTLog { get; set; } = new Queue<chatMessage>(); 
     public Queue<chatMessage> ChatLog { get; set; } = new Queue<chatMessage>(); 
-
+    public class Keyword
+    {
+        public ObjectId Id { get; set; }
+        public string Word { get; set; }
+        public string Definition { get; set; }
+        public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
+    }
     public class AppSettings
     {
         public string OpenApiKey { get; set; }
