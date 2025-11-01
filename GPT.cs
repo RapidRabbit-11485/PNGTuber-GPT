@@ -19,6 +19,7 @@ public class CPHInline
 
     public bool Startup()
     {
+        LogToFile(">>> Entering Startup()", "TRACE");
         try
         {
             // Dispose of existing LiteDB connection if already initialized
@@ -27,12 +28,24 @@ public class CPHInline
                 LogToFile("Existing LiteDB connection detected. Disposing before reinitialization.", "WARN");
                 _db.Dispose();
                 _db = null;
+                LogToFile("Condition _db != null evaluated TRUE in Startup()", "TRACE");
+            }
+            else
+            {
+                LogToFile("Condition _db != null evaluated FALSE in Startup()", "TRACE");
             }
             string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
+            LogToFile("Completed GetGlobalVar() successfully.", "TRACE");
             if (string.IsNullOrWhiteSpace(databasePath))
             {
                 LogToFile("'Database Path' global variable is not found or invalid.", "ERROR");
+                LogToFile("Condition string.IsNullOrWhiteSpace(databasePath) evaluated TRUE in Startup()", "TRACE");
                 return false;
+                LogToFile("<<< Exiting Startup() with return value: false", "TRACE");
+            }
+            else
+            {
+                LogToFile("Condition string.IsNullOrWhiteSpace(databasePath) evaluated FALSE in Startup()", "TRACE");
             }
 
             string dbFilePath = Path.Combine(databasePath, "PNGTuberGPT.db");
@@ -47,17 +60,21 @@ public class CPHInline
 
             LogToFile("LiteDB initialized with collections: settings, user_profiles, keywords.", "INFO");
 
+            LogToFile("<<< Exiting Startup() with return value: true", "TRACE");
             return true;
         }
         catch (Exception ex)
         {
             LogToFile($"Failed to initialize LiteDB: {ex.Message}", "ERROR");
+            LogToFile($"Exception stack trace: {ex.StackTrace}", "TRACE");
+            LogToFile("<<< Exiting Startup() with return value: false", "TRACE");
             return false;
         }
     }
 
     public void Dispose()
     {
+        LogToFile(">>> Entering Dispose()", "TRACE");
         try
         {
             _db?.Dispose();
@@ -66,6 +83,7 @@ public class CPHInline
         catch (Exception ex)
         {
             LogToFile($"Error while disposing LiteDB connection: {ex.Message}", "ERROR");
+            LogToFile($"Exception stack trace: {ex.StackTrace}", "TRACE");
         }
     }
     public Queue<chatMessage> GPTLog { get; set; } = new Queue<chatMessage>(); 
@@ -220,14 +238,17 @@ public class CPHInline
 
     public UserProfile GetOrCreateUserProfile(string userName, Dictionary<string, object> args)
     {
+        LogToFile(">>> Entering GetOrCreateUserProfile()", "TRACE");
         try
         {
             var userCollection = _db.GetCollection<UserProfile>("user_profiles");
             userCollection.EnsureIndex(x => x.UserName, true);
             var profile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
+            LogToFile("Completed FindOne() successfully.", "TRACE");
 
             if (profile == null)
             {
+                LogToFile("Condition profile == null evaluated TRUE in GetOrCreateUserProfile()", "TRACE");
                 profile = new UserProfile
                 {
                     UserName = userName,
@@ -235,8 +256,12 @@ public class CPHInline
                     Pronouns = ""
                 };
                 userCollection.Insert(profile);
-
+                LogToFile("Completed Insert() successfully.", "TRACE");
                 LogToFile($"[UserProfile] Created new profile for {userName}.", "DEBUG");
+            }
+            else
+            {
+                LogToFile("Condition profile == null evaluated FALSE in GetOrCreateUserProfile()", "TRACE");
             }
 
             string pronouns = "";
@@ -252,18 +277,25 @@ public class CPHInline
 
             if (!string.IsNullOrEmpty(pronouns) && pronouns != profile.Pronouns)
             {
+                LogToFile("Condition !string.IsNullOrEmpty(pronouns) && pronouns != profile.Pronouns evaluated TRUE in GetOrCreateUserProfile()", "TRACE");
                 profile.Pronouns = pronouns;
                 userCollection.Update(profile);
-
+                LogToFile("Completed Update() successfully.", "TRACE");
                 LogToFile($"[UserProfile] Updated pronouns for {userName} to {pronouns}.", "DEBUG");
             }
+            else
+            {
+                LogToFile("Condition !string.IsNullOrEmpty(pronouns) && pronouns != profile.Pronouns evaluated FALSE in GetOrCreateUserProfile()", "TRACE");
+            }
 
+            LogToFile("<<< Exiting GetOrCreateUserProfile() with return value: profile", "TRACE");
             return profile;
         }
         catch (Exception ex)
         {
             LogToFile($"[UserProfile] Error retrieving or creating user profile for {userName}: {ex.Message}", "ERROR");
-
+            LogToFile($"Exception stack trace: {ex.StackTrace}", "TRACE");
+            LogToFile("<<< Exiting GetOrCreateUserProfile() with return value: new UserProfile", "TRACE");
             return new UserProfile
             {
                 UserName = userName,
@@ -274,30 +306,40 @@ public class CPHInline
     }
     private void QueueMessage(chatMessage chatMsg)
     {
+        LogToFile(">>> Entering QueueMessage()", "TRACE");
         LogToFile($"Entering QueueMessage with chatMsg: {chatMsg}", "DEBUG");
         try
         {
             LogToFile($"Enqueuing chat message: {chatMsg}", "INFO");
             ChatLog.Enqueue(chatMsg);
+            LogToFile("Variable ChatLog.Count = " + ChatLog.Count, "TRACE");
 
             LogToFile($"ChatLog Count after enqueuing: {ChatLog.Count}", "DEBUG");
             int maxChatHistory = CPH.GetGlobalVar<int>("max_chat_history", true);
+            LogToFile("Completed GetGlobalVar() successfully.", "TRACE");
             if (ChatLog.Count > maxChatHistory)
             {
+                LogToFile("Condition ChatLog.Count > maxChatHistory evaluated TRUE in QueueMessage()", "TRACE");
                 chatMessage dequeuedMessage = ChatLog.Peek();
                 LogToFile($"Dequeuing chat message to maintain queue size: {dequeuedMessage}", "DEBUG");
                 ChatLog.Dequeue();
                 LogToFile($"ChatLog Count after dequeuing: {ChatLog.Count}", "DEBUG");
             }
+            else
+            {
+                LogToFile("Condition ChatLog.Count > maxChatHistory evaluated FALSE in QueueMessage()", "TRACE");
+            }
         }
         catch (Exception ex)
         {
             LogToFile($"An error occurred while enqueuing or dequeuing a chat message: {ex.Message}", "ERROR");
+            LogToFile($"Exception stack trace: {ex.StackTrace}", "TRACE");
         }
     }
 
     private void QueueGPTMessage(string userContent, string assistantContent)
     {
+        LogToFile(">>> Entering QueueGPTMessage()", "TRACE");
         LogToFile("Entering QueueGPTMessage with paired messages.", "DEBUG");
 
         chatMessage userMessage = new chatMessage
@@ -305,25 +347,34 @@ public class CPHInline
             role = "user",
             content = userContent
         };
+        LogToFile($"Variable userMessage = {userMessage}", "TRACE");
         chatMessage assistantMessage = new chatMessage
         {
             role = "assistant",
             content = assistantContent
         };
+        LogToFile($"Variable assistantMessage = {assistantMessage}", "TRACE");
         try
         {
             GPTLog.Enqueue(userMessage);
             GPTLog.Enqueue(assistantMessage);
+            LogToFile("Variable GPTLog.Count = " + GPTLog.Count, "TRACE");
 
             LogToFile($"Enqueuing user message: {userMessage}", "INFO");
             LogToFile($"Enqueuing assistant message: {assistantMessage}", "INFO");
 
             int maxPromptHistory = CPH.GetGlobalVar<int>("max_prompt_history", true);
+            LogToFile("Completed GetGlobalVar() successfully.", "TRACE");
             if (GPTLog.Count > maxPromptHistory * 2)
             {
+                LogToFile("Condition GPTLog.Count > maxPromptHistory * 2 evaluated TRUE in QueueGPTMessage()", "TRACE");
                 LogToFile("GPTLog limit exceeded. Dequeuing the oldest pair of messages.", "DEBUG");
                 GPTLog.Dequeue();
                 GPTLog.Dequeue();
+            }
+            else
+            {
+                LogToFile("Condition GPTLog.Count > maxPromptHistory * 2 evaluated FALSE in QueueGPTMessage()", "TRACE");
             }
 
             LogToFile($"GPTLog Count after enqueueing/dequeueing: {GPTLog.Count}", "DEBUG");
@@ -331,11 +382,13 @@ public class CPHInline
         catch (Exception ex)
         {
             LogToFile($"An error occurred while enqueuing GPT messages: {ex.Message}", "ERROR");
+            LogToFile($"Exception stack trace: {ex.StackTrace}", "TRACE");
         }
     }
 
     public bool Execute()
     {
+        LogToFile(">>> Entering Execute()", "TRACE");
 
         LogToFile("Starting initialization of the PNGTuber-GPT application.", "INFO");
 
@@ -344,6 +397,7 @@ public class CPHInline
         LogToFile("Starting to retrieve the version number from a global variable.", "DEBUG");
 
         string initializeVersionNumber = CPH.GetGlobalVar<string>("Version", true);
+        LogToFile("Completed GetGlobalVar() successfully.", "TRACE");
 
         LogToFile($"Retrieved version number: {initializeVersionNumber}", "DEBUG");
 
@@ -351,56 +405,90 @@ public class CPHInline
         {
 
             LogToFile("The 'Version' global variable is not found or is empty.", "ERROR");
+            LogToFile("Condition string.IsNullOrWhiteSpace(initializeVersionNumber) evaluated TRUE in Execute()", "TRACE");
+            LogToFile("<<< Exiting Execute() with return value: false", "TRACE");
             return false;
+        }
+        else
+        {
+            LogToFile("Condition string.IsNullOrWhiteSpace(initializeVersionNumber) evaluated FALSE in Execute()", "TRACE");
         }
 
         LogToFile($"Sending version number to chat: {initializeVersionNumber}", "DEBUG");
 
         CPH.SendMessage($"{initializeVersionNumber} has been initialized successfully.", true);
+        LogToFile("Completed SendMessage() successfully.", "TRACE");
 
         LogToFile("Version number sent to chat successfully.", "INFO");
 
-        return true;
+        LogToFile("<<< Exiting Execute() with return value: true", "TRACE");
         return true;
     }
 
     public bool GetUserProfileFromArgs()
     {
+        LogToFile(">>> Entering GetUserProfileFromArgs()", "TRACE");
         LogToFile("Entering GetUserProfileFromArgs method.", "DEBUG");
         try
         {
             if (!args.ContainsKey("userName"))
             {
+                LogToFile("Condition !args.ContainsKey(\"userName\") evaluated TRUE in GetUserProfileFromArgs()", "TRACE");
                 LogToFile("'userName' argument is missing.", "ERROR");
+                LogToFile("<<< Exiting GetUserProfileFromArgs() with return value: false", "TRACE");
                 return false;
+            }
+            else
+            {
+                LogToFile("Condition !args.ContainsKey(\"userName\") evaluated FALSE in GetUserProfileFromArgs()", "TRACE");
             }
 
             string userName = args["userName"]?.ToString();
+            LogToFile($"Variable userName = {userName}", "TRACE");
             if (string.IsNullOrWhiteSpace(userName))
             {
+                LogToFile("Condition string.IsNullOrWhiteSpace(userName) evaluated TRUE in GetUserProfileFromArgs()", "TRACE");
                 LogToFile("'userName' argument is invalid.", "ERROR");
+                LogToFile("<<< Exiting GetUserProfileFromArgs() with return value: false", "TRACE");
                 return false;
+            }
+            else
+            {
+                LogToFile("Condition string.IsNullOrWhiteSpace(userName) evaluated FALSE in GetUserProfileFromArgs()", "TRACE");
             }
 
             var profile = GetOrCreateUserProfile(userName, args);
+            LogToFile("Completed GetOrCreateUserProfile() successfully.", "TRACE");
             if (profile == null)
             {
+                LogToFile("Condition profile == null evaluated TRUE in GetUserProfileFromArgs()", "TRACE");
                 LogToFile($"Failed to retrieve or create profile for {userName}.", "ERROR");
+                LogToFile("<<< Exiting GetUserProfileFromArgs() with return value: false", "TRACE");
                 return false;
+            }
+            else
+            {
+                LogToFile("Condition profile == null evaluated FALSE in GetUserProfileFromArgs()", "TRACE");
             }
 
             string formattedName = string.IsNullOrEmpty(profile.Pronouns)
                 ? profile.PreferredName
                 : $"{profile.PreferredName} {profile.Pronouns}";
+            LogToFile($"Variable formattedName = {formattedName}", "TRACE");
 
             CPH.SetArgument("nicknamePronouns", formattedName);
+            LogToFile("Completed SetArgument() successfully.", "TRACE");
             CPH.SetArgument("Pronouns", profile.Pronouns);
+            LogToFile("Completed SetArgument() successfully.", "TRACE");
             LogToFile($"Set nicknamePronouns='{formattedName}', Pronouns='{profile.Pronouns}'", "DEBUG");
+            LogToFile("<<< Exiting GetUserProfileFromArgs() with return value: true", "TRACE");
             return true;
         }
         catch (Exception ex)
         {
             LogToFile($"An error occurred in GetUserProfileFromArgs: {ex.Message}", "ERROR");
+            LogToFile($"Exception stack trace: {ex.StackTrace}", "TRACE");
+            LogToFile("<<< Exiting GetUserProfileFromArgs() with return value: false", "TRACE");
             return false;
         }
     }
