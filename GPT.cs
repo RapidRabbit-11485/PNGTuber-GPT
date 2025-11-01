@@ -21,6 +21,13 @@ public class CPHInline
     {
         try
         {
+            // Dispose of existing LiteDB connection if already initialized
+            if (_db != null)
+            {
+                LogToFile("Existing LiteDB connection detected. Disposing before reinitialization.", "WARN");
+                _db.Dispose();
+                _db = null;
+            }
             string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
             if (string.IsNullOrWhiteSpace(databasePath))
             {
