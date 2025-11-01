@@ -203,6 +203,7 @@ public class CPHInline
 
     public class UserProfile
     {
+        public ObjectId Id { get; set; }
         public string UserName { get; set; }
         public string PreferredName { get; set; }
         public string Pronouns { get; set; }
