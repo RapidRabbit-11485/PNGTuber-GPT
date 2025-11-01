@@ -141,7 +141,6 @@ public class CPHInline
             var settings = settingsCol.FindAll().FirstOrDefault();
             if (settings != null)
             {
-
                 appSettings.moderation_enabled = settings.ContainsKey("moderation_enabled") ? settings["moderation_enabled"].AsBoolean : true;
                 appSettings.moderation_rebuke_enabled = settings.ContainsKey("moderation_rebuke_enabled") ? settings["moderation_rebuke_enabled"].AsBoolean : true;
                 appSettings.max_chat_history = settings.ContainsKey("max_chat_history") ? settings["max_chat_history"].AsInt32 : 20;
@@ -1380,7 +1379,9 @@ public class CPHInline
                 string apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
                 string AIModel = CPH.GetGlobalVar<string>("OpenAI Model", true);
 
-                string completionsUrl = CPH.GetGlobalVar<string>("openai_completions_url", "https://api.openai.com/v1/chat/completions");
+                string completionsUrl = CPH.GetGlobalVar<string>("openai_completions_url", true);
+                if (string.IsNullOrWhiteSpace(completionsUrl))
+                    completionsUrl = "https://api.openai.com/v1/chat/completions";
                 LogToFile($"Using completions endpoint: {completionsUrl}", "DEBUG");
 
                 var messages = new List<chatMessage>();
@@ -1455,6 +1456,8 @@ public class CPHInline
             LogToFile("Stored GPT response in global variable 'Response'.", "INFO");
 
             string outboundWebhookUrl = CPH.GetGlobalVar<string>("outbound_webhook_url", true);
+            if (string.IsNullOrWhiteSpace(outboundWebhookUrl))
+                outboundWebhookUrl = "https://api.openai.com/v1/chat/completions";
             string outboundWebhookMode = CPH.GetGlobalVar<string>("outbound_webhook_mode", true);
             if (!string.IsNullOrWhiteSpace(outboundWebhookUrl))
             {
@@ -1689,7 +1692,9 @@ public class CPHInline
             string apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
             string AIModel = CPH.GetGlobalVar<string>("OpenAI Model", true);
 
-            string completionsUrl = CPH.GetGlobalVar<string>("openai_completions_url", "https://api.openai.com/v1/chat/completions");
+            string completionsUrl = CPH.GetGlobalVar<string>("openai_completions_url", true);
+            if (string.IsNullOrWhiteSpace(completionsUrl))
+                completionsUrl = "https://api.openai.com/v1/chat/completions";
             LogToFile($"Using completions endpoint: {completionsUrl}", "DEBUG");
             var messages = new List<chatMessage>();
 
@@ -1734,6 +1739,8 @@ public class CPHInline
         LogToFile("Stored GPT response in global variable 'Response'.", "INFO");
 
         string outboundWebhookUrl = CPH.GetGlobalVar<string>("outbound_webhook_url", true);
+        if (string.IsNullOrWhiteSpace(outboundWebhookUrl))
+            outboundWebhookUrl = "https://api.openai.com/v1/chat/completions";
         string outboundWebhookMode = CPH.GetGlobalVar<string>("outbound_webhook_mode", true);
         if (!string.IsNullOrWhiteSpace(outboundWebhookUrl))
         {
