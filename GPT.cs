@@ -16,37 +16,38 @@ using LiteDB;
 public class CPHInline
 {
     private static LiteDatabase _db;
+    public Queue<chatMessage> GPTLog { get; set; } = new Queue<chatMessage>();
+    public Queue<chatMessage> ChatLog { get; set; } = new Queue<chatMessage>();
 
     public bool Startup()
     {
-        LogToFile(">>> Entering Startup()", "TRACE");
+        LogToFile(">>> Entering Startup()", "DEBUG");
         try
         {
-            // Dispose of existing LiteDB connection if already initialized
             if (_db != null)
             {
                 LogToFile("Existing LiteDB connection detected. Disposing before reinitialization.", "WARN");
                 _db.Dispose();
                 _db = null;
-                LogToFile("Condition _db != null evaluated TRUE in Startup()", "TRACE");
+                LogToFile("Condition _db != null evaluated TRUE in Startup()", "DEBUG");
             }
             else
             {
-                LogToFile("Condition _db != null evaluated FALSE in Startup()", "TRACE");
+                LogToFile("Condition _db != null evaluated FALSE in Startup()", "DEBUG");
             }
+
             string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
-            LogToFile("Completed GetGlobalVar() successfully.", "TRACE");
+            LogToFile("Completed GetGlobalVar() successfully.", "DEBUG");
+
             if (string.IsNullOrWhiteSpace(databasePath))
             {
                 LogToFile("'Database Path' global variable is not found or invalid.", "ERROR");
-                LogToFile("Condition string.IsNullOrWhiteSpace(databasePath) evaluated TRUE in Startup()", "TRACE");
+                LogToFile("Condition string.IsNullOrWhiteSpace(databasePath) evaluated TRUE in Startup()", "DEBUG");
+                LogToFile("<<< Exiting Startup() with return value: false", "DEBUG");
                 return false;
-                LogToFile("<<< Exiting Startup() with return value: false", "TRACE");
             }
-            else
-            {
-                LogToFile("Condition string.IsNullOrWhiteSpace(databasePath) evaluated FALSE in Startup()", "TRACE");
-            }
+
+            LogToFile("Condition string.IsNullOrWhiteSpace(databasePath) evaluated FALSE in Startup()", "DEBUG");
 
             string dbFilePath = Path.Combine(databasePath, "PNGTuberGPT.db");
             _db = new LiteDatabase(dbFilePath);
@@ -59,22 +60,21 @@ public class CPHInline
             userProfiles.EnsureIndex(x => x.PreferredName, false);
 
             LogToFile("LiteDB initialized with collections: settings, user_profiles, keywords.", "INFO");
-
-            LogToFile("<<< Exiting Startup() with return value: true", "TRACE");
+            LogToFile("<<< Exiting Startup() with return value: true", "DEBUG");
             return true;
         }
         catch (Exception ex)
         {
             LogToFile($"Failed to initialize LiteDB: {ex.Message}", "ERROR");
-            LogToFile($"Exception stack trace: {ex.StackTrace}", "TRACE");
-            LogToFile("<<< Exiting Startup() with return value: false", "TRACE");
+            LogToFile($"Exception stack trace: {ex.StackTrace}", "DEBUG");
+            LogToFile("<<< Exiting Startup() with return value: false", "DEBUG");
             return false;
         }
     }
 
     public void Dispose()
     {
-        LogToFile(">>> Entering Dispose()", "TRACE");
+        LogToFile(">>> Entering Dispose()", "DEBUG");
         try
         {
             _db?.Dispose();
@@ -83,11 +83,48 @@ public class CPHInline
         catch (Exception ex)
         {
             LogToFile($"Error while disposing LiteDB connection: {ex.Message}", "ERROR");
-            LogToFile($"Exception stack trace: {ex.StackTrace}", "TRACE");
+            LogToFile($"Exception stack trace: {ex.StackTrace}", "DEBUG");
         }
     }
-    public Queue<chatMessage> GPTLog { get; set; } = new Queue<chatMessage>(); 
-    public Queue<chatMessage> ChatLog { get; set; } = new Queue<chatMessage>(); 
+    
+    public bool Execute()    {
+        LogToFile(">>> Entering Execute()", "DEBUG");
+
+        LogToFile("Starting initialization of the PNGTuber-GPT application.", "INFO");
+
+        LogToFile("Initialization of PNGTuber-GPT successful. Added all global variables to memory.", "INFO");
+
+        LogToFile("Starting to retrieve the version number from a global variable.", "DEBUG");
+
+        string initializeVersionNumber = CPH.GetGlobalVar<string>("Version", true);
+        LogToFile("Completed GetGlobalVar() successfully.", "DEBUG");
+
+        LogToFile($"Retrieved version number: {initializeVersionNumber}", "DEBUG");
+
+        if (string.IsNullOrWhiteSpace(initializeVersionNumber))
+        {
+
+            LogToFile("The 'Version' global variable is not found or is empty.", "ERROR");
+            LogToFile("Condition string.IsNullOrWhiteSpace(initializeVersionNumber) evaluated TRUE in Execute()", "DEBUG");
+            LogToFile("<<< Exiting Execute() with return value: false", "DEBUG");
+            return false;
+        }
+        else
+        {
+            LogToFile("Condition string.IsNullOrWhiteSpace(initializeVersionNumber) evaluated FALSE in Execute()", "DEBUG");
+        }
+
+        LogToFile($"Sending version number to chat: {initializeVersionNumber}", "DEBUG");
+
+        CPH.SendMessage($"{initializeVersionNumber} has been initialized successfully.", true);
+        LogToFile("Completed SendMessage() successfully.", "DEBUG");
+
+        LogToFile("Version number sent to chat successfully.", "INFO");
+
+        LogToFile("<<< Exiting Execute() with return value: true", "DEBUG");
+        return true;
+    }
+    
     public class Keyword
     {
         public ObjectId Id { get; set; }
@@ -95,6 +132,7 @@ public class CPHInline
         public string Definition { get; set; }
         public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
     }
+    
     public class AppSettings
     {
         public string OpenApiKey { get; set; }
@@ -212,7 +250,7 @@ public class CPHInline
 
         public string titleName { get; set; }
     }
-
+    
     public class chatMessage
     {
 
@@ -236,19 +274,19 @@ public class CPHInline
         public List<string> Knowledge { get; set; } = new List<string>();
     }
 
-    public UserProfile GetOrCreateUserProfile(string userName, Dictionary<string, object> args)
+    public UserProfile GetOrCreateUserProfile(string userName)
     {
-        LogToFile(">>> Entering GetOrCreateUserProfile()", "TRACE");
+        LogToFile(">>> Entering GetOrCreateUserProfile()", "DEBUG");
         try
         {
             var userCollection = _db.GetCollection<UserProfile>("user_profiles");
             userCollection.EnsureIndex(x => x.UserName, true);
             var profile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
-            LogToFile("Completed FindOne() successfully.", "TRACE");
+            LogToFile("Completed FindOne() successfully.", "DEBUG");
 
             if (profile == null)
             {
-                LogToFile("Condition profile == null evaluated TRUE in GetOrCreateUserProfile()", "TRACE");
+                LogToFile("Condition profile == null evaluated TRUE in GetOrCreateUserProfile()", "DEBUG");
                 profile = new UserProfile
                 {
                     UserName = userName,
@@ -256,46 +294,83 @@ public class CPHInline
                     Pronouns = ""
                 };
                 userCollection.Insert(profile);
-                LogToFile("Completed Insert() successfully.", "TRACE");
+                LogToFile("Completed Insert() successfully.", "DEBUG");
                 LogToFile($"[UserProfile] Created new profile for {userName}.", "DEBUG");
             }
             else
             {
-                LogToFile("Condition profile == null evaluated FALSE in GetOrCreateUserProfile()", "TRACE");
+                LogToFile("Condition profile == null evaluated FALSE in GetOrCreateUserProfile()", "DEBUG");
             }
 
-            string pronouns = "";
-            if (args != null)
+            // --- Begin Pronoun Synchronization Logic ---
+            string pronouns = null;
+            string pronounSubject = null;
+            string pronounObject = null;
+            string pronounPossessive = null;
+            string pronounReflexive = null;
+            string pronounPronoun = null;
+
+            // Try to get each pronoun field from args first, then fall back to global variables.
+            if (!CPH.TryGetArg("pronouns", out pronouns))
+                pronouns = CPH.GetGlobalVar<string>("pronouns", false);
+            if (!CPH.TryGetArg("pronounSubject", out pronounSubject))
+                pronounSubject = CPH.GetGlobalVar<string>("pronounSubject", false);
+            if (!CPH.TryGetArg("pronounObject", out pronounObject))
+                pronounObject = CPH.GetGlobalVar<string>("pronounObject", false);
+            if (!CPH.TryGetArg("pronounPossessive", out pronounPossessive))
+                pronounPossessive = CPH.GetGlobalVar<string>("pronounPossessive", false);
+            if (!CPH.TryGetArg("pronounReflexive", out pronounReflexive))
+                pronounReflexive = CPH.GetGlobalVar<string>("pronounReflexive", false);
+            if (!CPH.TryGetArg("pronounPronoun", out pronounPronoun))
+                pronounPronoun = CPH.GetGlobalVar<string>("pronounPronoun", false);
+
+            LogToFile($"Pronoun retrieval results: pronouns='{pronouns}', pronounSubject='{pronounSubject}', pronounObject='{pronounObject}', pronounPossessive='{pronounPossessive}', pronounReflexive='{pronounReflexive}', pronounPronoun='{pronounPronoun}'", "DEBUG");
+
+            // If 'pronouns' is missing, try to construct it from available subfields
+            if (string.IsNullOrWhiteSpace(pronouns))
             {
-
-                string subject = args.ContainsKey("pronounSubject") ? args["pronounSubject"]?.ToString() : "";
-                string objectP = args.ContainsKey("pronounObject") ? args["pronounObject"]?.ToString() : "";
-
-                if (!string.IsNullOrEmpty(subject) && !string.IsNullOrEmpty(objectP))
-                    pronouns = $"({subject}/{objectP})";
+                var parts = new List<string>();
+                if (!string.IsNullOrWhiteSpace(pronounSubject))
+                    parts.Add(pronounSubject);
+                if (!string.IsNullOrWhiteSpace(pronounObject))
+                    parts.Add(pronounObject);
+                if (!string.IsNullOrWhiteSpace(pronounPossessive))
+                    parts.Add(pronounPossessive);
+                if (!string.IsNullOrWhiteSpace(pronounReflexive))
+                    parts.Add(pronounReflexive);
+                if (!string.IsNullOrWhiteSpace(pronounPronoun))
+                    parts.Add(pronounPronoun);
+                if (parts.Count > 0)
+                    pronouns = $"({string.Join("/", parts)})";
             }
 
-            if (!string.IsNullOrEmpty(pronouns) && pronouns != profile.Pronouns)
+            LogToFile($"Final pronouns value after construction: '{pronouns}'", "DEBUG");
+
+            // Only update if pronouns are found and different from the stored value.
+            if (!string.IsNullOrWhiteSpace(pronouns) && !string.Equals(pronouns, profile.Pronouns, StringComparison.Ordinal))
             {
-                LogToFile("Condition !string.IsNullOrEmpty(pronouns) && pronouns != profile.Pronouns evaluated TRUE in GetOrCreateUserProfile()", "TRACE");
                 profile.Pronouns = pronouns;
                 userCollection.Update(profile);
-                LogToFile("Completed Update() successfully.", "TRACE");
-                LogToFile($"[UserProfile] Updated pronouns for {userName} to {pronouns}.", "DEBUG");
+                LogToFile($"[UserProfile] Updated pronouns for {userName} to '{pronouns}'.", "INFO");
+            }
+            else if (string.IsNullOrWhiteSpace(pronouns))
+            {
+                LogToFile("No pronoun data found in args or globals; no pronoun update performed.", "DEBUG");
             }
             else
             {
-                LogToFile("Condition !string.IsNullOrEmpty(pronouns) && pronouns != profile.Pronouns evaluated FALSE in GetOrCreateUserProfile()", "TRACE");
+                LogToFile("Pronouns found but unchanged; no update needed.", "DEBUG");
             }
+            // --- End Pronoun Synchronization Logic ---
 
-            LogToFile("<<< Exiting GetOrCreateUserProfile() with return value: profile", "TRACE");
+            LogToFile("<<< Exiting GetOrCreateUserProfile() with return value: profile", "DEBUG");
             return profile;
         }
         catch (Exception ex)
         {
             LogToFile($"[UserProfile] Error retrieving or creating user profile for {userName}: {ex.Message}", "ERROR");
-            LogToFile($"Exception stack trace: {ex.StackTrace}", "TRACE");
-            LogToFile("<<< Exiting GetOrCreateUserProfile() with return value: new UserProfile", "TRACE");
+            LogToFile($"Exception stack trace: {ex.StackTrace}", "DEBUG");
+            LogToFile("<<< Exiting GetOrCreateUserProfile() with return value: new UserProfile", "DEBUG");
             return new UserProfile
             {
                 UserName = userName,
@@ -304,22 +379,23 @@ public class CPHInline
             };
         }
     }
+
     private void QueueMessage(chatMessage chatMsg)
     {
-        LogToFile(">>> Entering QueueMessage()", "TRACE");
+        LogToFile(">>> Entering QueueMessage()", "DEBUG");
         LogToFile($"Entering QueueMessage with chatMsg: {chatMsg}", "DEBUG");
         try
         {
             LogToFile($"Enqueuing chat message: {chatMsg}", "INFO");
             ChatLog.Enqueue(chatMsg);
-            LogToFile("Variable ChatLog.Count = " + ChatLog.Count, "TRACE");
+            LogToFile("Variable ChatLog.Count = " + ChatLog.Count, "DEBUG");
 
             LogToFile($"ChatLog Count after enqueuing: {ChatLog.Count}", "DEBUG");
             int maxChatHistory = CPH.GetGlobalVar<int>("max_chat_history", true);
-            LogToFile("Completed GetGlobalVar() successfully.", "TRACE");
+            LogToFile("Completed GetGlobalVar() successfully.", "DEBUG");
             if (ChatLog.Count > maxChatHistory)
             {
-                LogToFile("Condition ChatLog.Count > maxChatHistory evaluated TRUE in QueueMessage()", "TRACE");
+                LogToFile("Condition ChatLog.Count > maxChatHistory evaluated TRUE in QueueMessage()", "DEBUG");
                 chatMessage dequeuedMessage = ChatLog.Peek();
                 LogToFile($"Dequeuing chat message to maintain queue size: {dequeuedMessage}", "DEBUG");
                 ChatLog.Dequeue();
@@ -327,19 +403,19 @@ public class CPHInline
             }
             else
             {
-                LogToFile("Condition ChatLog.Count > maxChatHistory evaluated FALSE in QueueMessage()", "TRACE");
+                LogToFile("Condition ChatLog.Count > maxChatHistory evaluated FALSE in QueueMessage()", "DEBUG");
             }
         }
         catch (Exception ex)
         {
             LogToFile($"An error occurred while enqueuing or dequeuing a chat message: {ex.Message}", "ERROR");
-            LogToFile($"Exception stack trace: {ex.StackTrace}", "TRACE");
+            LogToFile($"Exception stack trace: {ex.StackTrace}", "DEBUG");
         }
     }
 
     private void QueueGPTMessage(string userContent, string assistantContent)
     {
-        LogToFile(">>> Entering QueueGPTMessage()", "TRACE");
+        LogToFile(">>> Entering QueueGPTMessage()", "DEBUG");
         LogToFile("Entering QueueGPTMessage with paired messages.", "DEBUG");
 
         chatMessage userMessage = new chatMessage
@@ -347,34 +423,34 @@ public class CPHInline
             role = "user",
             content = userContent
         };
-        LogToFile($"Variable userMessage = {userMessage}", "TRACE");
+        LogToFile($"Variable userMessage = {userMessage}", "DEBUG");
         chatMessage assistantMessage = new chatMessage
         {
             role = "assistant",
             content = assistantContent
         };
-        LogToFile($"Variable assistantMessage = {assistantMessage}", "TRACE");
+        LogToFile($"Variable assistantMessage = {assistantMessage}", "DEBUG");
         try
         {
             GPTLog.Enqueue(userMessage);
             GPTLog.Enqueue(assistantMessage);
-            LogToFile("Variable GPTLog.Count = " + GPTLog.Count, "TRACE");
+            LogToFile("Variable GPTLog.Count = " + GPTLog.Count, "DEBUG");
 
             LogToFile($"Enqueuing user message: {userMessage}", "INFO");
             LogToFile($"Enqueuing assistant message: {assistantMessage}", "INFO");
 
             int maxPromptHistory = CPH.GetGlobalVar<int>("max_prompt_history", true);
-            LogToFile("Completed GetGlobalVar() successfully.", "TRACE");
+            LogToFile("Completed GetGlobalVar() successfully.", "DEBUG");
             if (GPTLog.Count > maxPromptHistory * 2)
             {
-                LogToFile("Condition GPTLog.Count > maxPromptHistory * 2 evaluated TRUE in QueueGPTMessage()", "TRACE");
+                LogToFile("Condition GPTLog.Count > maxPromptHistory * 2 evaluated TRUE in QueueGPTMessage()", "DEBUG");
                 LogToFile("GPTLog limit exceeded. Dequeuing the oldest pair of messages.", "DEBUG");
                 GPTLog.Dequeue();
                 GPTLog.Dequeue();
             }
             else
             {
-                LogToFile("Condition GPTLog.Count > maxPromptHistory * 2 evaluated FALSE in QueueGPTMessage()", "TRACE");
+                LogToFile("Condition GPTLog.Count > maxPromptHistory * 2 evaluated FALSE in QueueGPTMessage()", "DEBUG");
             }
 
             LogToFile($"GPTLog Count after enqueueing/dequeueing: {GPTLog.Count}", "DEBUG");
@@ -382,114 +458,7 @@ public class CPHInline
         catch (Exception ex)
         {
             LogToFile($"An error occurred while enqueuing GPT messages: {ex.Message}", "ERROR");
-            LogToFile($"Exception stack trace: {ex.StackTrace}", "TRACE");
-        }
-    }
-
-    public bool Execute()
-    {
-        LogToFile(">>> Entering Execute()", "TRACE");
-
-        LogToFile("Starting initialization of the PNGTuber-GPT application.", "INFO");
-
-        LogToFile("Initialization of PNGTuber-GPT successful. Added all global variables to memory.", "INFO");
-
-        LogToFile("Starting to retrieve the version number from a global variable.", "DEBUG");
-
-        string initializeVersionNumber = CPH.GetGlobalVar<string>("Version", true);
-        LogToFile("Completed GetGlobalVar() successfully.", "TRACE");
-
-        LogToFile($"Retrieved version number: {initializeVersionNumber}", "DEBUG");
-
-        if (string.IsNullOrWhiteSpace(initializeVersionNumber))
-        {
-
-            LogToFile("The 'Version' global variable is not found or is empty.", "ERROR");
-            LogToFile("Condition string.IsNullOrWhiteSpace(initializeVersionNumber) evaluated TRUE in Execute()", "TRACE");
-            LogToFile("<<< Exiting Execute() with return value: false", "TRACE");
-            return false;
-        }
-        else
-        {
-            LogToFile("Condition string.IsNullOrWhiteSpace(initializeVersionNumber) evaluated FALSE in Execute()", "TRACE");
-        }
-
-        LogToFile($"Sending version number to chat: {initializeVersionNumber}", "DEBUG");
-
-        CPH.SendMessage($"{initializeVersionNumber} has been initialized successfully.", true);
-        LogToFile("Completed SendMessage() successfully.", "TRACE");
-
-        LogToFile("Version number sent to chat successfully.", "INFO");
-
-        LogToFile("<<< Exiting Execute() with return value: true", "TRACE");
-        return true;
-    }
-
-    public bool GetUserProfileFromArgs()
-    {
-        LogToFile(">>> Entering GetUserProfileFromArgs()", "TRACE");
-        LogToFile("Entering GetUserProfileFromArgs method.", "DEBUG");
-        try
-        {
-            if (!args.ContainsKey("userName"))
-            {
-                LogToFile("Condition !args.ContainsKey(\"userName\") evaluated TRUE in GetUserProfileFromArgs()", "TRACE");
-                LogToFile("'userName' argument is missing.", "ERROR");
-                LogToFile("<<< Exiting GetUserProfileFromArgs() with return value: false", "TRACE");
-                return false;
-            }
-            else
-            {
-                LogToFile("Condition !args.ContainsKey(\"userName\") evaluated FALSE in GetUserProfileFromArgs()", "TRACE");
-            }
-
-            string userName = args["userName"]?.ToString();
-            LogToFile($"Variable userName = {userName}", "TRACE");
-            if (string.IsNullOrWhiteSpace(userName))
-            {
-                LogToFile("Condition string.IsNullOrWhiteSpace(userName) evaluated TRUE in GetUserProfileFromArgs()", "TRACE");
-                LogToFile("'userName' argument is invalid.", "ERROR");
-                LogToFile("<<< Exiting GetUserProfileFromArgs() with return value: false", "TRACE");
-                return false;
-            }
-            else
-            {
-                LogToFile("Condition string.IsNullOrWhiteSpace(userName) evaluated FALSE in GetUserProfileFromArgs()", "TRACE");
-            }
-
-            var profile = GetOrCreateUserProfile(userName, args);
-            LogToFile("Completed GetOrCreateUserProfile() successfully.", "TRACE");
-            if (profile == null)
-            {
-                LogToFile("Condition profile == null evaluated TRUE in GetUserProfileFromArgs()", "TRACE");
-                LogToFile($"Failed to retrieve or create profile for {userName}.", "ERROR");
-                LogToFile("<<< Exiting GetUserProfileFromArgs() with return value: false", "TRACE");
-                return false;
-            }
-            else
-            {
-                LogToFile("Condition profile == null evaluated FALSE in GetUserProfileFromArgs()", "TRACE");
-            }
-
-            string formattedName = string.IsNullOrEmpty(profile.Pronouns)
-                ? profile.PreferredName
-                : $"{profile.PreferredName} {profile.Pronouns}";
-            LogToFile($"Variable formattedName = {formattedName}", "TRACE");
-
-            CPH.SetArgument("nicknamePronouns", formattedName);
-            LogToFile("Completed SetArgument() successfully.", "TRACE");
-            CPH.SetArgument("Pronouns", profile.Pronouns);
-            LogToFile("Completed SetArgument() successfully.", "TRACE");
-            LogToFile($"Set nicknamePronouns='{formattedName}', Pronouns='{profile.Pronouns}'", "DEBUG");
-            LogToFile("<<< Exiting GetUserProfileFromArgs() with return value: true", "TRACE");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            LogToFile($"An error occurred in GetUserProfileFromArgs: {ex.Message}", "ERROR");
-            LogToFile($"Exception stack trace: {ex.StackTrace}", "TRACE");
-            LogToFile("<<< Exiting GetUserProfileFromArgs() with return value: false", "TRACE");
-            return false;
+            LogToFile($"Exception stack trace: {ex.StackTrace}", "DEBUG");
         }
     }
 
@@ -498,12 +467,27 @@ public class CPHInline
         LogToFile("Entering UpdateUserPreferredName method.", "DEBUG");
         try
         {
-            string userName = args["userName"]?.ToString();
-            string preferredName = args["rawInput"]?.ToString();
-            if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(preferredName))
+            // Use CPH.TryGetArg to safely retrieve arguments
+            if (!CPH.TryGetArg("userName", out string userName) || string.IsNullOrWhiteSpace(userName))
             {
-                LogToFile("userName or rawInput missing.", "ERROR");
+                LogToFile("Failed to retrieve 'userName' argument via TryGetArg in UpdateUserPreferredName.", "DEBUG");
+                LogToFile("userName missing.", "ERROR");
                 return false;
+            }
+            else
+            {
+                LogToFile($"Successfully retrieved 'userName' argument via TryGetArg in UpdateUserPreferredName: {userName}", "DEBUG");
+            }
+
+            if (!CPH.TryGetArg("rawInput", out string preferredName) || string.IsNullOrWhiteSpace(preferredName))
+            {
+                LogToFile("Failed to retrieve 'rawInput' argument via TryGetArg in UpdateUserPreferredName.", "DEBUG");
+                LogToFile("preferredName missing.", "ERROR");
+                return false;
+            }
+            else
+            {
+                LogToFile($"Successfully retrieved 'rawInput' argument via TryGetArg in UpdateUserPreferredName: {preferredName}", "DEBUG");
             }
 
             var userCollection = _db.GetCollection<UserProfile>("user_profiles");
@@ -537,11 +521,16 @@ public class CPHInline
         LogToFile("Entering DeleteUserProfile method.", "DEBUG");
         try
         {
-            string userName = args["userName"]?.ToString();
-            if (string.IsNullOrWhiteSpace(userName))
+            // Use CPH.TryGetArg to safely retrieve userName argument
+            if (!CPH.TryGetArg("userName", out string userName))
             {
+                LogToFile("Failed to retrieve 'userName' argument via TryGetArg in DeleteUserProfile.", "DEBUG");
                 LogToFile("userName missing.", "ERROR");
                 return false;
+            }
+            else
+            {
+                LogToFile($"Successfully retrieved 'userName' argument via TryGetArg in DeleteUserProfile: {userName}", "DEBUG");
             }
 
             var userCollection = _db.GetCollection<UserProfile>("user_profiles");
@@ -573,25 +562,25 @@ public class CPHInline
         LogToFile("Entering ShowCurrentUserProfile method.", "DEBUG");
         try
         {
-            string userName = args["userName"]?.ToString();
-            if (string.IsNullOrWhiteSpace(userName))
+            if (!CPH.TryGetArg("userName", out string userName) || string.IsNullOrWhiteSpace(userName))
             {
+                LogToFile("Failed to retrieve 'userName' argument via TryGetArg in ShowCurrentUserProfile.", "DEBUG");
                 LogToFile("userName argument missing.", "ERROR");
                 return false;
+            }
+            else
+            {
+                LogToFile($"Successfully retrieved 'userName' argument via TryGetArg in ShowCurrentUserProfile: {userName}", "DEBUG");
             }
 
             var userCollection = _db.GetCollection<UserProfile>("user_profiles");
             var profile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
-            if (profile == null)
-            {
-                CPH.SendMessage($"{userName}, I don't have a nickname or pronouns stored for you.", true);
-                LogToFile($"Profile not found for {userName}.", "INFO");
-                return true;
-            }
 
-            string message = string.IsNullOrEmpty(profile.Pronouns)
-                ? $"{userName}, your nickname is {profile.PreferredName}."
-                : $"{userName}, your nickname is {profile.PreferredName} and your pronouns are {profile.Pronouns}.";
+            // PreferredName fallback is already enforced by GetOrCreateUserProfile
+            string displayName = profile.PreferredName;
+            string message = string.IsNullOrWhiteSpace(profile?.Pronouns)
+                ? $"Your current username is set to {displayName}"
+                : $"Your current username is set to {displayName} ({profile.Pronouns})";
 
             CPH.SendMessage(message, true);
             LogToFile($"Displayed profile for {userName}: {message}", "INFO");
@@ -609,12 +598,16 @@ public class CPHInline
         LogToFile("Entering ForgetThis method (LiteDB).", "DEBUG");
         try
         {
-            string keywordToRemove = args["rawInput"]?.ToString();
-            if (string.IsNullOrWhiteSpace(keywordToRemove))
+            // Use CPH.TryGetArg to retrieve 'rawInput'
+            if (!CPH.TryGetArg("rawInput", out string keywordToRemove) || string.IsNullOrWhiteSpace(keywordToRemove))
             {
-                LogToFile("No keyword provided to remove.", "ERROR");
+                LogToFile("Failed to retrieve 'rawInput' argument via TryGetArg in ForgetThis.", "DEBUG");
                 CPH.SendMessage("You need to tell me what to forget.", true);
                 return false;
+            }
+            else
+            {
+                LogToFile($"Successfully retrieved 'rawInput' argument via TryGetArg in ForgetThis: {keywordToRemove}", "DEBUG");
             }
 
             var keywordsCol = _db.GetCollection<BsonDocument>("Keywords");
@@ -648,11 +641,16 @@ public class CPHInline
         LogToFile("Entering ForgetThisAboutMe method.", "DEBUG");
         try
         {
-            string userName = args["userName"]?.ToString();
-            if (string.IsNullOrWhiteSpace(userName))
+            // Use CPH.TryGetArg to retrieve 'userName'
+            if (!CPH.TryGetArg("userName", out string userName) || string.IsNullOrWhiteSpace(userName))
             {
+                LogToFile("Failed to retrieve 'userName' argument via TryGetArg in ForgetThisAboutMe.", "DEBUG");
                 LogToFile("userName missing.", "ERROR");
                 return false;
+            }
+            else
+            {
+                LogToFile($"Successfully retrieved 'userName' argument via TryGetArg in ForgetThisAboutMe: {userName}", "DEBUG");
             }
 
             var userCollection = _db.GetCollection<UserProfile>("user_profiles");
@@ -720,23 +718,29 @@ public class CPHInline
     {
         LogToFile("Entering SaveMessage method.", "DEBUG");
 
-        string msg = args["rawInput"]?.ToString();
-        string userName = args["userName"]?.ToString();
+        // Use TryGetArg for all argument retrievals
+        if (!CPH.TryGetArg("rawInput", out string msg) || string.IsNullOrWhiteSpace(msg))
+        {
+            LogToFile("Failed to retrieve 'rawInput' argument via TryGetArg in SaveMessage.", "DEBUG");
+            return false;
+        }
+
+        if (!CPH.TryGetArg("userName", out string userName) || string.IsNullOrWhiteSpace(userName))
+        {
+            LogToFile("Failed to retrieve 'userName' argument via TryGetArg in SaveMessage.", "DEBUG");
+            return false;
+        }
+        LogToFile($"Successfully retrieved arguments: userName={userName}, rawInput={msg}", "DEBUG");
+
+        // Retrieve user profile for display name construction
+        var profile = GetOrCreateUserProfile(userName);
+        string displayName = profile.PreferredName;
+        if (!string.IsNullOrWhiteSpace(profile.Pronouns))
+            displayName += $" {profile.Pronouns}";
+
+        LogToFile($"Computed displayName: {displayName}", "DEBUG");
+
         string ignoreNamesString = CPH.GetGlobalVar<string>("Ignore Bot Usernames", true);
-
-        if (string.IsNullOrWhiteSpace(msg) || string.IsNullOrWhiteSpace(userName))
-        {
-            LogToFile($"'rawInput' or 'userName' value is not found or not a valid string. rawInput: {msg}, userName: {userName}", "ERROR");
-            return false;
-        }
-
-        LogToFile($"Retrieved message: {msg}, from user: {userName}", "INFO");
-
-        if (msg.StartsWith("!"))
-        {
-            LogToFile("Message is a command and will be ignored.", "INFO");
-            return false;
-        }
 
         if (string.IsNullOrWhiteSpace(ignoreNamesString))
         {
@@ -753,17 +757,13 @@ public class CPHInline
             return false;
         }
 
-        string nicknamePronouns = args.ContainsKey("nicknamePronouns") && !string.IsNullOrWhiteSpace(args["nicknamePronouns"].ToString()) ? args["nicknamePronouns"].ToString() : userName;
-
-        LogToFile($"Retrieved formatted nickname with pronouns: {nicknamePronouns}", "DEBUG");
-
         if (ChatLog == null)
         {
             ChatLog = new Queue<chatMessage>();
             LogToFile("ChatLog queue has been initialized.", "DEBUG");
         }
 
-        string messageContent = $"{nicknamePronouns} says: {msg}";
+        string messageContent = $"{displayName} says: {msg}";
         LogToFile($"Preparing to queue message: {messageContent}", "DEBUG");
 
         chatMessage chatMsg = new chatMessage
@@ -815,8 +815,8 @@ public class CPHInline
         bool moderationEnabled = CPH.GetGlobalVar<bool>("moderation_enabled", true);
         bool moderationRebukeEnabled = CPH.GetGlobalVar<bool>("moderation_rebuke_enabled", true);
 
-        string input = args["rawInput"]?.ToString();
-        if (string.IsNullOrWhiteSpace(input))
+        // Use CPH.TryGetArg for safe argument retrieval
+        if (!CPH.TryGetArg("rawInput", out string input) || string.IsNullOrWhiteSpace(input))
         {
             LogToFile("'rawInput' value is either not found or not a valid string.", "ERROR");
             return false;
@@ -825,7 +825,7 @@ public class CPHInline
         if (!moderationEnabled)
         {
             LogToFile("Moderation is globally disabled by settings.", "INFO");
-            CPH.SetArgument("moderatedMessage", args["rawInput"]?.ToString());
+            CPH.SetArgument("moderatedMessage", input);
             return true;
         }
 
@@ -1019,7 +1019,6 @@ public class CPHInline
 
         try
         {
-
             int characterNumber = 1;
             try
             {
@@ -1040,12 +1039,13 @@ public class CPHInline
                 return false;
             }
 
-            string messageToSpeak =
-                args.ContainsKey("moderatedMessage") && !string.IsNullOrWhiteSpace(args["moderatedMessage"]?.ToString())
-                    ? args["moderatedMessage"].ToString()
-                    : args.ContainsKey("rawInput") && !string.IsNullOrWhiteSpace(args["rawInput"]?.ToString())
-                        ? args["rawInput"].ToString()
-                        : "";
+            string messageToSpeak = null;
+            if (CPH.TryGetArg("moderatedMessage", out string moderatedMessage) && !string.IsNullOrWhiteSpace(moderatedMessage))
+                messageToSpeak = moderatedMessage;
+            else if (CPH.TryGetArg("rawInput", out string rawInput) && !string.IsNullOrWhiteSpace(rawInput))
+                messageToSpeak = rawInput;
+            else
+                messageToSpeak = "";
 
             if (string.IsNullOrWhiteSpace(messageToSpeak))
             {
@@ -1054,25 +1054,15 @@ public class CPHInline
                 return false;
             }
 
-            string userName = args.ContainsKey("userName") ? args["userName"]?.ToString() : null;
-            if (string.IsNullOrWhiteSpace(userName))
+            if (!CPH.TryGetArg("userName", out string userName) || string.IsNullOrWhiteSpace(userName))
             {
                 LogToFile("'userName' argument is missing or empty in Speak().", "ERROR");
                 return false;
             }
-            var profile = GetOrCreateUserProfile(userName, args);
+            var profile = GetOrCreateUserProfile(userName);
 
-            string formattedUser;
-            if (!string.IsNullOrWhiteSpace(profile.PreferredName))
-            {
-                formattedUser = profile.PreferredName;
-                LogToFile($"Speak(): Using PreferredName '{formattedUser}' for user '{userName}'.", "DEBUG");
-            }
-            else
-            {
-                formattedUser = profile.UserName;
-                LogToFile($"Speak(): PreferredName is empty, falling back to UserName '{formattedUser}'.", "DEBUG");
-            }
+            string formattedUser = profile.PreferredName;
+            LogToFile($"Speak(): Using PreferredName '{formattedUser}' for user '{userName}'.", "DEBUG");
 
             string outputMessage = $"{formattedUser} said: {messageToSpeak}";
             LogToFile($"Character {characterNumber} ({voiceAlias}) speaking message: {outputMessage}", "INFO");
@@ -1099,31 +1089,54 @@ public class CPHInline
     public bool RememberThis()
     {
         LogToFile("Entering RememberThis method.", "DEBUG");
-
-        string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
-        string userName = args.ContainsKey("userName") ? args["userName"].ToString() : "";
-        string nicknamePronouns = args.ContainsKey("nicknamePronouns") ? args["nicknamePronouns"].ToString() : "";
-        string userToConfirm = !string.IsNullOrWhiteSpace(nicknamePronouns) ? nicknamePronouns : userName;
-        string fullMessage = args.ContainsKey("moderatedMessage") && !string.IsNullOrWhiteSpace(args["moderatedMessage"]?.ToString())
-            ? args["moderatedMessage"].ToString()
-            : args.ContainsKey("rawInput") && !string.IsNullOrWhiteSpace(args["rawInput"]?.ToString())
-                ? args["rawInput"].ToString()
-                : "";
-
-        if (string.IsNullOrWhiteSpace(voiceAlias) || string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(fullMessage))
-        {
-            string missingParameter = string.IsNullOrWhiteSpace(voiceAlias) ? "Voice Alias" : string.IsNullOrWhiteSpace(userName) ? "userName" : "message";
-            LogToFile($"'{missingParameter}' value is not found or not a valid string.", "ERROR");
-            CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
-            return false;
-        }
-
         try
         {
+            if (!CPH.TryGetArg("userName", out string userName) || string.IsNullOrWhiteSpace(userName))
+            {
+                LogToFile("Failed to retrieve 'userName' argument via TryGetArg in RememberThis.", "ERROR");
+                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
+                return false;
+            }
+            else
+            {
+                LogToFile($"Successfully retrieved 'userName' argument via TryGetArg in RememberThis: {userName}", "DEBUG");
+            }
+
+            string fullMessage = null;
+            if (CPH.TryGetArg("moderatedMessage", out string moderatedMessage) && !string.IsNullOrWhiteSpace(moderatedMessage))
+            {
+                fullMessage = moderatedMessage;
+                LogToFile("Retrieved 'moderatedMessage' via TryGetArg in RememberThis.", "DEBUG");
+            }
+            else if (CPH.TryGetArg("rawInput", out string rawInput) && !string.IsNullOrWhiteSpace(rawInput))
+            {
+                fullMessage = rawInput;
+                LogToFile("Retrieved 'rawInput' via TryGetArg in RememberThis.", "DEBUG");
+            }
+
+            if (string.IsNullOrWhiteSpace(fullMessage))
+            {
+                LogToFile("Failed to retrieve valid message content via TryGetArg in RememberThis.", "ERROR");
+                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
+                return false;
+            }
+
+            string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
+            if (string.IsNullOrWhiteSpace(voiceAlias))
+            {
+                LogToFile("'Voice Alias' is not set or invalid.", "ERROR");
+                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
+                return false;
+            }
+            else
+            {
+                LogToFile($"Successfully retrieved 'Voice Alias' global variable in RememberThis: {voiceAlias}", "DEBUG");
+            }
+
             var parts = fullMessage.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length < 2)
             {
-                LogToFile("The message does not contain enough parts to extract a keyword and a definition.", "ERROR");
+                LogToFile("Message does not contain enough parts for keyword and definition.", "ERROR");
                 CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
                 return false;
             }
@@ -1132,13 +1145,8 @@ public class CPHInline
             string definition = string.Join(" ", parts.Skip(1));
 
             var keywordsCol = _db.GetCollection<BsonDocument>("Keywords");
-
-            var existing = keywordsCol.FindOne(Query.EQ("Keyword", keyword));
-            if (existing == null)
-            {
-
-                existing = keywordsCol.FindAll().FirstOrDefault(doc => string.Equals(doc["Keyword"]?.AsString, keyword, StringComparison.OrdinalIgnoreCase));
-            }
+            var existing = keywordsCol.FindOne(Query.EQ("Keyword", keyword)) ??
+                           keywordsCol.FindAll().FirstOrDefault(doc => string.Equals(doc["Keyword"]?.AsString, keyword, StringComparison.OrdinalIgnoreCase));
 
             if (existing != null)
             {
@@ -1157,7 +1165,7 @@ public class CPHInline
                 LogToFile($"Inserted new keyword '{keyword}' with definition in LiteDB.", "INFO");
             }
 
-            string outputMessage = $"OK, {userToConfirm}, I will remember '{definition}' for '{keyword}'.";
+            string outputMessage = $"OK, {userName}, I will remember '{definition}' for '{keyword}'.";
             CPH.SendMessage(outputMessage, true);
             LogToFile($"Confirmation message sent to user: {outputMessage}", "INFO");
             return true;
@@ -1173,26 +1181,39 @@ public class CPHInline
     public bool RememberThisAboutMe()
     {
         LogToFile("Entering RememberThisAboutMe method.", "DEBUG");
-
-        string userName = args.ContainsKey("userName") ? args["userName"].ToString() : "";
-        string messageToRemember = args.ContainsKey("moderatedMessage") && !string.IsNullOrWhiteSpace(args["moderatedMessage"]?.ToString())
-            ? args["moderatedMessage"].ToString()
-            : args.ContainsKey("rawInput") && !string.IsNullOrWhiteSpace(args["rawInput"]?.ToString())
-                ? args["rawInput"].ToString()
-                : "";
-
-        if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(messageToRemember))
-        {
-            string missingParameter = string.IsNullOrWhiteSpace(userName) ? "userName" : "messageToRemember";
-            LogToFile($"'{missingParameter}' value is not found or not a valid string.", "ERROR");
-            CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
-            return false;
-        }
-
         try
         {
+            if (!CPH.TryGetArg("userName", out string userName) || string.IsNullOrWhiteSpace(userName))
+            {
+                LogToFile("Failed to retrieve 'userName' argument via TryGetArg in RememberThisAboutMe.", "ERROR");
+                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
+                return false;
+            }
+            else
+            {
+                LogToFile($"Successfully retrieved 'userName' argument via TryGetArg in RememberThisAboutMe: {userName}", "DEBUG");
+            }
 
-            var profile = GetOrCreateUserProfile(userName, args);
+            string messageToRemember = null;
+            if (CPH.TryGetArg("moderatedMessage", out string moderatedMessage) && !string.IsNullOrWhiteSpace(moderatedMessage))
+            {
+                messageToRemember = moderatedMessage;
+                LogToFile("Retrieved 'moderatedMessage' via TryGetArg in RememberThisAboutMe.", "DEBUG");
+            }
+            else if (CPH.TryGetArg("rawInput", out string rawInput) && !string.IsNullOrWhiteSpace(rawInput))
+            {
+                messageToRemember = rawInput;
+                LogToFile("Retrieved 'rawInput' via TryGetArg in RememberThisAboutMe.", "DEBUG");
+            }
+
+            if (string.IsNullOrWhiteSpace(messageToRemember))
+            {
+                LogToFile("Failed to retrieve valid message content via TryGetArg in RememberThisAboutMe.", "ERROR");
+                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
+                return false;
+            }
+
+            var profile = GetOrCreateUserProfile(userName);
             if (profile == null)
             {
                 LogToFile($"Failed to retrieve or create profile for {userName}.", "ERROR");
@@ -1202,6 +1223,7 @@ public class CPHInline
 
             if (profile.Knowledge == null)
                 profile.Knowledge = new List<string>();
+
             if (!profile.Knowledge.Contains(messageToRemember))
             {
                 profile.Knowledge.Add(messageToRemember);
@@ -1295,13 +1317,13 @@ public class CPHInline
             LogToFile($"ChatLog Content before asking GPT: {Environment.NewLine}{chatLogAsString}", "INFO");
         }
 
-        if (!args.TryGetValue("userName", out object userNameObj) || string.IsNullOrWhiteSpace(userNameObj?.ToString()))
+        // Replace args.TryGetValue("userName", ...) with CPH.TryGetArg("userName", ...)
+        if (!CPH.TryGetArg("userName", out string userName) || string.IsNullOrWhiteSpace(userName))
         {
             LogToFile("'userName' argument is not found or not a valid string.", "ERROR");
             CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
             return false;
         }
-        string userName = userNameObj.ToString();
         LogToFile("Retrieved and validated 'userName' argument.", "DEBUG");
 
         string pronounSubject = CPH.GetGlobalVar<string>("pronounSubject", false);
@@ -1320,14 +1342,13 @@ public class CPHInline
         string userToSpeak = userName;
         if (!string.IsNullOrWhiteSpace(pronounDescription))
             userToSpeak = $"{userName} {pronounDescription}";
-        else if (args.TryGetValue("nicknamePronouns", out object nicknameObj) && !string.IsNullOrWhiteSpace(nicknameObj?.ToString()))
-            userToSpeak = nicknameObj.ToString();
 
-        string fullMessage = "";
-        if (args.TryGetValue("moderatedMessage", out object moderatedMessageObj) && !string.IsNullOrWhiteSpace(moderatedMessageObj?.ToString()))
-            fullMessage = moderatedMessageObj.ToString();
-        else if (args.TryGetValue("rawInput", out object rawInputObj) && !string.IsNullOrWhiteSpace(rawInputObj?.ToString()))
-            fullMessage = rawInputObj.ToString();
+        // Replace args retrieval for moderatedMessage/rawInput with CPH.TryGetArg
+        string fullMessage = null;
+        if (CPH.TryGetArg("moderatedMessage", out string moderatedMessage) && !string.IsNullOrWhiteSpace(moderatedMessage))
+            fullMessage = moderatedMessage;
+        else if (CPH.TryGetArg("rawInput", out string rawInput) && !string.IsNullOrWhiteSpace(rawInput))
+            fullMessage = rawInput;
         else
         {
             LogToFile("Both 'moderatedMessage' and 'rawInput' are not found or are empty strings.", "ERROR");
@@ -1361,10 +1382,8 @@ public class CPHInline
         var keywordsCol = _db.GetCollection<BsonDocument>("Keywords");
 
         List<string> mentionedUsers = new List<string>();
-
         if (!mentionedUsers.Contains(userName, StringComparer.OrdinalIgnoreCase))
             mentionedUsers.Add(userName);
-
         if (!string.IsNullOrWhiteSpace(broadcaster))
         {
             if (fullMessage.IndexOf(broadcaster, StringComparison.OrdinalIgnoreCase) >= 0 ||
@@ -1374,7 +1393,6 @@ public class CPHInline
                     mentionedUsers.Add(broadcaster);
             }
         }
-
         var mentionMatches = System.Text.RegularExpressions.Regex.Matches(fullMessage, @"@(\w+)");
         foreach (System.Text.RegularExpressions.Match match in mentionMatches)
         {
@@ -1383,24 +1401,47 @@ public class CPHInline
                 mentionedUsers.Add(muser);
         }
 
+        // Add system context for pronouns of all participants
+        var pronounContextEntries = new List<string>();
+
+        var askerProfile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
+        if (askerProfile != null && !string.IsNullOrWhiteSpace(askerProfile.Pronouns))
+            pronounContextEntries.Add($"{askerProfile.PreferredName} uses pronouns {askerProfile.Pronouns}.");
+
+        var broadcasterProfile = userCollection.FindOne(x => x.UserName.Equals(broadcaster, StringComparison.OrdinalIgnoreCase));
+        if (broadcasterProfile != null && !string.IsNullOrWhiteSpace(broadcasterProfile.Pronouns))
+            pronounContextEntries.Add($"{broadcasterProfile.PreferredName} uses pronouns {broadcasterProfile.Pronouns}.");
+
+        foreach (var uname in mentionedUsers.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var mentionedProfile = userCollection.FindOne(x => x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
+            if (mentionedProfile != null && !string.IsNullOrWhiteSpace(mentionedProfile.Pronouns))
+                pronounContextEntries.Add($"{mentionedProfile.PreferredName} uses pronouns {mentionedProfile.Pronouns}.");
+        }
+
         var enrichmentSections = new List<string>();
+        if (pronounContextEntries.Count > 0)
+        {
+            string pronounContext = "Known pronouns for participants: " + string.Join(" ", pronounContextEntries);
+            enrichmentSections.Add(pronounContext);
+            LogToFile($"Added pronoun context system message: {pronounContext}", "DEBUG");
+        }
         enrichmentSections.Add($"{context}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}");
 
         foreach (string uname in mentionedUsers.Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            var prof = userCollection.FindOne(x => x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
-            if (prof != null)
+            var mentionedProfile = userCollection.FindOne(x => x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
+            if (mentionedProfile != null)
             {
-                string preferred = string.IsNullOrWhiteSpace(prof.PreferredName) ? prof.UserName : prof.PreferredName;
+                string preferred = mentionedProfile.PreferredName;
                 string pronouns = "";
-
                 if (uname.Equals(userName, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(pronounDescription))
                     pronouns = $" (pronouns: {pronounDescription})";
-                else if (!string.IsNullOrWhiteSpace(prof.Pronouns))
-                    pronouns = $" (pronouns: {prof.Pronouns})";
+                else if (!string.IsNullOrWhiteSpace(mentionedProfile.Pronouns))
+                    pronouns = $" (pronouns: {mentionedProfile.Pronouns})";
                 enrichmentSections.Add($"User: {preferred}{pronouns}");
-                if (prof.Knowledge != null && prof.Knowledge.Count > 0)
-                    enrichmentSections.Add($"Memories about {preferred}: {string.Join("; ", prof.Knowledge)}");
+                if (mentionedProfile.Knowledge != null && mentionedProfile.Knowledge.Count > 0)
+                    enrichmentSections.Add($"Memories about {preferred}: {string.Join("; ", mentionedProfile.Knowledge)}");
             }
         }
 
@@ -1610,11 +1651,19 @@ public class CPHInline
     {
         LogToFile("Entering AskGPTWebhook (LiteDB context enrichment, outbound webhook, pronoun support, TTS/chat/discord parity).", "DEBUG");
 
-        string fullMessage = args.ContainsKey("moderatedMessage") && !string.IsNullOrWhiteSpace(args["moderatedMessage"]?.ToString())
-            ? args["moderatedMessage"].ToString()
-            : args.ContainsKey("rawInput") && !string.IsNullOrWhiteSpace(args["rawInput"]?.ToString())
-                ? args["rawInput"].ToString()
-                : null;
+        // Safely retrieve message content via CPH.TryGetArg
+        string fullMessage = null;
+        if (CPH.TryGetArg("moderatedMessage", out string moderatedMessage) && !string.IsNullOrWhiteSpace(moderatedMessage))
+        {
+            fullMessage = moderatedMessage;
+            LogToFile("Retrieved 'moderatedMessage' via TryGetArg in AskGPTWebhook.", "DEBUG");
+        }
+        else if (CPH.TryGetArg("rawInput", out string rawInput) && !string.IsNullOrWhiteSpace(rawInput))
+        {
+            fullMessage = rawInput;
+            LogToFile("Retrieved 'rawInput' via TryGetArg in AskGPTWebhook.", "DEBUG");
+        }
+
         if (string.IsNullOrWhiteSpace(fullMessage))
         {
             LogToFile("Both 'moderatedMessage' and 'rawInput' are missing or empty.", "ERROR");
@@ -1679,9 +1728,7 @@ public class CPHInline
         }
 
         string userToSpeak = "User";
-        if (args.TryGetValue("nicknamePronouns", out object nicknameObj) && !string.IsNullOrWhiteSpace(nicknameObj?.ToString()))
-            userToSpeak = nicknameObj.ToString();
-        else if (!string.IsNullOrWhiteSpace(pronounDescription))
+        if (!string.IsNullOrWhiteSpace(pronounDescription))
             userToSpeak = $"User {pronounDescription}";
 
         List<string> mentionedUsers = new List<string>();
@@ -1704,21 +1751,38 @@ public class CPHInline
                 mentionedUsers.Add(muser);
         }
 
+        // Add system context for pronouns of broadcaster and mentioned users
+        var pronounContextEntries = new List<string>();
+        var broadcasterProfile = userCollection.FindOne(x => x.UserName.Equals(broadcaster, StringComparison.OrdinalIgnoreCase));
+        if (broadcasterProfile != null && !string.IsNullOrWhiteSpace(broadcasterProfile.Pronouns))
+            pronounContextEntries.Add($"{broadcasterProfile.PreferredName} uses pronouns {broadcasterProfile.Pronouns}.");
+        foreach (var uname in mentionedUsers.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var mentionedProfile = userCollection.FindOne(x => x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
+            if (mentionedProfile != null && !string.IsNullOrWhiteSpace(mentionedProfile.Pronouns))
+                pronounContextEntries.Add($"{mentionedProfile.PreferredName} uses pronouns {mentionedProfile.Pronouns}.");
+        }
         var enrichmentSections = new List<string>();
+        if (pronounContextEntries.Count > 0)
+        {
+            string pronounContext = "Known pronouns for participants: " + string.Join(" ", pronounContextEntries);
+            enrichmentSections.Add(pronounContext);
+            LogToFile($"Added pronoun context system message: {pronounContext}", "DEBUG");
+        }
         enrichmentSections.Add($"{context}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}");
 
         foreach (string uname in mentionedUsers.Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            var prof = userCollection.FindOne(x => x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
-            if (prof != null)
+            var mentionedProfile = userCollection.FindOne(x => x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
+            if (mentionedProfile != null)
             {
-                string preferred = string.IsNullOrWhiteSpace(prof.PreferredName) ? prof.UserName : prof.PreferredName;
+                string preferred = mentionedProfile.PreferredName;
                 string pronouns = "";
-                if (!string.IsNullOrWhiteSpace(prof.Pronouns))
-                    pronouns = $" (pronouns: {prof.Pronouns})";
+                if (!string.IsNullOrWhiteSpace(mentionedProfile.Pronouns))
+                    pronouns = $" (pronouns: {mentionedProfile.Pronouns})";
                 enrichmentSections.Add($"User: {preferred}{pronouns}");
-                if (prof.Knowledge != null && prof.Knowledge.Count > 0)
-                    enrichmentSections.Add($"Memories about {preferred}: {string.Join("; ", prof.Knowledge)}");
+                if (mentionedProfile.Knowledge != null && mentionedProfile.Knowledge.Count > 0)
+                    enrichmentSections.Add($"Memories about {preferred}: {string.Join("; ", mentionedProfile.Knowledge)}");
             }
         }
 
