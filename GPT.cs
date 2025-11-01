@@ -594,7 +594,7 @@ public class CPHInline
     {
         try
         {
-            string userName = CPH.GetGlobalVar<string>("userName", true);
+            string userName = CPH.GetGlobalVar<string>("userName", false);
             if (string.IsNullOrWhiteSpace(userName))
             {
                 LogToFile("GetMemory called with no valid username.", "WARN");
