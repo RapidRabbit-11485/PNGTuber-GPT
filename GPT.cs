@@ -263,8 +263,8 @@ public class CPHInline
             ChatLog.Enqueue(chatMsg);
 
             LogToFile($"ChatLog Count after enqueuing: {ChatLog.Count}", "DEBUG");
-            var appSettings = ReadSettings();
-            if (ChatLog.Count > appSettings.max_chat_history)
+            int maxChatHistory = CPH.GetGlobalVar<int>("max_chat_history", true);
+            if (ChatLog.Count > maxChatHistory)
             {
                 chatMessage dequeuedMessage = ChatLog.Peek();
                 LogToFile($"Dequeuing chat message to maintain queue size: {dequeuedMessage}", "DEBUG");
@@ -300,8 +300,8 @@ public class CPHInline
             LogToFile($"Enqueuing user message: {userMessage}", "INFO");
             LogToFile($"Enqueuing assistant message: {assistantMessage}", "INFO");
 
-            var appSettings = ReadSettings();
-            if (GPTLog.Count > appSettings.max_prompt_history * 2)
+            int maxPromptHistory = CPH.GetGlobalVar<int>("max_prompt_history", true);
+            if (GPTLog.Count > maxPromptHistory * 2)
             {
                 LogToFile("GPTLog limit exceeded. Dequeuing the oldest pair of messages.", "DEBUG");
                 GPTLog.Dequeue();
@@ -708,7 +708,8 @@ public class CPHInline
     {
         LogToFile("Entering PerformModeration method.", "DEBUG");
 
-        var appSettings = ReadSettings();
+        bool moderationEnabled = CPH.GetGlobalVar<bool>("moderation_enabled", true);
+        bool moderationRebukeEnabled = CPH.GetGlobalVar<bool>("moderation_rebuke_enabled", true);
 
         string input = args["rawInput"]?.ToString();
         if (string.IsNullOrWhiteSpace(input))
@@ -717,7 +718,7 @@ public class CPHInline
             return false;
         }
 
-        if (!appSettings.moderation_enabled)
+        if (!moderationEnabled)
         {
             LogToFile("Moderation is globally disabled by settings.", "INFO");
             CPH.SetArgument("moderatedMessage", args["rawInput"]?.ToString());
@@ -780,7 +781,7 @@ public class CPHInline
             else
                 LogToFile("Flagged Categories: None", "INFO");
 
-            bool passed = !flaggedCategories.Any() || HandleModerationResponse(flaggedCategories, input, appSettings.moderation_rebuke_enabled);
+            bool passed = !flaggedCategories.Any() || HandleModerationResponse(flaggedCategories, input, moderationRebukeEnabled);
             LogToFile($"Moderation result: {(passed ? "Passed" : "Failed")}", "INFO");
             return passed;
         }
@@ -1329,6 +1330,8 @@ public class CPHInline
         {
 
             var appSettings = ReadSettings();
+            int maxChatHistory = CPH.GetGlobalVar<int>("max_chat_history", true);
+            int maxPromptHistory = CPH.GetGlobalVar<int>("max_prompt_history", true);
             string completionsRequestJSON = null;
             string completionsResponseContent = null;
             string GPTResponse = null;
@@ -1354,8 +1357,7 @@ public class CPHInline
                 messages.Add(new chatMessage { role = "assistant", content = "OK" });
                 if (ChatLog != null)
                 {
-
-                    foreach (var chatMessage in ChatLog.Reverse().Take(appSettings.max_chat_history).Reverse())
+                    foreach (var chatMessage in ChatLog.Reverse().Take(maxChatHistory).Reverse())
                     {
                         messages.Add(chatMessage);
                         messages.Add(new chatMessage { role = "assistant", content = "OK" });
@@ -1365,8 +1367,7 @@ public class CPHInline
                 messages.Add(new chatMessage { role = "assistant", content = "OK" });
                 if (GPTLog != null)
                 {
-
-                    foreach (var gptMessage in GPTLog.Reverse().Take(appSettings.max_prompt_history).Reverse())
+                    foreach (var gptMessage in GPTLog.Reverse().Take(maxPromptHistory).Reverse())
                     {
                         messages.Add(gptMessage);
                     }
@@ -1515,8 +1516,9 @@ public class CPHInline
             LogToFile("Both 'moderatedMessage' and 'rawInput' are missing or empty.", "ERROR");
             return false;
         }
-
-        var appSettings = ReadSettings();
+        // Removed: var appSettings = ReadSettings();
+        int maxChatHistory = CPH.GetGlobalVar<int>("max_chat_history", true);
+        int maxPromptHistory = CPH.GetGlobalVar<int>("max_prompt_history", true);
 
         int characterNumber = 1;
         try
@@ -1879,7 +1881,9 @@ public class CPHInline
 
         LogToFile("All configuration values are valid and present.", "DEBUG");
 
-        string completionsUrl = CPH.GetGlobalVar<string>("openai_completions_url", "https://api.openai.com/v1/chat/completions");
+        string completionsUrl = CPH.GetGlobalVar<string>("openai_completions_url", true);
+        if (string.IsNullOrWhiteSpace(completionsUrl))
+            completionsUrl = "https://api.openai.com/v1/chat/completions";
         LogToFile("All configuration values are valid and present.", "DEBUG");
         LogToFile($"Using completions endpoint: {completionsUrl}", "DEBUG");
 
@@ -2430,6 +2434,10 @@ public class CPHInline
             CPH.SetGlobalVar("voice_enabled", settings.VoiceEnabled, true);
             CPH.SetGlobalVar("outbound_webhook_url", settings.OutboundWebhookUrl, true);
             CPH.SetGlobalVar("outbound_webhook_mode", settings.OutboundWebhookMode, true);
+            CPH.SetGlobalVar("moderation_enabled", settings.ModerationEnabled, true);
+            CPH.SetGlobalVar("moderation_rebuke_enabled", settings.ModerationRebukeEnabled, true);
+            CPH.SetGlobalVar("max_chat_history", settings.MaxChatHistory, true);
+            CPH.SetGlobalVar("max_prompt_history", settings.MaxPromptHistory, true);
 
             LogToFile("Settings loaded successfully from LiteDB.", "INFO");
             LogToFile("Exiting ReadSettings method.", "DEBUG");
