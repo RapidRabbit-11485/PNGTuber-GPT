@@ -1551,7 +1551,11 @@ public class CPHInline
             if (string.IsNullOrWhiteSpace(outboundWebhookUrl))
                 outboundWebhookUrl = "https://api.openai.com/v1/chat/completions";
             string outboundWebhookMode = CPH.GetGlobalVar<string>("outbound_webhook_mode", true);
-            if (!string.IsNullOrWhiteSpace(outboundWebhookUrl))
+            if ((outboundWebhookMode ?? "").Equals("Disabled", StringComparison.OrdinalIgnoreCase))
+            {
+                LogToFile("Outbound webhook mode is set to 'Disabled'. Skipping webhook.", "INFO");
+            }
+            else if (!string.IsNullOrWhiteSpace(outboundWebhookUrl))
             {
                 string payload = null;
                 if ((outboundWebhookMode ?? "").ToLower() == "clean")
@@ -1856,7 +1860,11 @@ public class CPHInline
         if (string.IsNullOrWhiteSpace(outboundWebhookUrl))
             outboundWebhookUrl = "https://api.openai.com/v1/chat/completions";
         string outboundWebhookMode = CPH.GetGlobalVar<string>("outbound_webhook_mode", true);
-        if (!string.IsNullOrWhiteSpace(outboundWebhookUrl))
+        if ((outboundWebhookMode ?? "").Equals("Disabled", StringComparison.OrdinalIgnoreCase))
+        {
+            LogToFile("Outbound webhook mode is set to 'Disabled'. Skipping webhook.", "INFO");
+        }
+        else if (!string.IsNullOrWhiteSpace(outboundWebhookUrl))
         {
             string payload = null;
             if ((outboundWebhookMode ?? "").ToLower() == "clean")
