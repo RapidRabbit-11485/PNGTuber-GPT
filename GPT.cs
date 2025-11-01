@@ -86,7 +86,7 @@ public class CPHInline
             LogToFile($"Exception stack trace: {ex.StackTrace}", "DEBUG");
         }
     }
-    
+
     public bool Execute()    {
         LogToFile(">>> Entering Execute()", "DEBUG");
 
@@ -124,7 +124,7 @@ public class CPHInline
         LogToFile("<<< Exiting Execute() with return value: true", "DEBUG");
         return true;
     }
-    
+
     public class Keyword
     {
         public ObjectId Id { get; set; }
@@ -132,7 +132,7 @@ public class CPHInline
         public string Definition { get; set; }
         public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
     }
-    
+
     public class AppSettings
     {
         public string OpenApiKey { get; set; }
@@ -250,7 +250,7 @@ public class CPHInline
 
         public string titleName { get; set; }
     }
-    
+
     public class chatMessage
     {
 
@@ -302,7 +302,6 @@ public class CPHInline
                 LogToFile("Condition profile == null evaluated FALSE in GetOrCreateUserProfile()", "DEBUG");
             }
 
-            // --- Begin Pronoun Synchronization Logic ---
             string pronouns = null;
             string pronounSubject = null;
             string pronounObject = null;
@@ -310,7 +309,6 @@ public class CPHInline
             string pronounReflexive = null;
             string pronounPronoun = null;
 
-            // Try to get each pronoun field from args first, then fall back to global variables.
             if (!CPH.TryGetArg("pronouns", out pronouns))
                 pronouns = CPH.GetGlobalVar<string>("pronouns", false);
             if (!CPH.TryGetArg("pronounSubject", out pronounSubject))
@@ -326,7 +324,6 @@ public class CPHInline
 
             LogToFile($"Pronoun retrieval results: pronouns='{pronouns}', pronounSubject='{pronounSubject}', pronounObject='{pronounObject}', pronounPossessive='{pronounPossessive}', pronounReflexive='{pronounReflexive}', pronounPronoun='{pronounPronoun}'", "DEBUG");
 
-            // If 'pronouns' is missing, try to construct it from available subfields
             if (string.IsNullOrWhiteSpace(pronouns))
             {
                 var parts = new List<string>();
@@ -346,7 +343,6 @@ public class CPHInline
 
             LogToFile($"Final pronouns value after construction: '{pronouns}'", "DEBUG");
 
-            // Only update if pronouns are found and different from the stored value.
             if (!string.IsNullOrWhiteSpace(pronouns) && !string.Equals(pronouns, profile.Pronouns, StringComparison.Ordinal))
             {
                 profile.Pronouns = pronouns;
@@ -361,7 +357,6 @@ public class CPHInline
             {
                 LogToFile("Pronouns found but unchanged; no update needed.", "DEBUG");
             }
-            // --- End Pronoun Synchronization Logic ---
 
             LogToFile("<<< Exiting GetOrCreateUserProfile() with return value: profile", "DEBUG");
             return profile;
@@ -467,7 +462,7 @@ public class CPHInline
         LogToFile("Entering UpdateUserPreferredName method.", "DEBUG");
         try
         {
-            // Use CPH.TryGetArg to safely retrieve arguments
+
             if (!CPH.TryGetArg("userName", out string userName) || string.IsNullOrWhiteSpace(userName))
             {
                 LogToFile("Failed to retrieve 'userName' argument via TryGetArg in UpdateUserPreferredName.", "DEBUG");
@@ -521,7 +516,7 @@ public class CPHInline
         LogToFile("Entering DeleteUserProfile method.", "DEBUG");
         try
         {
-            // Use CPH.TryGetArg to safely retrieve userName argument
+
             if (!CPH.TryGetArg("userName", out string userName))
             {
                 LogToFile("Failed to retrieve 'userName' argument via TryGetArg in DeleteUserProfile.", "DEBUG");
@@ -576,7 +571,6 @@ public class CPHInline
             var userCollection = _db.GetCollection<UserProfile>("user_profiles");
             var profile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
 
-            // PreferredName fallback is already enforced by GetOrCreateUserProfile
             string displayName = profile.PreferredName;
             string message = string.IsNullOrWhiteSpace(profile?.Pronouns)
                 ? $"Your current username is set to {displayName}"
@@ -598,7 +592,7 @@ public class CPHInline
         LogToFile("Entering ForgetThis method (LiteDB).", "DEBUG");
         try
         {
-            // Use CPH.TryGetArg to retrieve 'rawInput'
+
             if (!CPH.TryGetArg("rawInput", out string keywordToRemove) || string.IsNullOrWhiteSpace(keywordToRemove))
             {
                 LogToFile("Failed to retrieve 'rawInput' argument via TryGetArg in ForgetThis.", "DEBUG");
@@ -641,7 +635,7 @@ public class CPHInline
         LogToFile("Entering ForgetThisAboutMe method.", "DEBUG");
         try
         {
-            // Use CPH.TryGetArg to retrieve 'userName'
+
             if (!CPH.TryGetArg("userName", out string userName) || string.IsNullOrWhiteSpace(userName))
             {
                 LogToFile("Failed to retrieve 'userName' argument via TryGetArg in ForgetThisAboutMe.", "DEBUG");
@@ -681,38 +675,29 @@ public class CPHInline
         LogToFile("Entering GetMemory method.", "DEBUG");
         try
         {
-            // Prefer runtime arg; fall back to non-persisted global only if needed
-            string userName = null;
-            if (!CPH.TryGetArg("userName", out userName) || string.IsNullOrWhiteSpace(userName))
-            {
-                userName = CPH.GetGlobalVar<string>("userName", false);
-                LogToFile($"TryGetArg('userName') empty; fallback global returned: '{userName}'", "DEBUG");
-            }
 
-            if (string.IsNullOrWhiteSpace(userName))
+            if (!CPH.TryGetArg("userName", out string userName) || string.IsNullOrWhiteSpace(userName))
             {
-                LogToFile("GetMemory called with no valid username.", "WARN");
+                LogToFile("GetMemory: 'userName' argument missing or empty.", "WARN");
                 return false;
             }
+            LogToFile($"GetMemory: Using userName='{userName}'", "DEBUG");
 
-            // Always use the canonical profile (enforces PreferredName fallback)
-            // But for lookup and messaging, use userName only, not PreferredName
             var userCollection = _db.GetCollection<UserProfile>("user_profiles");
             var profile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
-            if (profile != null && profile.Knowledge != null && profile.Knowledge.Count > 0)
+
+            if (profile == null || profile.Knowledge == null || profile.Knowledge.Count == 0)
             {
-                var combinedMemory = string.Join(", ", profile.Knowledge);
-                var message = $"Something I remember about {userName} is: {combinedMemory}.";
-                CPH.SendMessage(message, true);
-                LogToFile($"Memory retrieved for {userName}: {combinedMemory}", "DEBUG");
-            }
-            else
-            {
-                var message = $"I don’t have any saved memories for {userName} yet!";
-                CPH.SendMessage(message, true);
-                LogToFile($"No memory found for {userName}.", "DEBUG");
+                string noneMsg = $"I don’t have any saved memories for {userName}.";
+                CPH.SendMessage(noneMsg, true);
+                LogToFile($"GetMemory: No profile or memories for '{userName}'.", "INFO");
+                return true;
             }
 
+            var combinedMemory = string.Join(", ", profile.Knowledge);
+            var message = $"Something I remember about {userName} is: {combinedMemory}.";
+            CPH.SendMessage(message, true);
+            LogToFile($"GetMemory: Retrieved memory for '{userName}': {combinedMemory}", "DEBUG");
             return true;
         }
         catch (Exception ex)
@@ -727,7 +712,6 @@ public class CPHInline
     {
         LogToFile("Entering SaveMessage method.", "DEBUG");
 
-        // Use TryGetArg for all argument retrievals
         if (!CPH.TryGetArg("rawInput", out string msg) || string.IsNullOrWhiteSpace(msg))
         {
             LogToFile("Failed to retrieve 'rawInput' argument via TryGetArg in SaveMessage.", "DEBUG");
@@ -741,7 +725,6 @@ public class CPHInline
         }
         LogToFile($"Successfully retrieved arguments: userName={userName}, rawInput={msg}", "DEBUG");
 
-        // Retrieve user profile for display name construction
         var profile = GetOrCreateUserProfile(userName);
         string displayName = profile.PreferredName;
         if (!string.IsNullOrWhiteSpace(profile.Pronouns))
@@ -824,7 +807,6 @@ public class CPHInline
         bool moderationEnabled = CPH.GetGlobalVar<bool>("moderation_enabled", true);
         bool moderationRebukeEnabled = CPH.GetGlobalVar<bool>("moderation_rebuke_enabled", true);
 
-        // Use CPH.TryGetArg for safe argument retrieval
         if (!CPH.TryGetArg("rawInput", out string input) || string.IsNullOrWhiteSpace(input))
         {
             LogToFile("'rawInput' value is either not found or not a valid string.", "ERROR");
@@ -1326,7 +1308,6 @@ public class CPHInline
             LogToFile($"ChatLog Content before asking GPT: {Environment.NewLine}{chatLogAsString}", "INFO");
         }
 
-        // Replace args.TryGetValue("userName", ...) with CPH.TryGetArg("userName", ...)
         if (!CPH.TryGetArg("userName", out string userName) || string.IsNullOrWhiteSpace(userName))
         {
             LogToFile("'userName' argument is not found or not a valid string.", "ERROR");
@@ -1352,7 +1333,6 @@ public class CPHInline
         if (!string.IsNullOrWhiteSpace(pronounDescription))
             userToSpeak = $"{userName} {pronounDescription}";
 
-        // Replace args retrieval for moderatedMessage/rawInput with CPH.TryGetArg
         string fullMessage = null;
         if (CPH.TryGetArg("moderatedMessage", out string moderatedMessage) && !string.IsNullOrWhiteSpace(moderatedMessage))
             fullMessage = moderatedMessage;
@@ -1410,7 +1390,6 @@ public class CPHInline
                 mentionedUsers.Add(muser);
         }
 
-        // Add system context for pronouns of all participants
         var pronounContextEntries = new List<string>();
 
         var askerProfile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
@@ -1660,7 +1639,6 @@ public class CPHInline
     {
         LogToFile("Entering AskGPTWebhook (LiteDB context enrichment, outbound webhook, pronoun support, TTS/chat/discord parity).", "DEBUG");
 
-        // Safely retrieve message content via CPH.TryGetArg
         string fullMessage = null;
         if (CPH.TryGetArg("moderatedMessage", out string moderatedMessage) && !string.IsNullOrWhiteSpace(moderatedMessage))
         {
@@ -1678,7 +1656,7 @@ public class CPHInline
             LogToFile("Both 'moderatedMessage' and 'rawInput' are missing or empty.", "ERROR");
             return false;
         }
-        // Removed: var appSettings = ReadSettings();
+
         int maxChatHistory = CPH.GetGlobalVar<int>("max_chat_history", true);
         int maxPromptHistory = CPH.GetGlobalVar<int>("max_prompt_history", true);
 
@@ -1760,7 +1738,6 @@ public class CPHInline
                 mentionedUsers.Add(muser);
         }
 
-        // Add system context for pronouns of broadcaster and mentioned users
         var pronounContextEntries = new List<string>();
         var broadcasterProfile = userCollection.FindOne(x => x.UserName.Equals(broadcaster, StringComparison.OrdinalIgnoreCase));
         if (broadcasterProfile != null && !string.IsNullOrWhiteSpace(broadcasterProfile.Pronouns))
@@ -2446,7 +2423,6 @@ public class CPHInline
         {
             LogToFile("Entering SaveSettings method.", "DEBUG");
 
-            // Compose key:value pairs for settings
             var settingsDict = new Dictionary<string, string>
             {
                 ["OpenAI API Key"] = EncryptData(CPH.GetGlobalVar<string>("OpenAI API Key", true)),
@@ -2493,7 +2469,6 @@ public class CPHInline
                 ["max_prompt_history"] = CPH.GetGlobalVar<string>("max_prompt_history", true)
             };
 
-            // Check for required settings
             string[] requiredKeys = new string[]
             {
                 "OpenAI API Key", "OpenAI Model", "Database Path", "Ignore Bot Usernames", "Logging Level", "Version",
@@ -2519,7 +2494,7 @@ public class CPHInline
                     ["Key"] = kvp.Key,
                     ["Value"] = kvp.Value
                 };
-                // Upsert by Key
+
                 var existing = settingsCol.FindOne(x => x["Key"] == kvp.Key);
                 if (existing != null)
                 {
@@ -2534,7 +2509,6 @@ public class CPHInline
             }
             LogToFile("Settings saved successfully to LiteDB.", "INFO");
 
-            // Also update global vars for thresholds and other values
             CPH.SetGlobalVar("hate_threshold", settingsDict["hate_threshold"], true);
             CPH.SetGlobalVar("hate_threatening_threshold", settingsDict["hate_threatening_threshold"], true);
             CPH.SetGlobalVar("harassment_threshold", settingsDict["harassment_threshold"], true);
