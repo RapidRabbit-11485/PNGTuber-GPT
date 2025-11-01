@@ -1547,25 +1547,23 @@ public class CPHInline
         {
             try
             {
-                using (var completionsWebRequest = WebRequest.Create(completionsUrl) as HttpWebRequest)
+                var completionsWebRequest = WebRequest.Create(completionsUrl) as HttpWebRequest;
+                completionsWebRequest.Method = "POST";
+                completionsWebRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
+                completionsWebRequest.ContentType = "application/json";
+                byte[] completionsContentBytes = Encoding.UTF8.GetBytes(completionsRequestJSON);
+                using (Stream requestStream = completionsWebRequest.GetRequestStream())
                 {
-                    completionsWebRequest.Method = "POST";
-                    completionsWebRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
-                    completionsWebRequest.ContentType = "application/json";
-                    byte[] completionsContentBytes = Encoding.UTF8.GetBytes(completionsRequestJSON);
-                    using (Stream requestStream = completionsWebRequest.GetRequestStream())
-                    {
-                        requestStream.Write(completionsContentBytes, 0, completionsContentBytes.Length);
-                    }
-                    using (WebResponse completionsWebResponse = completionsWebRequest.GetResponse())
-                    using (StreamReader responseReader = new StreamReader(completionsWebResponse.GetResponseStream()))
-                    {
-                        completionsResponseContent = responseReader.ReadToEnd();
-                        LogToFile($"Response JSON: {completionsResponseContent}", "DEBUG");
-                        var completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
-                        GPTResponse = completionsJsonResponse?.Choices?.FirstOrDefault()?.Message?.content ?? string.Empty;
-                        apiSuccess = true;
-                    }
+                    requestStream.Write(completionsContentBytes, 0, completionsContentBytes.Length);
+                }
+                using (WebResponse completionsWebResponse = completionsWebRequest.GetResponse())
+                using (StreamReader responseReader = new StreamReader(completionsWebResponse.GetResponseStream()))
+                {
+                    completionsResponseContent = responseReader.ReadToEnd();
+                    LogToFile($"Response JSON: {completionsResponseContent}", "DEBUG");
+                    var completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
+                    GPTResponse = completionsJsonResponse?.Choices?.FirstOrDefault()?.Message?.content ?? string.Empty;
+                    apiSuccess = true;
                 }
             }
             catch (WebException webEx)
@@ -1682,22 +1680,20 @@ public class CPHInline
             LogToFile($"Sending outbound webhook payload: {payload}", "INFO");
             try
             {
-                using (var request = WebRequest.Create(outboundWebhookUrl))
+                var request = WebRequest.Create(outboundWebhookUrl);
+                request.Method = "POST";
+                if ((outboundWebhookMode ?? "").ToLower() == "clean")
+                    request.ContentType = "text/plain";
+                else
+                    request.ContentType = "application/json";
+                byte[] payloadBytes = Encoding.UTF8.GetBytes(payload);
+                using (var stream = request.GetRequestStream())
                 {
-                    request.Method = "POST";
-                    if ((outboundWebhookMode ?? "").ToLower() == "clean")
-                        request.ContentType = "text/plain";
-                    else
-                        request.ContentType = "application/json";
-                    byte[] payloadBytes = Encoding.UTF8.GetBytes(payload);
-                    using (var stream = request.GetRequestStream())
-                    {
-                        stream.Write(payloadBytes, 0, payloadBytes.Length);
-                    }
-                    using (var response = request.GetResponse())
-                    {
-                        LogToFile("Outbound webhook POST successful.", "INFO");
-                    }
+                    stream.Write(payloadBytes, 0, payloadBytes.Length);
+                }
+                using (var response = request.GetResponse())
+                {
+                    LogToFile("Outbound webhook POST successful.", "INFO");
                 }
             }
             catch (WebException webEx)
