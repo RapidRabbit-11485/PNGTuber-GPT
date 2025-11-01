@@ -2434,10 +2434,10 @@ public class CPHInline
             CPH.SetGlobalVar("voice_enabled", settings.VoiceEnabled, true);
             CPH.SetGlobalVar("outbound_webhook_url", settings.OutboundWebhookUrl, true);
             CPH.SetGlobalVar("outbound_webhook_mode", settings.OutboundWebhookMode, true);
-            CPH.SetGlobalVar("moderation_enabled", settings.ModerationEnabled, true);
-            CPH.SetGlobalVar("moderation_rebuke_enabled", settings.ModerationRebukeEnabled, true);
-            CPH.SetGlobalVar("max_chat_history", settings.MaxChatHistory, true);
-            CPH.SetGlobalVar("max_prompt_history", settings.MaxPromptHistory, true);
+            CPH.SetGlobalVar("moderation_enabled", settings.moderation_enabled, true);
+            CPH.SetGlobalVar("moderation_rebuke_enabled", settings.moderation_rebuke_enabled, true);
+            CPH.SetGlobalVar("max_chat_history", settings.max_chat_history, true);
+            CPH.SetGlobalVar("max_prompt_history", settings.max_prompt_history, true);
 
             LogToFile("Settings loaded successfully from LiteDB.", "INFO");
             LogToFile("Exiting ReadSettings method.", "DEBUG");
