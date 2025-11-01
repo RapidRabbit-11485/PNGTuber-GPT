@@ -222,7 +222,7 @@ public class CPHInline
     {
         try
         {
-            var userCollection = _db.GetCollection<UserProfile>("UserProfiles");
+            var userCollection = _db.GetCollection<UserProfile>("user_profiles");
             userCollection.EnsureIndex(x => x.UserName, true);
             var profile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
 
@@ -418,7 +418,7 @@ public class CPHInline
                 return false;
             }
 
-            var userCollection = _db.GetCollection<UserProfile>("UserProfiles");
+            var userCollection = _db.GetCollection<UserProfile>("user_profiles");
             var profile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
             if (profile == null)
             {
@@ -456,7 +456,7 @@ public class CPHInline
                 return false;
             }
 
-            var userCollection = _db.GetCollection<UserProfile>("UserProfiles");
+            var userCollection = _db.GetCollection<UserProfile>("user_profiles");
             var profile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
             if (profile == null)
             {
@@ -492,7 +492,7 @@ public class CPHInline
                 return false;
             }
 
-            var userCollection = _db.GetCollection<UserProfile>("UserProfiles");
+            var userCollection = _db.GetCollection<UserProfile>("user_profiles");
             var profile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
             if (profile == null)
             {
@@ -567,7 +567,7 @@ public class CPHInline
                 return false;
             }
 
-            var userCollection = _db.GetCollection<UserProfile>("UserProfiles");
+            var userCollection = _db.GetCollection<UserProfile>("user_profiles");
             var profile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
             if (profile == null || profile.Knowledge == null || profile.Knowledge.Count == 0)
             {
@@ -1124,7 +1124,7 @@ public class CPHInline
                 LogToFile($"Memory already exists for user '{userName}': {messageToRemember}", "DEBUG");
             }
 
-            var userCollection = _db.GetCollection<UserProfile>("UserProfiles");
+            var userCollection = _db.GetCollection<UserProfile>("user_profiles");
             userCollection.Update(profile);
             LogToFile($"Updated UserProfile for '{userName}' in LiteDB.", "DEBUG");
 
@@ -1269,7 +1269,7 @@ public class CPHInline
         string currentTitle = CPH.GetGlobalVar<string>("currentTitle", false);
         string currentGame = CPH.GetGlobalVar<string>("currentGame", false);
 
-        var userCollection = _db.GetCollection<UserProfile>("UserProfiles");
+        var userCollection = _db.GetCollection<UserProfile>("user_profiles");
         var keywordsCol = _db.GetCollection<BsonDocument>("Keywords");
 
         List<string> mentionedUsers = new List<string>();
@@ -1574,7 +1574,7 @@ public class CPHInline
         string currentTitle = CPH.GetGlobalVar<string>("currentTitle", false);
         string currentGame = CPH.GetGlobalVar<string>("currentGame", false);
 
-        var userCollection = _db.GetCollection<UserProfile>("UserProfiles");
+        var userCollection = _db.GetCollection<UserProfile>("user_profiles");
         var keywordsCol = _db.GetCollection<BsonDocument>("Keywords");
 
         string pronounSubject = CPH.GetGlobalVar<string>("pronounSubject", false);
