@@ -112,28 +112,6 @@ public class CPHInline
         public int max_prompt_history { get; set; } = 10;
     }
 
-    public AppSettings ReadSettings()
-    {
-        var appSettings = new AppSettings();
-        try
-        {
-            var settingsCol = _db.GetCollection<BsonDocument>("settings");
-            var settings = settingsCol.FindAll().FirstOrDefault();
-            if (settings != null)
-            {
-                appSettings.moderation_enabled = settings.ContainsKey("moderation_enabled") ? settings["moderation_enabled"].AsBoolean : true;
-                appSettings.moderation_rebuke_enabled = settings.ContainsKey("moderation_rebuke_enabled") ? settings["moderation_rebuke_enabled"].AsBoolean : true;
-                appSettings.max_chat_history = settings.ContainsKey("max_chat_history") ? settings["max_chat_history"].AsInt32 : 20;
-                appSettings.max_prompt_history = settings.ContainsKey("max_prompt_history") ? settings["max_prompt_history"].AsInt32 : 10;
-            }
-        }
-        catch (Exception ex)
-        {
-            LogToFile($"Error in ReadSettings: {ex.Message}", "ERROR");
-        }
-        return appSettings;
-    }
-
     public class ChatCompletionsResponse
     {
 
