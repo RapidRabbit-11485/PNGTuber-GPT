@@ -2259,32 +2259,42 @@ public class CPHInline
                 cleaned = Regex.Replace(cleaned, citationPattern, "").Trim();
                 LogToFile("Removed markdown-style citations from text.", "DEBUG");
 
-                // Replace smart punctuation with ASCII equivalents
+                // Normalize before punctuation fix
+                cleaned = cleaned.Normalize(NormalizationForm.FormD);
+
+                // Replace smart punctuation and dash variants with ASCII equivalents
                 cleaned = cleaned
                     .Replace("’", "'")
                     .Replace("‘", "'")
                     .Replace("“", "\"")
                     .Replace("”", "\"")
-                    .Replace("—", " ")
-                    .Replace("–", " ")
+                    .Replace("‒", "-")
+                    .Replace("–", "-")
+                    .Replace("—", "-")
+                    .Replace("―", "-")
                     .Replace("…", "...")
-                    .Replace("‒", " ")
-                    .Replace("―", " ");
+                    .Replace("‐", "-");
 
+                // Remove unwanted characters while preserving normal punctuation
                 var sbHuman = new System.Text.StringBuilder();
-                foreach (var ch in cleaned.Normalize(NormalizationForm.FormD))
+                foreach (var ch in cleaned)
                 {
                     var uc = CharUnicodeInfo.GetUnicodeCategory(ch);
                     if (uc == UnicodeCategory.LowercaseLetter || uc == UnicodeCategory.UppercaseLetter ||
                         uc == UnicodeCategory.TitlecaseLetter || uc == UnicodeCategory.ModifierLetter ||
                         uc == UnicodeCategory.OtherLetter || uc == UnicodeCategory.DecimalDigitNumber ||
                         char.IsWhiteSpace(ch) ||
-                        ".,!?;:'\"()–—-".Contains(ch))
+                        ".,!?;:'\"()-".Contains(ch))
                     {
                         sbHuman.Append(ch);
                     }
                 }
+
                 cleaned = sbHuman.ToString();
+
+                // Collapse multiple dashes and fix spacing issues
+                cleaned = Regex.Replace(cleaned, @"\s*-\s*", " - ");
+                cleaned = Regex.Replace(cleaned, @"\s{2,}", " ").Trim();
                 break;
 
             case "Strict":
