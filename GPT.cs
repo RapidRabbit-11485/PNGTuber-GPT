@@ -1102,8 +1102,8 @@ public class CPHInline
                 return false;
             }
 
-            CPH.SetGlobalVar("character", 1, true);
-            LogToFile("Reset 'character' global to 1 after speaking.", "DEBUG");
+            // CPH.SetGlobalVar("character", 1, true);
+            // LogToFile("Reset 'character' global to 1 after speaking.", "DEBUG");
             return true;
         }
         catch (Exception ex)
@@ -1748,8 +1748,8 @@ public class CPHInline
             LogToFile("Posted GPT result to Discord.", "INFO");
         }
 
-        CPH.SetGlobalVar("character", 1, true);
-        LogToFile("Reset 'character' global to 1 after AskGPT.", "DEBUG");
+        // CPH.SetGlobalVar("character", 1, true);
+        // LogToFile("Reset 'character' global to 1 after AskGPT.", "DEBUG");
         // Explicitly clear in-memory caches to release memory
         if (allUserProfiles != null)
         {
