@@ -141,6 +141,8 @@ public class CPHInline
     {
         public string OpenApiKey { get; set; }
         public string OpenAiModel { get; set; }
+        public string ModelInputCost { get; set; }
+        public string ModelOutputCost { get; set; }
         public string DatabasePath { get; set; }
         public string IgnoreBotUsernames { get; set; }
 
@@ -1001,14 +1003,14 @@ public class CPHInline
             bool passed = !flaggedCategories.Any();
             if (!passed)
             {
-                // Only rebuke if enabled, do not send "could not process" message
+
                 HandleModerationResponse(flaggedCategories, input, moderationRebukeEnabled);
                 LogToFile("==== End Moderation Evaluation ====", "INFO");
                 return false;
             }
             else
             {
-                // Passed moderation, no additional chat output
+
                 CPH.SetArgument("moderatedMessage", input);
                 LogToFile("Message passed moderation.", "DEBUG");
                 LogToFile("==== End Moderation Evaluation ====", "INFO");
@@ -1032,7 +1034,6 @@ public class CPHInline
         bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
         bool voiceEnabled = CPH.GetGlobalVar<bool>("voice_enabled", true);
 
-        // If no flagged categories, proceed as usual (success path)
         if (!flaggedCategories.Any())
         {
             CPH.SetArgument("moderatedMessage", input);
@@ -1040,7 +1041,6 @@ public class CPHInline
             return true;
         }
 
-        // If flagged categories exist, apply unified guard for TTS and chat
         if (!postToChat)
         {
             LogToFile("[Skipped Moderation Output] Post To Chat is disabled; skipping all moderation rebuke, TTS, and chat output.", "INFO");
@@ -1053,13 +1053,12 @@ public class CPHInline
             return false;
         }
 
-        // At this point, postToChat == true && rebukeEnabled == true
         string flaggedCategoriesString = string.Join(", ", flaggedCategories);
         string outputMessage = $"This message was flagged in the following categories: {flaggedCategoriesString}. Repeated attempts at abuse may result in a ban.";
         LogToFile(outputMessage, "INFO");
 
         string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
-        // Only do TTS if all relevant conditions are true
+
         if (postToChat && rebukeEnabled && voiceEnabled && !string.IsNullOrWhiteSpace(voiceAlias))
         {
             int speakResult = CPH.TtsSpeak(voiceAlias, outputMessage, false);
@@ -1070,7 +1069,6 @@ public class CPHInline
             LogToFile($"[Skipped TTS Output] TTS not performed. Conditions: PostToChat={postToChat}, RebukeEnabled={rebukeEnabled}, VoiceEnabled={voiceEnabled}, VoiceAliasPresent={!string.IsNullOrWhiteSpace(voiceAlias)}", "DEBUG");
         }
 
-        // Only post to chat if postToChat && rebukeEnabled
         if (postToChat && rebukeEnabled)
         {
             CPH.SendMessage(outputMessage, true);
@@ -1138,7 +1136,7 @@ public class CPHInline
         }
         catch (WebException webEx)
         {
-            // Log status and response content separately
+
             if (webEx.Response != null)
             {
                 try
@@ -1247,11 +1245,9 @@ public class CPHInline
             string outputMessage = $"{formattedUser} said: {messageToSpeak}";
             LogToFile($"Character {characterNumber} ({voiceAlias}) speaking message: {outputMessage}", "INFO");
 
-            // Check global flags
             bool postToChatFlag = CPH.GetGlobalVar<bool>("Post To Chat", true);
             bool voiceEnabled = CPH.GetGlobalVar<bool>("voice_enabled", true);
 
-            // Send to chat if enabled
             if (postToChatFlag)
             {
                 CPH.SendMessage(outputMessage, true);
@@ -1261,7 +1257,6 @@ public class CPHInline
                 LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {outputMessage}", "DEBUG");
             }
 
-            // Speak via TTS if enabled
             if (voiceEnabled)
             {
                 int speakResult = CPH.TtsSpeak(voiceAlias, outputMessage, false);
@@ -1276,8 +1271,6 @@ public class CPHInline
                 LogToFile($"[Skipped TTS Output] Voice disabled. Message: {outputMessage}", "DEBUG");
             }
 
-            // CPH.SetGlobalVar("character", 1, true);
-            // LogToFile("Reset 'character' global to 1 after speaking.", "DEBUG");
             return true;
         }
         catch (Exception ex)
@@ -1549,12 +1542,77 @@ public class CPHInline
         }
     }
 
+    private void LogPromptScorecard(string methodName, string model, dynamic usage)
+    {
+        try
+        {
+
+            long rollingPromptTokens = 0;
+            long rollingCompletionTokens = 0;
+            long rollingTotalTokens = 0;
+            try
+            {
+
+                var usageCollection = _db.GetCollection<BsonDocument>("token_usage");
+                var entry = new BsonDocument
+                {
+                    ["Timestamp"] = DateTime.UtcNow,
+                    ["PromptTokens"] = usage.PromptTokens,
+                    ["CompletionTokens"] = usage.CompletionTokens,
+                    ["TotalTokens"] = usage.TotalTokens
+                };
+                usageCollection.Insert(entry);
+
+                var cutoff = DateTime.UtcNow.AddDays(-30);
+                usageCollection.DeleteMany(Query.LT("Timestamp", cutoff));
+
+                var recentDocs = usageCollection.Find(Query.GTE("Timestamp", cutoff)).ToList();
+                rollingPromptTokens = recentDocs.Sum(x => x["PromptTokens"].AsInt64);
+                rollingCompletionTokens = recentDocs.Sum(x => x["CompletionTokens"].AsInt64);
+                rollingTotalTokens = recentDocs.Sum(x => x["TotalTokens"].AsInt64);
+            }
+            catch (Exception ex2)
+            {
+                LogToFile($"Error in LiteDB token_usage integration: {ex2.Message}", "ERROR");
+            }
+
+            double inputRate = CPH.GetGlobalVar<double>("model_input_cost", 2.50);
+            double outputRate = CPH.GetGlobalVar<double>("model_output_cost", 10.00);
+
+            double promptCost = Math.Round((usage.PromptTokens / 1_000_000.0) * inputRate, 6);
+            double completionCost = Math.Round((usage.CompletionTokens / 1_000_000.0) * outputRate, 6);
+            double totalPromptCost = Math.Round(promptCost + completionCost, 6);
+
+            double rollingCost = Math.Round(
+                ((rollingPromptTokens / 1_000_000.0) * inputRate) +
+                ((rollingCompletionTokens / 1_000_000.0) * outputRate), 4);
+
+            LogToFile($"Prompt Scorecard ({methodName})", "INFO");
+            LogToFile("--------------------------------------------------", "INFO");
+            LogToFile($"{"Metric",-30}{"Value",-10}", "INFO");
+            LogToFile("--------------------------------------------------", "INFO");
+
+            LogToFile($"{"Model",-30}{model,-10}", "INFO");
+            LogToFile($"{"Prompt Tokens",-30}{usage.PromptTokens,-10}", "INFO");
+            LogToFile($"{"Completion Tokens",-30}{usage.CompletionTokens,-10}", "INFO");
+            LogToFile($"{"Total Tokens",-30}{usage.TotalTokens,-10}", "INFO");
+            LogToFile($"{"30-Day Rolling Tokens",-30}{rollingTotalTokens,-10}", "INFO");
+            LogToFile($"{"Prompt Cost (USD)",-30}{totalPromptCost.ToString("C4"),-10}", "INFO");
+            LogToFile($"{"30-Day Rolling Cost (USD)",-30}{rollingCost.ToString("C2"),-10}", "INFO");
+
+            LogToFile("--------------------------------------------------", "INFO");
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"Error while logging prompt scorecard: {ex.Message}", "ERROR");
+        }
+    }
+
     public bool AskGPT()
     {
         LogToFile("==== Begin AskGPT Execution ====", "INFO");
         LogToFile("Entering AskGPT method (streamer.bot pronouns, LiteDB context, webhook/discord sync).", "DEBUG");
 
-        // Global flag checks
         bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
         bool voiceEnabled = CPH.GetGlobalVar<bool>("voice_enabled", true);
 
@@ -1667,7 +1725,6 @@ public class CPHInline
         string currentTitle = CPH.GetGlobalVar<string>("currentTitle", false);
         string currentGame = CPH.GetGlobalVar<string>("currentGame", false);
 
-        // Load user_profiles and Keywords collections into memory
         var userCollection = _db.GetCollection<UserProfile>("user_profiles");
         var allUserProfiles = userCollection.FindAll().ToList();
         var keywordsCol = _db.GetCollection<BsonDocument>("Keywords");
@@ -1795,12 +1852,12 @@ public class CPHInline
         completionsRequestJSON = JsonConvert.SerializeObject(new { model = AIModel, messages = messages }, Formatting.Indented);
         LogToFile($"Request JSON: {completionsRequestJSON}", "DEBUG");
 
-        // Retry logic for OpenAI API call
         int maxAttempts = 3;
         int attempt = 0;
         bool apiSuccess = false;
         Exception lastException = null;
         int[] backoffSeconds = { 1, 2, 4 };
+        ChatCompletionsResponse completionsJsonResponse = null;
         for (attempt = 0; attempt < maxAttempts && !apiSuccess; attempt++)
         {
             try
@@ -1819,7 +1876,7 @@ public class CPHInline
                 {
                     completionsResponseContent = responseReader.ReadToEnd();
                     LogToFile($"Response JSON: {completionsResponseContent}", "DEBUG");
-                    var completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
+                    completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
                     GPTResponse = completionsJsonResponse?.Choices?.FirstOrDefault()?.Message?.content ?? string.Empty;
                     apiSuccess = true;
                 }
@@ -1864,6 +1921,15 @@ public class CPHInline
         sw.Stop();
         LogToFile($"OpenAI API call completed in {sw.ElapsedMilliseconds} ms.", "INFO");
 
+        if (apiSuccess && completionsJsonResponse?.Usage != null)
+        {
+            LogPromptScorecard(
+                "AskGPT",
+                AIModel,
+                completionsJsonResponse.Usage
+            );
+        }
+
         GPTResponse = CleanAIText(GPTResponse);
         LogToFile("Applied CleanAIText() to GPT response.", "DEBUG");
         if (!apiSuccess || string.IsNullOrWhiteSpace(GPTResponse))
@@ -1901,7 +1967,7 @@ public class CPHInline
                 else
                     LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {msg}", "DEBUG");
             }
-            // Clear temporary collections before exit
+
             if (allUserProfiles != null) { allUserProfiles.Clear(); allUserProfiles = null; }
             if (keywordDocs != null) { keywordDocs.Clear(); keywordDocs = null; }
             LogToFile("==== End AskGPT Execution ====", "INFO");
@@ -1996,7 +2062,6 @@ public class CPHInline
             }
         }
 
-        // TTS Output: voiceEnabled check
         if (voiceEnabled)
         {
             CPH.TtsSpeak(voiceAlias, GPTResponse, false);
@@ -2007,7 +2072,6 @@ public class CPHInline
             LogToFile($"[Skipped TTS Output] Voice disabled. Message: {GPTResponse}", "DEBUG");
         }
 
-        // Chat Output: postToChat check
         if (postToChat)
         {
             CPH.SendMessage(GPTResponse, true);
@@ -2025,9 +2089,6 @@ public class CPHInline
             LogToFile("Posted GPT result to Discord.", "INFO");
         }
 
-        // CPH.SetGlobalVar("character", 1, true);
-        // LogToFile("Reset 'character' global to 1 after AskGPT.", "DEBUG");
-        // Explicitly clear in-memory caches to release memory
         if (allUserProfiles != null)
         {
             allUserProfiles.Clear();
@@ -2047,7 +2108,6 @@ public class CPHInline
         LogToFile("==== Begin AskGPTWebhook Execution ====", "INFO");
         LogToFile("Entering AskGPTWebhook (LiteDB context enrichment, outbound webhook, pronoun support, TTS/chat/discord parity).", "DEBUG");
 
-        // Respect Post To Chat and voice_enabled global variables
         bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
         bool voiceEnabled = CPH.GetGlobalVar<bool>("voice_enabled", true);
 
@@ -2115,7 +2175,6 @@ public class CPHInline
         string currentTitle = CPH.GetGlobalVar<string>("currentTitle", false);
         string currentGame = CPH.GetGlobalVar<string>("currentGame", false);
 
-        // Load user_profiles and Keywords collections into memory
         var userCollection = _db.GetCollection<UserProfile>("user_profiles");
         var allUserProfiles = userCollection.FindAll().ToList();
         var keywordsCol = _db.GetCollection<BsonDocument>("Keywords");
@@ -2313,7 +2372,7 @@ public class CPHInline
         }
         finally
         {
-            // nothing to clean here yet
+
         }
         sw.Stop();
         LogToFile($"OpenAI API call completed in {sw.ElapsedMilliseconds} ms.", "INFO");
@@ -2343,7 +2402,7 @@ public class CPHInline
                 else
                     LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {chatMsg}", "DEBUG");
             }
-            // Clear temporary collections before exit
+
             if (allUserProfiles != null) { allUserProfiles.Clear(); allUserProfiles = null; }
             if (keywordDocs != null) { keywordDocs.Clear(); keywordDocs = null; }
             LogToFile("==== End AskGPTWebhook Execution ====", "INFO");
@@ -2353,7 +2412,23 @@ public class CPHInline
         CPH.SetGlobalVar("Response", GPTResponse, true);
         LogToFile("Stored GPT response in global variable 'Response'.", "INFO");
 
-        // Outbound webhook POST with retry logic and error logging
+        try
+        {
+            var completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
+            if (apiSuccess && completionsJsonResponse?.Usage != null)
+            {
+                LogPromptScorecard(
+                    "AskGPTWebhook",
+                    CPH.GetGlobalVar<string>("OpenAI Model", true),
+                    completionsJsonResponse.Usage
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"Failed to log prompt scorecard in AskGPTWebhook: {ex.Message}", "ERROR");
+        }
+
         string outboundWebhookUrl = CPH.GetGlobalVar<string>("outbound_webhook_url", true);
         if (string.IsNullOrWhiteSpace(outboundWebhookUrl))
             outboundWebhookUrl = "https://api.openai.com/v1/chat/completions";
@@ -2478,7 +2553,6 @@ public class CPHInline
             }
         }
 
-        // TTS Output: voiceEnabled check
         if (voiceEnabled)
         {
             CPH.TtsSpeak(voiceAlias, GPTResponse, false);
@@ -2489,7 +2563,6 @@ public class CPHInline
             LogToFile($"[Skipped TTS Output] Voice disabled. Message: {GPTResponse}", "DEBUG");
         }
 
-        // Chat Output: postToChat check
         if (postToChat)
         {
             CPH.SendMessage(GPTResponse, true);
@@ -2507,7 +2580,7 @@ public class CPHInline
         }
         CPH.SetGlobalVar("character", 1, true);
         LogToFile("Reset 'character' global to 1 after AskGPTWebhook.", "DEBUG");
-        // Explicitly clear in-memory caches to release memory
+
         if (allUserProfiles != null)
         {
             allUserProfiles.Clear();
@@ -2536,7 +2609,6 @@ public class CPHInline
             return string.Empty;
         }
 
-        // Log guard for very long input
         if (text.Length > 10000)
             LogToFile("Warning: unusually long input to CleanAIText.", "WARN");
 
@@ -2564,10 +2636,8 @@ public class CPHInline
                 cleaned = Regex.Replace(cleaned, citationPattern, "").Trim();
                 LogToFile("Removed markdown-style citations from text.", "DEBUG");
 
-                // Normalize before punctuation fix
                 cleaned = cleaned.Normalize(NormalizationForm.FormD);
 
-                // Replace smart punctuation and dash variants with ASCII equivalents
                 cleaned = cleaned
                     .Replace("’", "'")
                     .Replace("‘", "'")
@@ -2580,7 +2650,6 @@ public class CPHInline
                     .Replace("…", "...")
                     .Replace("‐", "-");
 
-                // Remove unwanted characters while preserving normal punctuation and slashes
                 var sbHuman = new System.Text.StringBuilder();
                 foreach (var ch in cleaned)
                 {
@@ -2597,7 +2666,6 @@ public class CPHInline
 
                 cleaned = sbHuman.ToString();
 
-                // Collapse multiple dashes and fix spacing issues is now handled in final step
                 cleaned = Regex.Replace(cleaned, @"\s{2,}", " ").Trim();
                 break;
 
@@ -2625,7 +2693,6 @@ public class CPHInline
         cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
         LogToFile($"Text before whitespace normalization: {beforeFinal}", "DEBUG");
 
-        // Final cleanup for HumanFriendly: replace " - " with " ", collapse whitespace, and log
         if ((mode ?? "").Trim() == "HumanFriendly")
         {
             string beforeDashNorm = cleaned;
@@ -3056,6 +3123,9 @@ public class CPHInline
             {
                 ["OpenAI API Key"] = EncryptData(CPH.GetGlobalVar<string>("OpenAI API Key", true)),
                 ["OpenAI Model"] = CPH.GetGlobalVar<string>("OpenAI Model", true),
+
+                ["Model Input Cost"] = CPH.GetGlobalVar<string>("model_input_cost", true),
+                ["Model Output Cost"] = CPH.GetGlobalVar<string>("model_output_cost", true),
                 ["Database Path"] = CPH.GetGlobalVar<string>("Database Path", true),
                 ["Ignore Bot Usernames"] = CPH.GetGlobalVar<string>("Ignore Bot Usernames", true),
                 ["Text Clean Mode"] = CPH.GetGlobalVar<string>("Text Clean Mode", true),
@@ -3100,7 +3170,7 @@ public class CPHInline
 
             string[] requiredKeys = new string[]
             {
-                "OpenAI API Key", "OpenAI Model", "Database Path", "Ignore Bot Usernames", "Logging Level", "Version",
+                "OpenAI API Key", "OpenAI Model", "Model Input Cost", "Model Output Cost", "Database Path", "Ignore Bot Usernames", "Logging Level", "Version",
                 "Discord Webhook URL", "Discord Bot Username", "Discord Avatar Url",
                 "character_voice_alias_1", "character_voice_alias_2", "character_voice_alias_3", "character_voice_alias_4", "character_voice_alias_5",
                 "character_file_1", "character_file_2", "character_file_3", "character_file_4", "character_file_5",
@@ -3189,6 +3259,22 @@ public class CPHInline
                 if (key == "OpenAI API Key")
                 {
                     value = DecryptData(value);
+                    CPH.SetGlobalVar(key, value, true);
+                    LogToFile($"Loaded setting: {key} = {value}", "DEBUG");
+                    continue;
+                }
+
+                if (key == "Model Input Cost")
+                {
+                    CPH.SetGlobalVar("model_input_cost", value, true);
+                    LogToFile($"Loaded cost setting: {key} (mapped to model_input_cost) = {value}", "DEBUG");
+                    continue;
+                }
+                if (key == "Model Output Cost")
+                {
+                    CPH.SetGlobalVar("model_output_cost", value, true);
+                    LogToFile($"Loaded cost setting: {key} (mapped to model_output_cost) = {value}", "DEBUG");
+                    continue;
                 }
                 CPH.SetGlobalVar(key, value, true);
                 LogToFile($"Loaded setting: {key} = {value}", "DEBUG");
