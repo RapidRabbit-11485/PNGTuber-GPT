@@ -191,6 +191,13 @@ public class CPHInline
         public int max_prompt_history { get; set; } = 10;
     }
 
+    public class UsageData
+    {
+        public long PromptTokens { get; set; }
+        public long CompletionTokens { get; set; }
+        public long TotalTokens { get; set; }
+    }
+
     public class ChatCompletionsResponse
     {
 
@@ -1576,8 +1583,10 @@ public class CPHInline
                 LogToFile($"Error in LiteDB token_usage integration: {ex2.Message}", "ERROR");
             }
 
-            double inputRate = CPH.GetGlobalVar<double>("model_input_cost", 2.50);
-            double outputRate = CPH.GetGlobalVar<double>("model_output_cost", 10.00);
+            double inputRate = CPH.GetGlobalVar<double>("model_input_cost", true);
+            double outputRate = CPH.GetGlobalVar<double>("model_output_cost", true);
+            if (inputRate == 0) inputRate = 2.50;
+            if (outputRate == 0) outputRate = 10.00;
 
             double promptCost = Math.Round((usage.PromptTokens / 1_000_000.0) * inputRate, 6);
             double completionCost = Math.Round((usage.CompletionTokens / 1_000_000.0) * outputRate, 6);
