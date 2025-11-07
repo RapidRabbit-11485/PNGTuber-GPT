@@ -87,7 +87,8 @@ public class CPHInline
         }
     }
 
-    public bool Execute()    {
+    public bool Execute()
+    {
         LogToFile(">>> Entering Execute()", "DEBUG");
 
         LogToFile("Starting initialization of the PNGTuber-GPT application.", "INFO");
@@ -103,7 +104,6 @@ public class CPHInline
 
         if (string.IsNullOrWhiteSpace(initializeVersionNumber))
         {
-
             LogToFile("The 'Version' global variable is not found or is empty.", "ERROR");
             LogToFile("Condition string.IsNullOrWhiteSpace(initializeVersionNumber) evaluated TRUE in Execute()", "DEBUG");
             LogToFile("<<< Exiting Execute() with return value: false", "DEBUG");
@@ -116,7 +116,11 @@ public class CPHInline
 
         LogToFile($"Sending version number to chat: {initializeVersionNumber}", "DEBUG");
 
-        CPH.SendMessage($"{initializeVersionNumber} has been initialized successfully.", true);
+        bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+        if (postToChat)
+            CPH.SendMessage($"{initializeVersionNumber} has been initialized successfully.", true);
+        else
+            LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {initializeVersionNumber} has been initialized successfully.", "DEBUG");
         LogToFile("Completed SendMessage() successfully.", "DEBUG");
 
         LogToFile("Version number sent to chat successfully.", "INFO");
@@ -462,7 +466,6 @@ public class CPHInline
         LogToFile("Entering UpdateUserPreferredName method.", "DEBUG");
         try
         {
-
             if (!CPH.TryGetArg("userName", out string userName) || string.IsNullOrWhiteSpace(userName))
             {
                 LogToFile("Failed to retrieve 'userName' argument via TryGetArg in UpdateUserPreferredName.", "DEBUG");
@@ -500,13 +503,31 @@ public class CPHInline
                 LogToFile($"Updated preferred name for {userName} to {preferredName}.", "INFO");
             }
 
-            CPH.SendMessage($"{userName}, your nickname has been set to {preferredName}.", true);
+            string message = $"{userName}, your nickname has been set to {preferredName}.";
+            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+            if (postToChat)
+            {
+                CPH.SendMessage(message, true);
+            }
+            else
+            {
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
+            }
             return true;
         }
         catch (Exception ex)
         {
             LogToFile($"Error in UpdateUserPreferredName: {ex.Message}", "ERROR");
-            CPH.SendMessage("I'm sorry, I couldn't update your nickname right now.", true);
+            string message = "I'm sorry, I couldn't update your nickname right now.";
+            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+            if (postToChat)
+            {
+                CPH.SendMessage(message, true);
+            }
+            else
+            {
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
+            }
             return false;
         }
     }
@@ -516,7 +537,6 @@ public class CPHInline
         LogToFile("Entering DeleteUserProfile method.", "DEBUG");
         try
         {
-
             if (!CPH.TryGetArg("userName", out string userName))
             {
                 LogToFile("Failed to retrieve 'userName' argument via TryGetArg in DeleteUserProfile.", "DEBUG");
@@ -532,7 +552,12 @@ public class CPHInline
             var profile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
             if (profile == null)
             {
-                CPH.SendMessage($"{userName}, you don't have a custom nickname set.", true);
+                string message = $"{userName}, you don't have a custom nickname set.";
+                bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+                if (postToChat)
+                    CPH.SendMessage(message, true);
+                else
+                    LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
                 LogToFile($"No profile found for {userName}.", "INFO");
                 return true;
             }
@@ -541,13 +566,25 @@ public class CPHInline
             userCollection.Update(profile);
             LogToFile($"Reset preferred name for {userName}.", "INFO");
 
-            CPH.SendMessage($"{userName}, your nickname has been reset to your username.", true);
+            {
+                string message = $"{userName}, your nickname has been reset to your username.";
+                bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+                if (postToChat)
+                    CPH.SendMessage(message, true);
+                else
+                    LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
+            }
             return true;
         }
         catch (Exception ex)
         {
             LogToFile($"Error in DeleteUserProfile: {ex.Message}", "ERROR");
-            CPH.SendMessage("An error occurred while resetting your nickname.", true);
+            string message = "An error occurred while resetting your nickname.";
+            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+            if (postToChat)
+                CPH.SendMessage(message, true);
+            else
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
             return false;
         }
     }
@@ -576,7 +613,11 @@ public class CPHInline
                 ? $"Your current username is set to {displayName}"
                 : $"Your current username is set to {displayName} ({profile.Pronouns})";
 
-            CPH.SendMessage(message, true);
+            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+            if (postToChat)
+                CPH.SendMessage(message, true);
+            else
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
             LogToFile($"Displayed profile for {userName}: {message}", "INFO");
             return true;
         }
@@ -592,11 +633,15 @@ public class CPHInline
         LogToFile("Entering ForgetThis method (LiteDB).", "DEBUG");
         try
         {
+            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
 
             if (!CPH.TryGetArg("rawInput", out string keywordToRemove) || string.IsNullOrWhiteSpace(keywordToRemove))
             {
                 LogToFile("Failed to retrieve 'rawInput' argument via TryGetArg in ForgetThis.", "DEBUG");
-                CPH.SendMessage("You need to tell me what to forget.", true);
+                if (postToChat)
+                    CPH.SendMessage("You need to tell me what to forget.", true);
+                else
+                    LogToFile("[Skipped Chat Output] Post To Chat disabled. Message: You need to tell me what to forget.", "DEBUG");
                 return false;
             }
             else
@@ -612,12 +657,18 @@ public class CPHInline
             {
                 keywordsCol.Delete(existing["_id"]);
                 LogToFile($"Removed keyword '{keywordToRemove}' from LiteDB.", "INFO");
-                CPH.SendMessage($"The definition for '{keywordToRemove}' has been removed.", true);
+                if (postToChat)
+                    CPH.SendMessage($"The definition for '{keywordToRemove}' has been removed.", true);
+                else
+                    LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: The definition for '{keywordToRemove}' has been removed.", "DEBUG");
             }
             else
             {
                 LogToFile($"No definition found for keyword '{keywordToRemove}'.", "INFO");
-                CPH.SendMessage($"I don't have a definition stored for '{keywordToRemove}'.", true);
+                if (postToChat)
+                    CPH.SendMessage($"I don't have a definition stored for '{keywordToRemove}'.", true);
+                else
+                    LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: I don't have a definition stored for '{keywordToRemove}'.", "DEBUG");
             }
 
             return true;
@@ -625,7 +676,11 @@ public class CPHInline
         catch (Exception ex)
         {
             LogToFile($"An error occurred in ForgetThis: {ex.Message}", "ERROR");
-            CPH.SendMessage("An error occurred while attempting to forget that. Please try again later.", true);
+            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+            if (postToChat)
+                CPH.SendMessage("An error occurred while attempting to forget that. Please try again later.", true);
+            else
+                LogToFile("[Skipped Chat Output] Post To Chat disabled. Message: An error occurred while attempting to forget that. Please try again later.", "DEBUG");
             return false;
         }
     }
@@ -635,7 +690,6 @@ public class CPHInline
         LogToFile("Entering ForgetThisAboutMe method.", "DEBUG");
         try
         {
-
             if (!CPH.TryGetArg("userName", out string userName) || string.IsNullOrWhiteSpace(userName))
             {
                 LogToFile("Failed to retrieve 'userName' argument via TryGetArg in ForgetThisAboutMe.", "DEBUG");
@@ -649,23 +703,52 @@ public class CPHInline
 
             var userCollection = _db.GetCollection<UserProfile>("user_profiles");
             var profile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
+
+            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+
             if (profile == null || profile.Knowledge == null || profile.Knowledge.Count == 0)
             {
                 LogToFile($"No memories found for {userName}.", "INFO");
-                CPH.SendMessage($"{userName}, I don't have any memories stored for you.", true);
+                if (postToChat)
+                {
+                    CPH.SendMessage($"{userName}, I don't have any memories stored for you.", true);
+                }
+                else
+                {
+                    LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {userName}, I don't have any memories stored for you.", "DEBUG");
+                }
                 return true;
             }
 
             profile.Knowledge.Clear();
             userCollection.Update(profile);
             LogToFile($"Cleared all memories for {userName}.", "INFO");
-            CPH.SendMessage($"{userName}, all your memories have been cleared.", true);
+
+            if (postToChat)
+            {
+                CPH.SendMessage($"{userName}, all your memories have been cleared.", true);
+            }
+            else
+            {
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {userName}, all your memories have been cleared.", "DEBUG");
+            }
+
             return true;
         }
         catch (Exception ex)
         {
             LogToFile($"Error in ForgetThisAboutMe: {ex.Message}", "ERROR");
-            CPH.SendMessage("An error occurred while attempting to clear your memories. Please try again later.", true);
+
+            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+            if (postToChat)
+            {
+                CPH.SendMessage("An error occurred while attempting to clear your memories. Please try again later.", true);
+            }
+            else
+            {
+                LogToFile("[Skipped Chat Output] Post To Chat disabled. Message: An error occurred while attempting to clear your memories. Please try again later.", "DEBUG");
+            }
+
             return false;
         }
     }
@@ -675,7 +758,6 @@ public class CPHInline
         LogToFile("Entering GetMemory method.", "DEBUG");
         try
         {
-
             if (!CPH.TryGetArg("userName", out string userName) || string.IsNullOrWhiteSpace(userName))
             {
                 LogToFile("GetMemory: 'userName' argument missing or empty.", "WARN");
@@ -689,21 +771,34 @@ public class CPHInline
             if (profile == null || profile.Knowledge == null || profile.Knowledge.Count == 0)
             {
                 string noneMsg = $"I don’t have any saved memories for {userName}.";
-                CPH.SendMessage(noneMsg, true);
+                bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+                if (postToChat)
+                    CPH.SendMessage(noneMsg, true);
+                else
+                    LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {noneMsg}", "DEBUG");
                 LogToFile($"GetMemory: No profile or memories for '{userName}'.", "INFO");
                 return true;
             }
 
             var combinedMemory = string.Join(", ", profile.Knowledge);
             var message = $"Something I remember about {userName} is: {combinedMemory}.";
-            CPH.SendMessage(message, true);
+            bool postToChat2 = CPH.GetGlobalVar<bool>("Post To Chat", true);
+            if (postToChat2)
+                CPH.SendMessage(message, true);
+            else
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
             LogToFile($"GetMemory: Retrieved memory for '{userName}': {combinedMemory}", "DEBUG");
             return true;
         }
         catch (Exception ex)
         {
             LogToFile($"Error in GetMemory: {ex.Message}", "ERROR");
-            CPH.SendMessage("Sorry, something went wrong while retrieving your memory.", true);
+            string message = "Sorry, something went wrong while retrieving your memory.";
+            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+            if (postToChat)
+                CPH.SendMessage(message, true);
+            else
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
             return false;
         }
     }
@@ -778,24 +873,36 @@ public class CPHInline
         if (ChatLog == null)
         {
             LogToFile("ChatLog is not initialized and cannot be cleared.", "ERROR");
-            CPH.SendMessage("Chat history is already empty.", true);
+            string message = "Chat history is already empty.";
+            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+            if (postToChat)
+                CPH.SendMessage(message, true);
+            else
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
             return false;
         }
 
         try
         {
-
             ChatLog.Clear();
             LogToFile("Chat history has been successfully cleared.", "INFO");
-
-            CPH.SendMessage("Chat history has been cleared.", true);
+            string message = "Chat history has been cleared.";
+            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+            if (postToChat)
+                CPH.SendMessage(message, true);
+            else
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
             return true;
         }
         catch (Exception ex)
         {
-
             LogToFile($"An error occurred while clearing the chat history: {ex.Message}", "ERROR");
-            CPH.SendMessage("I was unable to clear the chat history. Please check the log file for more details.", true);
+            string message = "I was unable to clear the chat history. Please check the log file for more details.";
+            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+            if (postToChat)
+                CPH.SendMessage(message, true);
+            else
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
             return false;
         }
     }
@@ -807,11 +914,14 @@ public class CPHInline
 
         bool moderationEnabled = CPH.GetGlobalVar<bool>("moderation_enabled", true);
         bool moderationRebukeEnabled = CPH.GetGlobalVar<bool>("moderation_rebuke_enabled", true);
+        bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+        LogToFile($"[INFO] 'Post To Chat' global variable: {postToChat}", "INFO");
 
         if (!CPH.TryGetArg("rawInput", out string input) || string.IsNullOrWhiteSpace(input))
         {
             LogToFile("PerformModeration failed: missing or invalid rawInput", "ERROR");
-            CPH.SendMessage("Moderation failed — message could not be processed.", true);
+            if (postToChat)
+                CPH.SendMessage("Moderation failed — message could not be processed.", true);
             LogToFile("==== End Moderation Evaluation ====", "INFO");
             return false;
         }
@@ -832,9 +942,15 @@ public class CPHInline
             if (response?.Results == null || response.Results.Count == 0)
             {
                 LogToFile("PerformModeration failed: moderation endpoint returned null or empty results", "ERROR");
-                CPH.SendMessage("Moderation failed — message could not be processed.", true);
+                LogToFile("[DEBUG] Moderation API call failed or returned no results (communication or flagging failure).", "DEBUG");
+                if (postToChat)
+                    CPH.SendMessage("Moderation failed — message could not be processed.", true);
                 LogToFile("==== End Moderation Evaluation ====", "INFO");
                 return false;
+            }
+            else
+            {
+                LogToFile("[DEBUG] Moderation API call succeeded and returned results.", "DEBUG");
             }
 
             var result = response.Results[0];
@@ -882,20 +998,30 @@ public class CPHInline
             else
                 LogToFile("Flagged Categories: None", "INFO");
 
-            bool passed = !flaggedCategories.Any() || HandleModerationResponse(flaggedCategories, input, moderationRebukeEnabled);
-            LogToFile($"Moderation result: {(passed ? "Passed" : "Failed")}", "INFO");
+            bool passed = !flaggedCategories.Any();
             if (!passed)
             {
-                CPH.SendMessage("Moderation failed — message could not be processed.", true);
+                // Only rebuke if enabled, do not send "could not process" message
+                HandleModerationResponse(flaggedCategories, input, moderationRebukeEnabled);
+                LogToFile("==== End Moderation Evaluation ====", "INFO");
+                return false;
             }
-            LogToFile("==== End Moderation Evaluation ====", "INFO");
-            return passed;
+            else
+            {
+                // Passed moderation, no additional chat output
+                CPH.SetArgument("moderatedMessage", input);
+                LogToFile("Message passed moderation.", "DEBUG");
+                LogToFile("==== End Moderation Evaluation ====", "INFO");
+                return true;
+            }
         }
         catch (Exception ex)
         {
             LogToFile($"An error occurred in PerformModeration: {ex.Message}", "ERROR");
             LogToFile($"Exception stack trace: {ex.StackTrace}", "DEBUG");
-            CPH.SendMessage("Moderation failed — message could not be processed.", true);
+            LogToFile("[DEBUG] Moderation API call failed or exception thrown (communication or flagging failure).", "DEBUG");
+            if (postToChat)
+                CPH.SendMessage("Moderation failed — message could not be processed.", true);
             LogToFile("==== End Moderation Evaluation ====", "INFO");
             return false;
         }
@@ -903,39 +1029,58 @@ public class CPHInline
 
     private bool HandleModerationResponse(List<string> flaggedCategories, string input, bool rebukeEnabled)
     {
-        if (flaggedCategories.Any())
-        {
-            string flaggedCategoriesString = string.Join(", ", flaggedCategories);
-            string outputMessage = $"This message was flagged in the following categories: {flaggedCategoriesString}. Repeated attempts at abuse may result in a ban.";
-            LogToFile(outputMessage, "INFO");
+        bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+        bool voiceEnabled = CPH.GetGlobalVar<bool>("voice_enabled", true);
 
-            if (rebukeEnabled)
-            {
-                string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
-                if (string.IsNullOrWhiteSpace(voiceAlias))
-                {
-                    LogToFile("'Voice Alias' global variable is not found or not a valid string.", "ERROR");
-                    return false;
-                }
-
-                int speakResult = CPH.TtsSpeak(voiceAlias, outputMessage, false);
-                LogToFile($"TTS speak result: {speakResult}", "DEBUG");
-
-                CPH.SendMessage(outputMessage, true);
-            }
-            else
-            {
-                LogToFile("Moderation rebuke is disabled by settings. Skipping TTS and chat output.", "INFO");
-                CPH.SendMessage("Message flagged but moderation responses are disabled.", true);
-            }
-            return false;
-        }
-        else
+        // If no flagged categories, proceed as usual (success path)
+        if (!flaggedCategories.Any())
         {
             CPH.SetArgument("moderatedMessage", input);
             LogToFile("Message passed moderation.", "DEBUG");
             return true;
         }
+
+        // If flagged categories exist, apply unified guard for TTS and chat
+        if (!postToChat)
+        {
+            LogToFile("[Skipped Moderation Output] Post To Chat is disabled; skipping all moderation rebuke, TTS, and chat output.", "INFO");
+            return false;
+        }
+
+        if (!rebukeEnabled)
+        {
+            LogToFile("[Skipped Moderation Output] Moderation rebuke is disabled by settings. Skipping TTS and chat output.", "INFO");
+            return false;
+        }
+
+        // At this point, postToChat == true && rebukeEnabled == true
+        string flaggedCategoriesString = string.Join(", ", flaggedCategories);
+        string outputMessage = $"This message was flagged in the following categories: {flaggedCategoriesString}. Repeated attempts at abuse may result in a ban.";
+        LogToFile(outputMessage, "INFO");
+
+        string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
+        // Only do TTS if all relevant conditions are true
+        if (postToChat && rebukeEnabled && voiceEnabled && !string.IsNullOrWhiteSpace(voiceAlias))
+        {
+            int speakResult = CPH.TtsSpeak(voiceAlias, outputMessage, false);
+            LogToFile($"TTS speak result: {speakResult}", "DEBUG");
+        }
+        else
+        {
+            LogToFile($"[Skipped TTS Output] TTS not performed. Conditions: PostToChat={postToChat}, RebukeEnabled={rebukeEnabled}, VoiceEnabled={voiceEnabled}, VoiceAliasPresent={!string.IsNullOrWhiteSpace(voiceAlias)}", "DEBUG");
+        }
+
+        // Only post to chat if postToChat && rebukeEnabled
+        if (postToChat && rebukeEnabled)
+        {
+            CPH.SendMessage(outputMessage, true);
+        }
+        else
+        {
+            LogToFile($"[Skipped Chat Output] Conditions not met for chat output. PostToChat={postToChat}, RebukeEnabled={rebukeEnabled}. Message: {outputMessage}", "DEBUG");
+        }
+
+        return false;
     }
 
     private ModerationResponse CallModerationEndpoint(string prompt)
@@ -1044,7 +1189,6 @@ public class CPHInline
     public bool Speak()
     {
         LogToFile("Entering Speak method (LiteDB + Pronoun integration).", "DEBUG");
-
         try
         {
             int characterNumber = 1;
@@ -1063,7 +1207,11 @@ public class CPHInline
             {
                 string err = $"No voice alias configured for Character {characterNumber}. Please set 'character_voice_alias_{characterNumber}'.";
                 LogToFile(err, "ERROR");
-                CPH.SendMessage(err, true);
+                bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+                if (postToChat)
+                    CPH.SendMessage(err, true);
+                else
+                    LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {err}", "DEBUG");
                 return false;
             }
 
@@ -1078,7 +1226,11 @@ public class CPHInline
             if (string.IsNullOrWhiteSpace(messageToSpeak))
             {
                 LogToFile("No text provided to speak.", "ERROR");
-                CPH.SendMessage("No text provided to speak.", true);
+                bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+                if (postToChat)
+                    CPH.SendMessage("No text provided to speak.", true);
+                else
+                    LogToFile("[Skipped Chat Output] Post To Chat disabled. Message: No text provided to speak.", "DEBUG");
                 return false;
             }
 
@@ -1095,11 +1247,33 @@ public class CPHInline
             string outputMessage = $"{formattedUser} said: {messageToSpeak}";
             LogToFile($"Character {characterNumber} ({voiceAlias}) speaking message: {outputMessage}", "INFO");
 
-            int speakResult = CPH.TtsSpeak(voiceAlias, outputMessage, false);
-            if (speakResult != 0)
+            // Check global flags
+            bool postToChatFlag = CPH.GetGlobalVar<bool>("Post To Chat", true);
+            bool voiceEnabled = CPH.GetGlobalVar<bool>("voice_enabled", true);
+
+            // Send to chat if enabled
+            if (postToChatFlag)
             {
-                LogToFile($"TTS returned non-zero result code: {speakResult}", "WARN");
-                return false;
+                CPH.SendMessage(outputMessage, true);
+            }
+            else
+            {
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {outputMessage}", "DEBUG");
+            }
+
+            // Speak via TTS if enabled
+            if (voiceEnabled)
+            {
+                int speakResult = CPH.TtsSpeak(voiceAlias, outputMessage, false);
+                if (speakResult != 0)
+                {
+                    LogToFile($"TTS returned non-zero result code: {speakResult}", "WARN");
+                    return false;
+                }
+            }
+            else
+            {
+                LogToFile($"[Skipped TTS Output] Voice disabled. Message: {outputMessage}", "DEBUG");
             }
 
             // CPH.SetGlobalVar("character", 1, true);
@@ -1109,7 +1283,11 @@ public class CPHInline
         catch (Exception ex)
         {
             LogToFile($"Speak() encountered an error: {ex.Message}", "ERROR");
-            CPH.SendMessage("An internal error occurred while speaking.", true);
+            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+            if (postToChat)
+                CPH.SendMessage("An internal error occurred while speaking.", true);
+            else
+                LogToFile("[Skipped Chat Output] Post To Chat disabled. Message: An internal error occurred while speaking.", "DEBUG");
             return false;
         }
     }
@@ -1119,10 +1297,17 @@ public class CPHInline
         LogToFile("Entering RememberThis method.", "DEBUG");
         try
         {
+            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+            bool voiceEnabled = CPH.GetGlobalVar<bool>("voice_enabled", true);
+
             if (!CPH.TryGetArg("userName", out string userName) || string.IsNullOrWhiteSpace(userName))
             {
                 LogToFile("Failed to retrieve 'userName' argument via TryGetArg in RememberThis.", "ERROR");
-                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
+                string message = "I'm sorry, but I can't remember that right now. Please try again later.";
+                if (postToChat)
+                    CPH.SendMessage(message, true);
+                else
+                    LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
                 return false;
             }
             else
@@ -1145,7 +1330,11 @@ public class CPHInline
             if (string.IsNullOrWhiteSpace(fullMessage))
             {
                 LogToFile("Failed to retrieve valid message content via TryGetArg in RememberThis.", "ERROR");
-                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
+                string message = "I'm sorry, but I can't remember that right now. Please try again later.";
+                if (postToChat)
+                    CPH.SendMessage(message, true);
+                else
+                    LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
                 return false;
             }
 
@@ -1153,7 +1342,11 @@ public class CPHInline
             if (string.IsNullOrWhiteSpace(voiceAlias))
             {
                 LogToFile("'Voice Alias' is not set or invalid.", "ERROR");
-                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
+                string message = "I'm sorry, but I can't remember that right now. Please try again later.";
+                if (postToChat)
+                    CPH.SendMessage(message, true);
+                else
+                    LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
                 return false;
             }
             else
@@ -1165,7 +1358,11 @@ public class CPHInline
             if (parts.Length < 2)
             {
                 LogToFile("Message does not contain enough parts for keyword and definition.", "ERROR");
-                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
+                string message = "I'm sorry, but I can't remember that right now. Please try again later.";
+                if (postToChat)
+                    CPH.SendMessage(message, true);
+                else
+                    LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
                 return false;
             }
 
@@ -1194,14 +1391,22 @@ public class CPHInline
             }
 
             string outputMessage = $"OK, {userName}, I will remember '{definition}' for '{keyword}'.";
-            CPH.SendMessage(outputMessage, true);
+            if (postToChat)
+                CPH.SendMessage(outputMessage, true);
+            else
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {outputMessage}", "DEBUG");
             LogToFile($"Confirmation message sent to user: {outputMessage}", "INFO");
             return true;
         }
         catch (Exception ex)
         {
             LogToFile($"An error occurred while trying to remember: {ex.Message}", "ERROR");
-            CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
+            string message = "I'm sorry, but I can't remember that right now. Please try again later.";
+            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+            if (postToChat)
+                CPH.SendMessage(message, true);
+            else
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
             return false;
         }
     }
@@ -1211,10 +1416,16 @@ public class CPHInline
         LogToFile("Entering RememberThisAboutMe method.", "DEBUG");
         try
         {
+            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+
             if (!CPH.TryGetArg("userName", out string userName) || string.IsNullOrWhiteSpace(userName))
             {
                 LogToFile("Failed to retrieve 'userName' argument via TryGetArg in RememberThisAboutMe.", "ERROR");
-                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
+                string message = "I'm sorry, but I can't remember that right now. Please try again later.";
+                if (postToChat)
+                    CPH.SendMessage(message, true);
+                else
+                    LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
                 return false;
             }
             else
@@ -1237,7 +1448,11 @@ public class CPHInline
             if (string.IsNullOrWhiteSpace(messageToRemember))
             {
                 LogToFile("Failed to retrieve valid message content via TryGetArg in RememberThisAboutMe.", "ERROR");
-                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
+                string message = "I'm sorry, but I can't remember that right now. Please try again later.";
+                if (postToChat)
+                    CPH.SendMessage(message, true);
+                else
+                    LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
                 return false;
             }
 
@@ -1245,7 +1460,11 @@ public class CPHInline
             if (profile == null)
             {
                 LogToFile($"Failed to retrieve or create profile for {userName}.", "ERROR");
-                CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
+                string message = "I'm sorry, but I can't remember that right now. Please try again later.";
+                if (postToChat)
+                    CPH.SendMessage(message, true);
+                else
+                    LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
                 return false;
             }
 
@@ -1268,14 +1487,22 @@ public class CPHInline
 
             string userToConfirm = !string.IsNullOrWhiteSpace(profile.PreferredName) ? profile.PreferredName : userName;
             string outputMessage = $"OK, {userToConfirm}, I will remember {messageToRemember} about you.";
-            CPH.SendMessage(outputMessage, true);
+            if (postToChat)
+                CPH.SendMessage(outputMessage, true);
+            else
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {outputMessage}", "DEBUG");
             LogToFile($"Confirmation message sent to user: {outputMessage}", "INFO");
             return true;
         }
         catch (Exception ex)
         {
             LogToFile($"An error occurred in RememberThisAboutMe: {ex.Message}", "ERROR");
-            CPH.SendMessage("I'm sorry, but I can't remember that right now. Please try again later.", true);
+            string message = "I'm sorry, but I can't remember that right now. Please try again later.";
+            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+            if (postToChat)
+                CPH.SendMessage(message, true);
+            else
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
             return false;
         }
     }
@@ -1288,24 +1515,36 @@ public class CPHInline
         if (GPTLog == null)
         {
             LogToFile("GPTLog is not initialized and cannot be cleared.", "ERROR");
-            CPH.SendMessage("Prompt history is already empty.", true);
+            string message = "Prompt history is already empty.";
+            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+            if (postToChat)
+                CPH.SendMessage(message, true);
+            else
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
             return false;
         }
 
         try
         {
-
             GPTLog.Clear();
             LogToFile("Prompt history has been successfully cleared.", "INFO");
-
-            CPH.SendMessage("Prompt history has been cleared.", true);
+            string message = "Prompt history has been cleared.";
+            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+            if (postToChat)
+                CPH.SendMessage(message, true);
+            else
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
             return true;
         }
         catch (Exception ex)
         {
-
             LogToFile($"An error occurred while clearing the prompt history: {ex.Message}", "ERROR");
-            CPH.SendMessage("I was unable to clear the prompt history. Please check the log file for more details.", true);
+            string message = "I was unable to clear the prompt history. Please check the log file for more details.";
+            bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+            if (postToChat)
+                CPH.SendMessage(message, true);
+            else
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {message}", "DEBUG");
             return false;
         }
     }
@@ -1314,6 +1553,10 @@ public class CPHInline
     {
         LogToFile("==== Begin AskGPT Execution ====", "INFO");
         LogToFile("Entering AskGPT method (streamer.bot pronouns, LiteDB context, webhook/discord sync).", "DEBUG");
+
+        // Global flag checks
+        bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+        bool voiceEnabled = CPH.GetGlobalVar<bool>("voice_enabled", true);
 
         int characterNumber = 1;
         try
@@ -1331,7 +1574,10 @@ public class CPHInline
         {
             string err = $"No voice alias configured for Character {characterNumber}. Please set 'character_voice_alias_{characterNumber}'.";
             LogToFile(err, "ERROR");
-            CPH.SendMessage(err, true);
+            if (postToChat)
+                CPH.SendMessage(err, true);
+            else
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {err}", "DEBUG");
             LogToFile("==== End AskGPT Execution ====", "INFO");
             return false;
         }
@@ -1350,7 +1596,11 @@ public class CPHInline
         if (!CPH.TryGetArg("userName", out string userName) || string.IsNullOrWhiteSpace(userName))
         {
             LogToFile("'userName' argument is not found or not a valid string.", "ERROR");
-            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            string msg = "I'm sorry, but I can't answer that question right now. Please check the log for details.";
+            if (postToChat)
+                CPH.SendMessage(msg, true);
+            else
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {msg}", "DEBUG");
             LogToFile("==== End AskGPT Execution ====", "INFO");
             return false;
         }
@@ -1381,7 +1631,11 @@ public class CPHInline
         else
         {
             LogToFile("Both 'moderatedMessage' and 'rawInput' are not found or are empty strings.", "ERROR");
-            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            string msg = "I'm sorry, but I can't answer that question right now. Please check the log for details.";
+            if (postToChat)
+                CPH.SendMessage(msg, true);
+            else
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {msg}", "DEBUG");
             LogToFile("==== End AskGPT Execution ====", "INFO");
             return false;
         }
@@ -1393,7 +1647,11 @@ public class CPHInline
         if (string.IsNullOrWhiteSpace(databasePath))
         {
             LogToFile("'Database Path' global variable is not found or not a valid string.", "ERROR");
-            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            string msg = "I'm sorry, but I can't answer that question right now. Please check the log for details.";
+            if (postToChat)
+                CPH.SendMessage(msg, true);
+            else
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {msg}", "DEBUG");
             LogToFile("==== End AskGPT Execution ====", "INFO");
             return false;
         }
@@ -1629,12 +1887,19 @@ public class CPHInline
                     catch { }
                     LogToFile($"Final OpenAI API failure. HTTP Status: {status}. Response: {failBody}", "ERROR");
                 }
-                CPH.SendMessage(apiFailMsg, true);
+                if (postToChat)
+                    CPH.SendMessage(apiFailMsg, true);
+                else
+                    LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {apiFailMsg}", "DEBUG");
             }
             else
             {
                 LogToFile("GPT model did not return a response.", "ERROR");
-                CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+                string msg = "I'm sorry, but I can't answer that question right now. Please check the log for details.";
+                if (postToChat)
+                    CPH.SendMessage(msg, true);
+                else
+                    LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {msg}", "DEBUG");
             }
             // Clear temporary collections before exit
             if (allUserProfiles != null) { allUserProfiles.Clear(); allUserProfiles = null; }
@@ -1714,23 +1979,35 @@ public class CPHInline
                     catch { }
                 }
                 LogToFile($"Failed to POST outbound webhook. HTTP Status: {status}. Response: {respBody}", "ERROR");
-                CPH.SendMessage("Outbound webhook failed to deliver response.", true);
+                string msg = "Outbound webhook failed to deliver response.";
+                if (postToChat)
+                    CPH.SendMessage(msg, true);
+                else
+                    LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {msg}", "DEBUG");
             }
             catch (Exception ex)
             {
                 LogToFile($"Failed to POST outbound webhook: {ex.Message}", "ERROR");
-                CPH.SendMessage("Outbound webhook failed to deliver response.", true);
+                string msg = "Outbound webhook failed to deliver response.";
+                if (postToChat)
+                    CPH.SendMessage(msg, true);
+                else
+                    LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {msg}", "DEBUG");
             }
         }
 
-        bool voiceEnabled = CPH.GetGlobalVar<bool>("voice_enabled", true);
+        // TTS Output: voiceEnabled check
         if (voiceEnabled)
         {
             CPH.TtsSpeak(voiceAlias, GPTResponse, false);
             LogToFile($"Character {characterNumber} spoke GPT's response.", "INFO");
         }
+        else
+        {
+            LogToFile($"[Skipped TTS Output] Voice disabled. Message: {GPTResponse}", "DEBUG");
+        }
 
-        bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+        // Chat Output: postToChat check
         if (postToChat)
         {
             CPH.SendMessage(GPTResponse, true);
@@ -1738,7 +2015,7 @@ public class CPHInline
         }
         else
         {
-            LogToFile("Posting GPT responses to chat is disabled by settings.", "INFO");
+            LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {GPTResponse}", "DEBUG");
         }
 
         bool logDiscord = CPH.GetGlobalVar<bool>("Log GPT Questions to Discord", true);
@@ -1769,6 +2046,10 @@ public class CPHInline
     {
         LogToFile("==== Begin AskGPTWebhook Execution ====", "INFO");
         LogToFile("Entering AskGPTWebhook (LiteDB context enrichment, outbound webhook, pronoun support, TTS/chat/discord parity).", "DEBUG");
+
+        // Respect Post To Chat and voice_enabled global variables
+        bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+        bool voiceEnabled = CPH.GetGlobalVar<bool>("voice_enabled", true);
 
         string fullMessage = null;
         if (CPH.TryGetArg("moderatedMessage", out string moderatedMessage) && !string.IsNullOrWhiteSpace(moderatedMessage))
@@ -1807,7 +2088,10 @@ public class CPHInline
         {
             string err = $"No voice alias configured for Character {characterNumber}. Please set 'character_voice_alias_{characterNumber}'.";
             LogToFile(err, "ERROR");
-            CPH.SendMessage(err, true);
+            if (postToChat)
+                CPH.SendMessage(err, true);
+            else
+                LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {err}", "DEBUG");
             LogToFile("==== End AskGPTWebhook Execution ====", "INFO");
             return false;
         }
@@ -2044,12 +2328,20 @@ public class CPHInline
                 LogToFile(msg, "ERROR");
                 if (apiFailStatus != -1 || !string.IsNullOrEmpty(apiFailRespBody))
                     LogToFile($"Final OpenAI API failure. HTTP Status: {apiFailStatus}. Response: {(apiFailRespBody != null && apiFailRespBody.Length > 300 ? apiFailRespBody.Substring(0, 300) + "..." : apiFailRespBody)}", "ERROR");
-                CPH.SendMessage("GPT API unavailable", true);
+                string chatMsg = "GPT API unavailable";
+                if (postToChat)
+                    CPH.SendMessage(chatMsg, true);
+                else
+                    LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {chatMsg}", "DEBUG");
             }
             else
             {
                 LogToFile("GPT model did not return a response.", "ERROR");
-                CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+                string chatMsg = "I'm sorry, but I can't answer that question right now. Please check the log for details.";
+                if (postToChat)
+                    CPH.SendMessage(chatMsg, true);
+                else
+                    LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {chatMsg}", "DEBUG");
             }
             // Clear temporary collections before exit
             if (allUserProfiles != null) { allUserProfiles.Clear(); allUserProfiles = null; }
@@ -2178,17 +2470,26 @@ public class CPHInline
                 LogToFile(webhookFailMsg, "ERROR");
                 if (webhookFailStatus != -1 || !string.IsNullOrEmpty(webhookFailRespBody))
                     LogToFile($"Final webhook failure. HTTP Status: {webhookFailStatus}. Response: {(webhookFailRespBody != null && webhookFailRespBody.Length > 300 ? webhookFailRespBody.Substring(0, 300) + "..." : webhookFailRespBody)}", "ERROR");
-                CPH.SendMessage("Webhook delivery failed after 3 attempts", true);
+                string chatMsg = "Webhook delivery failed after 3 attempts";
+                if (postToChat)
+                    CPH.SendMessage(chatMsg, true);
+                else
+                    LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {chatMsg}", "DEBUG");
             }
         }
 
-        bool voiceEnabled = CPH.GetGlobalVar<bool>("voice_enabled", true);
+        // TTS Output: voiceEnabled check
         if (voiceEnabled)
         {
             CPH.TtsSpeak(voiceAlias, GPTResponse, false);
             LogToFile($"Character {characterNumber} spoke GPT's response.", "INFO");
         }
-        bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+        else
+        {
+            LogToFile($"[Skipped TTS Output] Voice disabled. Message: {GPTResponse}", "DEBUG");
+        }
+
+        // Chat Output: postToChat check
         if (postToChat)
         {
             CPH.SendMessage(GPTResponse, true);
@@ -2196,7 +2497,7 @@ public class CPHInline
         }
         else
         {
-            LogToFile("Posting GPT responses to chat is disabled by settings.", "INFO");
+            LogToFile($"[Skipped Chat Output] Post To Chat disabled. Message: {GPTResponse}", "DEBUG");
         }
         bool logDiscord = CPH.GetGlobalVar<bool>("Log GPT Questions to Discord", true);
         if (logDiscord)
@@ -2235,6 +2536,10 @@ public class CPHInline
             return string.Empty;
         }
 
+        // Log guard for very long input
+        if (text.Length > 10000)
+            LogToFile("Warning: unusually long input to CleanAIText.", "WARN");
+
         string cleaned = text;
         switch ((mode ?? "").Trim())
         {
@@ -2245,7 +2550,7 @@ public class CPHInline
 
             case "StripEmojis":
                 var sbEmoji = new System.Text.StringBuilder();
-                foreach (var ch in cleaned.Normalize(NormalizationForm.FormD))
+                foreach (var ch in cleaned)
                 {
                     var uc = CharUnicodeInfo.GetUnicodeCategory(ch);
                     if (uc != UnicodeCategory.OtherSymbol && uc != UnicodeCategory.Surrogate && uc != UnicodeCategory.NonSpacingMark)
@@ -2275,7 +2580,7 @@ public class CPHInline
                     .Replace("…", "...")
                     .Replace("‐", "-");
 
-                // Remove unwanted characters while preserving normal punctuation
+                // Remove unwanted characters while preserving normal punctuation and slashes
                 var sbHuman = new System.Text.StringBuilder();
                 foreach (var ch in cleaned)
                 {
@@ -2284,7 +2589,7 @@ public class CPHInline
                         uc == UnicodeCategory.TitlecaseLetter || uc == UnicodeCategory.ModifierLetter ||
                         uc == UnicodeCategory.OtherLetter || uc == UnicodeCategory.DecimalDigitNumber ||
                         char.IsWhiteSpace(ch) ||
-                        ".,!?;:'\"()-".Contains(ch))
+                        ".,!?;:'\"()-/".Contains(ch))
                     {
                         sbHuman.Append(ch);
                     }
@@ -2292,8 +2597,7 @@ public class CPHInline
 
                 cleaned = sbHuman.ToString();
 
-                // Collapse multiple dashes and fix spacing issues
-                cleaned = Regex.Replace(cleaned, @"\s*-\s*", " - ");
+                // Collapse multiple dashes and fix spacing issues is now handled in final step
                 cleaned = Regex.Replace(cleaned, @"\s{2,}", " ").Trim();
                 break;
 
@@ -2305,7 +2609,7 @@ public class CPHInline
                 var sbStrict = new System.Text.StringBuilder();
                 foreach (var ch in cleaned)
                 {
-                    if (char.IsLetterOrDigit(ch) || " .!?,\'".Contains(ch))
+                    if (char.IsLetterOrDigit(ch) || " .!?,;:'()\"".Contains(ch))
                         sbStrict.Append(ch);
                 }
                 cleaned = sbStrict.ToString();
@@ -2320,6 +2624,16 @@ public class CPHInline
         string beforeFinal = cleaned;
         cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
         LogToFile($"Text before whitespace normalization: {beforeFinal}", "DEBUG");
+
+        // Final cleanup for HumanFriendly: replace " - " with " ", collapse whitespace, and log
+        if ((mode ?? "").Trim() == "HumanFriendly")
+        {
+            string beforeDashNorm = cleaned;
+            cleaned = cleaned.Replace(" - ", " ");
+            cleaned = Regex.Replace(cleaned, @"\s{2,}", " ");
+            LogToFile("Applied final dash/space normalization in CleanAIText().", "DEBUG");
+        }
+
         LogToFile($"Text after cleaning: {cleaned}", "DEBUG");
         return cleaned;
     }
@@ -2716,12 +3030,18 @@ public class CPHInline
 
     public bool SayPlay()
     {
-
         LogToFile("Entering the SayPlay method.", "DEBUG");
 
-        CPH.SendMessage("!play", true);
-
-        LogToFile("Sent !play command to chat successfully.", "INFO");
+        bool postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
+        if (postToChat)
+        {
+            CPH.SendMessage("!play", true);
+            LogToFile("Sent !play command to chat successfully.", "INFO");
+        }
+        else
+        {
+            LogToFile("[Skipped Chat Output] Post To Chat disabled. Message: !play", "DEBUG");
+        }
 
         return true;
     }
