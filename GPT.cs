@@ -200,8 +200,8 @@ public class CPHInline
 
     public class ChatCompletionsResponse
     {
-
         public List<Choice> Choices { get; set; }
+        public UsageData Usage { get; set; }
     }
 
     public class Choice
@@ -1549,7 +1549,7 @@ public class CPHInline
         }
     }
 
-    private void LogPromptScorecard(string methodName, string model, dynamic usage)
+    private void LogPromptScorecard(string methodName, string model, UsageData usage)
     {
         try
         {
