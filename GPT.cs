@@ -193,14 +193,34 @@ public class CPHInline
 
     public class UsageData
     {
-        public long PromptTokens { get; set; }
-        public long CompletionTokens { get; set; }
-        public long TotalTokens { get; set; }
+        [JsonProperty("prompt_tokens")]
+        public int PromptTokens { get; set; }
+
+        [JsonProperty("completion_tokens")]
+        public int CompletionTokens { get; set; }
+
+        [JsonProperty("total_tokens")]
+        public int TotalTokens { get; set; }
     }
 
     public class ChatCompletionsResponse
     {
+        [JsonProperty("id")]
+        public string Id { get; set; }
+
+        [JsonProperty("object")]
+        public string Object { get; set; }
+
+        [JsonProperty("created")]
+        public long Created { get; set; }
+
+        [JsonProperty("model")]
+        public string Model { get; set; }
+
+        [JsonProperty("choices")]
         public List<Choice> Choices { get; set; }
+
+        [JsonProperty("usage")]
         public UsageData Usage { get; set; }
     }
 
@@ -1553,20 +1573,31 @@ public class CPHInline
     {
         try
         {
+            // Defensive: check for null usage object
+            if (usage == null)
+            {
+                LogToFile($"No usage data available for {methodName}. Skipping scorecard logging.", "WARN");
+                return;
+            }
+
+            // Safely extract token values, defaulting to 0 if null/missing/invalid
+            long promptTokens = 0, completionTokens = 0, totalTokens = 0;
+            try { promptTokens = usage?.PromptTokens ?? 0; } catch { promptTokens = 0; }
+            try { completionTokens = usage?.CompletionTokens ?? 0; } catch { completionTokens = 0; }
+            try { totalTokens = usage?.TotalTokens ?? 0; } catch { totalTokens = 0; }
 
             long rollingPromptTokens = 0;
             long rollingCompletionTokens = 0;
             long rollingTotalTokens = 0;
             try
             {
-
                 var usageCollection = _db.GetCollection<BsonDocument>("token_usage");
                 var entry = new BsonDocument
                 {
                     ["Timestamp"] = DateTime.UtcNow,
-                    ["PromptTokens"] = usage.PromptTokens,
-                    ["CompletionTokens"] = usage.CompletionTokens,
-                    ["TotalTokens"] = usage.TotalTokens
+                    ["PromptTokens"] = promptTokens,
+                    ["CompletionTokens"] = completionTokens,
+                    ["TotalTokens"] = totalTokens
                 };
                 usageCollection.Insert(entry);
 
@@ -1574,9 +1605,18 @@ public class CPHInline
                 usageCollection.DeleteMany(Query.LT("Timestamp", cutoff));
 
                 var recentDocs = usageCollection.Find(Query.GTE("Timestamp", cutoff)).ToList();
-                rollingPromptTokens = recentDocs.Sum(x => x["PromptTokens"].AsInt64);
-                rollingCompletionTokens = recentDocs.Sum(x => x["CompletionTokens"].AsInt64);
-                rollingTotalTokens = recentDocs.Sum(x => x["TotalTokens"].AsInt64);
+                rollingPromptTokens = recentDocs.Sum(x =>
+                {
+                    try { return x["PromptTokens"].AsInt64; } catch { return 0L; }
+                });
+                rollingCompletionTokens = recentDocs.Sum(x =>
+                {
+                    try { return x["CompletionTokens"].AsInt64; } catch { return 0L; }
+                });
+                rollingTotalTokens = recentDocs.Sum(x =>
+                {
+                    try { return x["TotalTokens"].AsInt64; } catch { return 0L; }
+                });
             }
             catch (Exception ex2)
             {
@@ -1588,8 +1628,8 @@ public class CPHInline
             if (inputRate == 0) inputRate = 2.50;
             if (outputRate == 0) outputRate = 10.00;
 
-            double promptCost = Math.Round((usage.PromptTokens / 1_000_000.0) * inputRate, 6);
-            double completionCost = Math.Round((usage.CompletionTokens / 1_000_000.0) * outputRate, 6);
+            double promptCost = Math.Round((promptTokens / 1_000_000.0) * inputRate, 6);
+            double completionCost = Math.Round((completionTokens / 1_000_000.0) * outputRate, 6);
             double totalPromptCost = Math.Round(promptCost + completionCost, 6);
 
             double rollingCost = Math.Round(
@@ -1602,9 +1642,9 @@ public class CPHInline
             LogToFile("--------------------------------------------------", "INFO");
 
             LogToFile($"{"Model",-30}{model,-10}", "INFO");
-            LogToFile($"{"Prompt Tokens",-30}{usage.PromptTokens,-10}", "INFO");
-            LogToFile($"{"Completion Tokens",-30}{usage.CompletionTokens,-10}", "INFO");
-            LogToFile($"{"Total Tokens",-30}{usage.TotalTokens,-10}", "INFO");
+            LogToFile($"{"Prompt Tokens",-30}{promptTokens,-10}", "INFO");
+            LogToFile($"{"Completion Tokens",-30}{completionTokens,-10}", "INFO");
+            LogToFile($"{"Total Tokens",-30}{totalTokens,-10}", "INFO");
             LogToFile($"{"30-Day Rolling Tokens",-30}{rollingTotalTokens,-10}", "INFO");
             LogToFile($"{"Prompt Cost",-30}{totalPromptCost.ToString("C4"),-10}", "INFO");
             LogToFile($"{"30-Day Rolling Cost",-30}{rollingCost.ToString("C2"),-10}", "INFO");
@@ -1930,12 +1970,12 @@ public class CPHInline
         sw.Stop();
         LogToFile($"OpenAI API call completed in {sw.ElapsedMilliseconds} ms.", "INFO");
 
-        if (apiSuccess && completionsJsonResponse?.Usage != null)
+        if (apiSuccess && completionsJsonResponse?.usage != null)
         {
             LogPromptScorecard(
                 "AskGPT",
                 AIModel,
-                completionsJsonResponse.Usage
+                completionsJsonResponse.usage
             );
         }
 
@@ -2424,12 +2464,12 @@ public class CPHInline
         try
         {
             var completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
-            if (apiSuccess && completionsJsonResponse?.Usage != null)
+            if (apiSuccess && completionsJsonResponse?.usage != null)
             {
                 LogPromptScorecard(
                     "AskGPTWebhook",
                     CPH.GetGlobalVar<string>("OpenAI Model", true),
-                    completionsJsonResponse.Usage
+                    completionsJsonResponse.usage
                 );
             }
         }
