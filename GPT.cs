@@ -1597,8 +1597,8 @@ public class CPHInline
             LogToFile($"{"Completion Tokens",-30}{usage.CompletionTokens,-10}", "INFO");
             LogToFile($"{"Total Tokens",-30}{usage.TotalTokens,-10}", "INFO");
             LogToFile($"{"30-Day Rolling Tokens",-30}{rollingTotalTokens,-10}", "INFO");
-            LogToFile($"{"Prompt Cost (USD)",-30}{totalPromptCost.ToString("C4"),-10}", "INFO");
-            LogToFile($"{"30-Day Rolling Cost (USD)",-30}{rollingCost.ToString("C2"),-10}", "INFO");
+            LogToFile($"{"Prompt Cost",-30}{totalPromptCost.ToString("C4"),-10}", "INFO");
+            LogToFile($"{"30-Day Rolling Cost",-30}{rollingCost.ToString("C2"),-10}", "INFO");
 
             LogToFile("--------------------------------------------------", "INFO");
         }
