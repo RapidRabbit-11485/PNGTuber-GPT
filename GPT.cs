@@ -1145,7 +1145,6 @@ public class CPHInline
                 return false;
             }
 
-            // Extract the keyword (first word)
             var keyword = rawInput.Trim().Split(' ', '\t', '\r', '\n').FirstOrDefault();
             if (string.IsNullOrWhiteSpace(keyword))
             {
@@ -1597,7 +1596,6 @@ public class CPHInline
             }
             LogToFile($"[SaveMessage] DEBUG: Args OK. userName='{userName}', msg='{msg}'", "DEBUG");
 
-            // Prevent saving chat commands to the queue
             if (msg.StartsWith("!", StringComparison.OrdinalIgnoreCase))
             {
                 LogToFile($"[SaveMessage] INFO: Skipped message '{msg}' because it is a command.", "INFO");
@@ -1606,7 +1604,6 @@ public class CPHInline
                 return false;
             }
 
-            // Ignore Bot Usernames check -- moved up!
             try
             {
                 LogToFile("[SaveMessage] DEBUG: Retrieving 'Ignore Bot Usernames' global var", "DEBUG");
@@ -2425,7 +2422,7 @@ public class CPHInline
         string rawInput = null;
         try
         {
-            // Retrieve rawInput argument
+
             try
             {
                 if (!CPH.TryGetArg("rawInput", out rawInput) || string.IsNullOrWhiteSpace(rawInput))
@@ -2444,7 +2441,6 @@ public class CPHInline
                 return false;
             }
 
-            // Parse keyword and definition
             string keyword = null;
             string definition = null;
             try
@@ -2479,7 +2475,6 @@ public class CPHInline
                 postToChat = false;
             }
 
-            // Database upsert for keywords collection
             try
             {
                 var col = _db.GetCollection<BsonDocument>("keywords");
@@ -2904,7 +2899,7 @@ public class CPHInline
         string pronounSubject = null, pronounObject = null, pronounPossessive = null, pronounReflexive = null, pronounDescription = null;
         string userToSpeak = null;
         string fullMessage = null;
-        // Ensure prompt is declared and initialized
+
         string prompt = null;
         string databasePath = null;
         string characterFileName = null;
@@ -2912,19 +2907,19 @@ public class CPHInline
         string contextBody = string.Empty;
         string broadcaster = null, currentTitle = null, currentGame = null;
         var userCollection = _db.GetCollection<UserProfile>("user_profiles");
-        // Ensure allUserProfiles is declared and initialized
+
         var allUserProfiles = (List<UserProfile>)null;
         var keywordsCol = _db.GetCollection<BsonDocument>("keywords");
-        // Ensure keywordDocs is declared and initialized
+
         var keywordDocs = (List<BsonDocument>)null;
-        // Ensure profileDocs_web and keywordDocs_web are declared and initialized (for possible web context usage)
+
         var profileDocs_web = new List<BsonDocument>();
         var keywordDocs_web = new List<BsonDocument>();
-        // Ensure mentionedUsers, pronounContextEntries, enrichmentSections are declared and initialized
+
         List<string> mentionedUsers = new List<string>();
         var pronounContextEntries = new List<string>();
         var enrichmentSections = new List<string>();
-        // Remove StringBuilder contextBody and contextBodyString
+
         System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
         string completionsRequestJSON = null;
         string completionsResponseContent = null;
@@ -2934,7 +2929,7 @@ public class CPHInline
         string completionsUrl = null;
         string apiKey = null;
         string AIModel = null;
-        // Ensure messages is declared and initialized
+
         var messages = (List<chatMessage>)null;
         int maxAttempts = 3;
         int attempt = 0;
@@ -3057,7 +3052,7 @@ public class CPHInline
                     return false;
                 }
                 prompt = $"{userToSpeak} asks: {fullMessage}";
-                // LogToFile($"[AskGPT] INFO: Prompt input: {prompt}", "INFO"); // Moved after scorecard
+
                 LogToFile($"Constructed prompt for GPT: {prompt}", "DEBUG");
             }
             catch (Exception exArgs)
@@ -3068,13 +3063,12 @@ public class CPHInline
                 return false;
             }
 
-            // ==== Begin 6-phase Coaching Mode Context Assembly ====
             try
             {
-                // PHASE 1: Load context file for character (refactored, string-based globals, safe parsing)
+
                 try
                 {
-                    // 1) Safely get character number from Streamer.bot (stored as string)
+
                     string characterStr = CPH.GetGlobalVar<string>("character", true);
                     int characterNumberLocal = 1;
                     if (!int.TryParse(characterStr, out characterNumberLocal))
@@ -3082,7 +3076,6 @@ public class CPHInline
                     characterNumber = characterNumberLocal;
                     LogToFile($"[AskGPT] DEBUG: Active character number set to {characterNumber}.", "DEBUG");
 
-                    // 2) Get character context file name from Streamer.bot global variable (e.g., character_file_1)
                     string characterFileKey = $"character_file_{characterNumber}";
                     string contextFileName = CPH.GetGlobalVar<string>(characterFileKey, true);
                     if (string.IsNullOrWhiteSpace(contextFileName))
@@ -3091,7 +3084,6 @@ public class CPHInline
                         LogToFile($"[AskGPT] WARN: No context file defined for Character {characterNumber}. Using default '{contextFileName}'.", "WARN");
                     }
 
-                    // 3) Get base database path from Streamer.bot (global has space in name)
                     string databasePathLocal = CPH.GetGlobalVar<string>("Database Path", true);
                     if (string.IsNullOrWhiteSpace(databasePathLocal))
                     {
@@ -3100,7 +3092,6 @@ public class CPHInline
                     }
                     databasePath = databasePathLocal;
 
-                    // 4) Build full path and try to load context
                     string fullContextFilePathLocal = Path.Combine(databasePath, contextFileName);
                     fullContextFilePath = fullContextFilePathLocal;
                     string contextBodyLocal = string.Empty;
@@ -3116,7 +3107,6 @@ public class CPHInline
                     }
                     contextBody = contextBodyLocal;
 
-                    // 5) Prepend system context to message list
                     if (messages == null)
                         messages = new List<chatMessage>();
                     if (!string.IsNullOrWhiteSpace(contextBody))
@@ -3128,12 +3118,10 @@ public class CPHInline
                     LogToFile($"[AskGPT] Stack: {exCtx.StackTrace}", "DEBUG");
                 }
 
-                // PHASE 2: Enter coaching mode
                 LogToFile("[AskGPT] DEBUG: Entering coaching mode for structured context assembly.", "DEBUG");
                 messages.Add(new chatMessage { role = "system", content = "You will now receive structured context updates. Acknowledge each with 'OK' and wait for instruction to resume normal operation." });
                 messages.Add(new chatMessage { role = "assistant", content = "OK" });
 
-                // PHASE 3: Chat Log injection
                 int chatTurns = ChatLog != null ? ChatLog.Count : 0;
                 LogToFile($"[AskGPT] DEBUG: Injecting chat log with {chatTurns} turns.", "DEBUG");
                 if (ChatLog != null)
@@ -3145,11 +3133,10 @@ public class CPHInline
                     }
                 }
 
-                // PHASE 4: Keyword definitions
                 LogToFile("[AskGPT] DEBUG: Querying LiteDB for keyword definitions (normalized).", "DEBUG");
                 try
                 {
-                    // Normalize input
+
                     string normalizedPrompt = Regex.Replace(prompt.ToLowerInvariant(), "[^a-z0-9 ]", " ");
                     normalizedPrompt = Regex.Replace(normalizedPrompt, @"\s+", " ").Trim();
 
@@ -3190,7 +3177,6 @@ public class CPHInline
                     LogToFile($"[AskGPT] Stack: {exKey.StackTrace}", "DEBUG");
                 }
 
-                // PHASE 5: User knowledge
                 int userKnowledgeCount = 0;
                 LogToFile("[AskGPT] DEBUG: Querying LiteDB for user knowledge.", "DEBUG");
                 try
@@ -3222,10 +3208,9 @@ public class CPHInline
                 else
                     LogToFile("[AskGPT] INFO: No user knowledge found. Skipping user knowledge context.", "INFO");
 
-                // PHASE 6: Pronoun coaching
                 LogToFile("[AskGPT] DEBUG: Adding pronoun awareness coaching.", "DEBUG");
                 pronounContextEntries = new List<string>();
-                // Re-gather pronoun context for all users mentioned/broadcaster/asker
+
                 mentionedUsers = new List<string>();
                 if (!mentionedUsers.Contains(userName, StringComparer.OrdinalIgnoreCase))
                     mentionedUsers.Add(userName);
@@ -3270,7 +3255,6 @@ public class CPHInline
                     LogToFile("[AskGPT] INFO: No pronoun entries found. Skipping pronoun coaching.", "INFO");
                 }
 
-                // PHASE 7: Hand-off and final prompt (was phase 6)
                 LogToFile("[AskGPT] DEBUG: Finishing context transmission and resuming normal conversation mode.", "DEBUG");
                 messages.Add(new chatMessage { role = "system", content = "All context updates received. Resume normal conversation mode." });
                 messages.Add(new chatMessage { role = "assistant", content = "OK" });
@@ -3286,7 +3270,6 @@ public class CPHInline
                 LogToFile($"[AskGPT] Context: databasePath='{databasePath}', characterFileName='{characterFileName}', userName='{userName}'", "ERROR");
                 return false;
             }
-            // ==== End 6-phase Coaching Mode Context Assembly ====
 
             sw.Start();
             try
@@ -3317,7 +3300,7 @@ public class CPHInline
                         using (StreamReader responseReader = new StreamReader(completionsWebResponse.GetResponseStream()))
                         {
                             completionsResponseContent = responseReader.ReadToEnd();
-                            // Log raw model output before any parsing or cleaning
+
                             var rawContent = string.Empty;
                             try
                             {
@@ -3404,7 +3387,6 @@ public class CPHInline
                 LogToFile($"[AskGPT] Context: AIModel='{AIModel}', userName='{userName}'", "ERROR");
             }
 
-            // New INFO-level logs after scorecard, before cleaning
             LogToFile($"[AskGPT] INFO: Prompt input: {prompt}", "INFO");
             LogToFile($"[AskGPT] INFO: Model output (uncleaned): {GPTResponse}", "INFO");
             GPTResponse = CleanAIText(GPTResponse);
@@ -3578,7 +3560,7 @@ public class CPHInline
                 LogToFile($"[AskGPT] Context: voiceEnabled={voiceEnabled}, postToChat={postToChat}, characterNumber={characterNumber}, voiceAlias='{voiceAlias}'", "ERROR");
                 return false;
             }
-            // Cleanup keywordDocs and allUserProfiles at the end
+
             if (allUserProfiles != null)
             {
                 allUserProfiles.Clear();
@@ -3603,7 +3585,7 @@ public class CPHInline
                 CPH.SendMessage("An internal error occurred in AskGPT.", true);
             else
                 LogToFile("[AskGPT] [Skipped Chat Output] Post To Chat disabled. Message: An internal error occurred in AskGPT.", "WARN");
-            // Cleanup keywordDocs and allUserProfiles at the end (also on fatal error)
+
             if (allUserProfiles != null)
             {
                 allUserProfiles.Clear();
@@ -3624,7 +3606,6 @@ public class CPHInline
         LogToFile("==== Begin AskGPTWebhook Execution ====", "DEBUG");
         LogToFile("Entering AskGPTWebhook (LiteDB context enrichment, outbound webhook, pronoun support, TTS/chat/discord parity).", "DEBUG");
 
-        // New: Declare variables needed for webhook payload and logging
         string prompt = null;
         string contextBody = null;
         List<BsonDocument> profileDocs_web = new List<BsonDocument>();
@@ -3663,7 +3644,7 @@ public class CPHInline
                 LogToFile("==== End AskGPTWebhook Execution ====", "INFO");
                 return false;
             }
-            // New: Initialize prompt to fullMessage after validation
+
             prompt = fullMessage;
         }
         catch (Exception ex)
@@ -3686,11 +3667,10 @@ public class CPHInline
             LogToFile($"[AskGPTWebhook] Stack: {ex.StackTrace}", "DEBUG");
         }
 
-        // Character number (from Streamer.bot global, safe conversion)
         int characterNumber = 1;
         try
         {
-            // Get character number from Streamer.bot global (as string)
+
             string characterStr = CPH.GetGlobalVar<string>("character", true);
             int characterNumberParsed = 1;
             if (!int.TryParse(characterStr, out characterNumberParsed))
@@ -3704,7 +3684,6 @@ public class CPHInline
             LogToFile($"[AskGPTWebhook] Context: exception={ex.Message}", "DEBUG");
         }
 
-        // Voice alias (from Streamer.bot global)
         string voiceAlias = null;
         try
         {
@@ -3737,19 +3716,17 @@ public class CPHInline
         List<string> mentionedUsers = new List<string>();
         List<string> pronounContextEntries = new List<string>();
         List<string> enrichmentSections = new List<string>();
-        // ==== Begin 6-phase Coaching Mode Context Assembly ====
-        // Retrieve global variable for 500 character limit
+
         bool limit500 = CPH.GetGlobalVar<bool>("Limit Responses to 500 Characters", true);
         List<chatMessage> messages = null;
         try
         {
-            // ---- Context loading (character file) ----
+
             string contextBodyLocal = "";
             string fullContextFilePath = "";
             try
             {
-                // Get character number from Streamer.bot global (already done above)
-                // Get character file name from Streamer.bot global variable (e.g., character_file_1)
+
                 string characterFileKey = $"character_file_{characterNumber}";
                 string contextFileName = CPH.GetGlobalVar<string>(characterFileKey, true);
                 if (string.IsNullOrWhiteSpace(contextFileName))
@@ -3758,7 +3735,6 @@ public class CPHInline
                     LogToFile($"[AskGPTWebhook] WARN: No context file defined for Character {characterNumber}. Using default '{contextFileName}'.", "WARN");
                 }
 
-                // Get base database path from Streamer.bot (global has a space in its name)
                 string databasePathLocal = CPH.GetGlobalVar<string>("Database Path", true);
                 if (string.IsNullOrWhiteSpace(databasePathLocal))
                 {
@@ -3766,7 +3742,6 @@ public class CPHInline
                     LogToFile("[AskGPTWebhook] WARN: 'Database Path' global variable missing or empty.", "WARN");
                 }
 
-                // Build full path and read context file
                 fullContextFilePath = Path.Combine(databasePathLocal, contextFileName);
                 if (!File.Exists(fullContextFilePath))
                 {
@@ -3794,15 +3769,13 @@ public class CPHInline
             if (messages == null)
                 messages = new List<chatMessage>();
             messages.Insert(0, new chatMessage { role = "system", content = contextBodyLocal });
-            // Assign contextBody for webhook payload (matches AskGPT)
+
             contextBody = contextBodyLocal;
 
-            // PHASE 1: Enter coaching mode
             LogToFile("[AskGPTWebhook] DEBUG: Entering coaching mode for structured context assembly.", "DEBUG");
             messages.Add(new chatMessage { role = "system", content = "You will now receive structured context updates. Acknowledge each with 'OK' and wait for instruction to resume normal operation." });
             messages.Add(new chatMessage { role = "assistant", content = "OK" });
 
-            // PHASE 2: Chat Log injection
             int chatTurns = ChatLog != null ? ChatLog.Count : 0;
             LogToFile($"[AskGPTWebhook] DEBUG: Injecting chat log with {chatTurns} turns.", "DEBUG");
             if (ChatLog != null)
@@ -3814,12 +3787,11 @@ public class CPHInline
                 }
             }
 
-            // PHASE 3: Keyword definitions
             LogToFile("[AskGPTWebhook] DEBUG: Querying LiteDB for keyword definitions (normalized).", "DEBUG");
 
             try
             {
-                // Normalize input
+
                 string normalizedPrompt = Regex.Replace(fullMessage.ToLowerInvariant(), "[^a-z0-9 ]", " ");
                 normalizedPrompt = Regex.Replace(normalizedPrompt, @"\s+", " ").Trim();
 
@@ -3860,7 +3832,6 @@ public class CPHInline
                 LogToFile($"[AskGPTWebhook] Stack: {exKey.StackTrace}", "DEBUG");
             }
 
-            // PHASE 4: User knowledge
             int userKnowledgeCount = 0;
             LogToFile("[AskGPTWebhook] DEBUG: Querying LiteDB for user knowledge.", "DEBUG");
             try
@@ -3889,10 +3860,9 @@ public class CPHInline
             else
                 LogToFile("[AskGPTWebhook] INFO: No user knowledge found. Skipping user knowledge context.", "INFO");
 
-            // PHASE 5: Pronoun coaching
             LogToFile("[AskGPTWebhook] DEBUG: Adding pronoun awareness coaching.", "DEBUG");
             pronounContextEntries = new List<string>();
-            // Re-gather pronoun context for all users mentioned/broadcaster/asker
+
             mentionedUsers = new List<string>();
             if (!mentionedUsers.Contains(userToSpeak, StringComparer.OrdinalIgnoreCase))
                 mentionedUsers.Add(userToSpeak);
@@ -3937,7 +3907,6 @@ public class CPHInline
                 LogToFile("[AskGPTWebhook] INFO: No pronoun entries found. Skipping pronoun coaching.", "INFO");
             }
 
-            // PHASE 6: Hand-off and final prompt
             LogToFile("[AskGPTWebhook] DEBUG: Finishing context transmission and resuming normal conversation mode.", "DEBUG");
             messages.Add(new chatMessage { role = "system", content = "All context updates received. Resume normal conversation mode." });
             messages.Add(new chatMessage { role = "assistant", content = "OK" });
@@ -3953,7 +3922,6 @@ public class CPHInline
             LogToFile($"[AskGPTWebhook] Context: databasePath='{databasePath}', characterFileName='{characterFileName}', contextFilePath='{contextFilePath}', characterNumber={characterNumber}", "ERROR");
             return false;
         }
-        // ==== End 6-phase Coaching Mode Context Assembly ====
 
         string completionsRequestJSON = null;
         string completionsResponseContent = null;
@@ -4067,7 +4035,6 @@ public class CPHInline
             LogToFile($"[AskGPTWebhook] DEBUG: OpenAI API call completed in {sw.ElapsedMilliseconds} ms.", "DEBUG");
         }
 
-        // The following INFO-level logs are now moved after scorecard logging, matching AskGPT's flow.
         if (!apiSuccess || string.IsNullOrWhiteSpace(GPTResponse))
         {
             if (!apiSuccess)
@@ -4097,7 +4064,7 @@ public class CPHInline
             LogToFile("==== End AskGPTWebhook Execution ====", "DEBUG");
             return false;
         }
-        // (Removed: LogToFile($"[AskGPTWebhook] INFO: Model response: {GPTResponse}", "INFO");)
+
         try
         {
             CPH.SetGlobalVar("Response", GPTResponse, true);
@@ -4128,7 +4095,6 @@ public class CPHInline
             LogToFile($"[AskGPTWebhook] Stack: {ex.StackTrace}", "DEBUG");
         }
 
-        // INFO-level logs after scorecard, before cleaning (order matches AskGPT)
         LogToFile($"[AskGPTWebhook] INFO: Prompt input: {prompt}", "INFO");
         LogToFile($"[AskGPTWebhook] INFO: Model output (uncleaned): {GPTResponse}", "INFO");
         GPTResponse = CleanAIText(GPTResponse);
@@ -4335,7 +4301,7 @@ public class CPHInline
             keywordDocs.Clear();
             keywordDocs = null;
         }
-        // Cleanup for dynamic context assembly collections
+
         if (profileDocs_web != null)
         {
             profileDocs_web.Clear();
@@ -4361,7 +4327,7 @@ public class CPHInline
                 return;
             }
 
-            const int chunkSize = 500; // Twitch chat message limit (approx 514 with buffer)
+            const int chunkSize = 500; 
             for (int i = 0; i < message.Length; i += chunkSize)
             {
                 string chunk = message.Substring(i, Math.Min(chunkSize, message.Length - i));
@@ -4377,7 +4343,7 @@ public class CPHInline
             LogToFile($"[SendChunkedMessage] Stack: {ex.StackTrace}", "DEBUG");
         }
     }
-    
+
     private string CleanAIText(string text)
     {
         LogToFile("Entering CleanAIText method.", "DEBUG");
@@ -4598,7 +4564,7 @@ public class CPHInline
 
         try
         {
-            // Defensive pass for all modes: remove stray spaces before punctuation.
+
             cleaned = Regex.Replace(cleaned, @"\s+([.,!?;:])", "$1");
         }
         catch (Exception ex)
@@ -4612,21 +4578,15 @@ public class CPHInline
             {
                 string beforeHumanFinal = cleaned;
 
-                // 1) Collapse the exact " - " separator (common em-dash normalization case)
                 cleaned = Regex.Replace(cleaned, @"\s-\s", " ");
 
-                // 2) Remove space+dash when it starts an attached word (e.g., " -bam" -> " bam")
-                //    This avoids breaking true hyphenated words because those have no preceding space.
                 cleaned = Regex.Replace(cleaned, @"\s-\s*(?=[A-Za-z0-9])", " ");
 
-                // 3) Remove stray spaces before punctuation like " ." ","
                 cleaned = Regex.Replace(cleaned, @"\s+([.,!?;:])", "$1");
 
-                // 4) Remove spaces immediately inside brackets: "( text )" -> "(text)"
                 cleaned = Regex.Replace(cleaned, @"([\(\[\{])\s+", "$1");
                 cleaned = Regex.Replace(cleaned, @"\s+([\)\]\}])", "$1");
 
-                // 5) Collapse any multiple spaces created by removals
                 cleaned = Regex.Replace(cleaned, @"\s{2,}", " ").Trim();
 
                 LogToFile("Applied enhanced HumanFriendly punctuation/dash normalization.", "DEBUG");
@@ -4915,7 +4875,7 @@ public class CPHInline
 
     public bool GetStreamInfo()
     {
-        LogToFile(">>> Entering GetStreamInfo() – Retrieving Twitch stream information.", "DEBUG");
+        LogToFile("Entering GetStreamInfo(): Retrieving Twitch stream information.", "DEBUG");
         try
         {
             Task<AllDatas> getAllDatasTask = FunctionGetAllDatas();
@@ -4928,30 +4888,30 @@ public class CPHInline
                 CPH.SetGlobalVar("currentGame", datas.gameName, false);
                 CPH.SetGlobalVar("currentTitle", datas.titleName, false);
 
-                LogToFile($"[GetStreamInfo] INFO: Retrieved stream data successfully. R=Retrieve stream info, A=Set globals, P=User='{datas.UserName}', I=Globals updated, D=Success.", "INFO");
-                LogToFile("<<< Exiting GetStreamInfo() – Completed successfully.", "DEBUG");
+                LogToFile($"[GetStreamInfo] INFO: Twitch API returned current game='{datas.gameName}' and title='{datas.titleName}'. Global variables updated for user='{datas.UserName}'.", "INFO");
+                LogToFile("Exiting GetStreamInfo(): Completed successfully.", "DEBUG");
                 return true;
             }
             else
             {
-                LogToFile("[GetStreamInfo] ERROR: Twitch API returned no stream data. R=Retrieve stream info, A=Process FunctionGetAllDatas result, P=None, I=Should have valid AllDatas, D=Null result.", "ERROR");
-                LogToFile("<<< Exiting GetStreamInfo() – Failure.", "DEBUG");
+                LogToFile("[GetStreamInfo] ERROR: No stream data was returned from Twitch API. Expected a valid AllDatas object but received null.", "ERROR");
+                LogToFile("Exiting GetStreamInfo(): Failure.", "DEBUG");
                 return false;
             }
         }
         catch (Exception ex)
         {
-            LogToFile($"[GetStreamInfo] ERROR: Failed to retrieve stream information: {ex.Message}", "ERROR");
+            LogToFile($"[GetStreamInfo] ERROR: An exception occurred while retrieving stream information: {ex.Message}", "ERROR");
             LogToFile($"[GetStreamInfo] Stack: {ex.StackTrace}", "DEBUG");
-            LogToFile("[GetStreamInfo] Context: Unexpected exception during FunctionGetAllDatas() or global variable assignment.", "ERROR");
-            LogToFile("<<< Exiting GetStreamInfo() – Fatal error encountered.", "DEBUG");
+            LogToFile("[GetStreamInfo] Context: Exception occurred during FunctionGetAllDatas() or global variable assignment.", "ERROR");
+            LogToFile("Exiting GetStreamInfo(): Fatal error encountered.", "DEBUG");
             return false;
         }
     }
 
     public async Task<AllDatas> FunctionGetAllDatas()
     {
-        LogToFile(">>> Entering FunctionGetAllDatas() – Preparing Twitch API call to retrieve channel metadata.", "DEBUG");
+        LogToFile("Entering FunctionGetAllDatas(): Preparing Twitch API call to retrieve channel metadata.", "DEBUG");
         string broadcasterId = null;
         string twitchApiEndpoint = null;
         string clientIdValue = null;
@@ -4964,7 +4924,7 @@ public class CPHInline
             clientIdValue = CPH.TwitchClientId;
             tokenValue = CPH.TwitchOAuthToken;
 
-            LogToFile($"[FunctionGetAllDatas] DEBUG: Constructed Twitch API endpoint: {twitchApiEndpoint}, ClientID={clientIdValue?.Substring(0, Math.Min(clientIdValue.Length, 6))}****", "DEBUG");
+            LogToFile($"[FunctionGetAllDatas] DEBUG: Twitch API endpoint: {twitchApiEndpoint}, ClientID={clientIdValue?.Substring(0, Math.Min(clientIdValue.Length, 6))}****", "DEBUG");
 
             WebRequest request = WebRequest.Create(twitchApiEndpoint);
             request.Method = "GET";
@@ -4988,14 +4948,14 @@ public class CPHInline
                         titleName = root.data[0].title,
                     };
 
-                    LogToFile($"[FunctionGetAllDatas] INFO: Successfully parsed Twitch API response. R=Fetch Twitch channel info, A=Deserialize JSON, P=BroadcasterId={broadcasterId}, I=Expect valid data, D=Received.", "INFO");
-                    LogToFile("<<< Exiting FunctionGetAllDatas() – Success.", "DEBUG");
+                    LogToFile($"[FunctionGetAllDatas] INFO: Successfully parsed Twitch API response. BroadcasterId={broadcasterId}, UserName='{result.UserName}', Game='{result.gameName}', Title='{result.titleName}'.", "INFO");
+                    LogToFile("Exiting FunctionGetAllDatas(): Success.", "DEBUG");
                     return result;
                 }
             }
             catch (WebException webEx)
             {
-                LogToFile($"[FunctionGetAllDatas] ERROR: WebException during Twitch API request: {webEx.Message}", "ERROR");
+                LogToFile($"[FunctionGetAllDatas] ERROR: A WebException occurred while making the Twitch API request: {webEx.Message}", "ERROR");
                 LogToFile($"[FunctionGetAllDatas] Stack: {webEx.StackTrace}", "DEBUG");
 
                 if (webEx.Response != null)
@@ -5003,28 +4963,28 @@ public class CPHInline
                     using (StreamReader reader = new StreamReader(webEx.Response.GetResponseStream()))
                     {
                         string errorBody = reader.ReadToEnd();
-                        LogToFile($"[FunctionGetAllDatas] ERROR: Twitch API response body on failure: {errorBody}", "ERROR");
+                        LogToFile($"[FunctionGetAllDatas] ERROR: Twitch API returned an error response body: {errorBody}", "ERROR");
                     }
                 }
                 LogToFile($"[FunctionGetAllDatas] Context: Endpoint={twitchApiEndpoint}, BroadcasterId={broadcasterId}", "ERROR");
-                LogToFile("<<< Exiting FunctionGetAllDatas() – WebException occurred.", "DEBUG");
+                LogToFile("Exiting FunctionGetAllDatas(): WebException occurred.", "DEBUG");
                 return null;
             }
             catch (Exception ex)
             {
-                LogToFile($"[FunctionGetAllDatas] ERROR: General exception during Twitch API call: {ex.Message}", "ERROR");
+                LogToFile($"[FunctionGetAllDatas] ERROR: An exception occurred during the Twitch API call: {ex.Message}", "ERROR");
                 LogToFile($"[FunctionGetAllDatas] Stack: {ex.StackTrace}", "DEBUG");
                 LogToFile($"[FunctionGetAllDatas] Context: Endpoint={twitchApiEndpoint}, BroadcasterId={broadcasterId}", "ERROR");
-                LogToFile("<<< Exiting FunctionGetAllDatas() – General failure.", "DEBUG");
+                LogToFile("Exiting FunctionGetAllDatas(): General failure.", "DEBUG");
                 return null;
             }
         }
         catch (Exception exOuter)
         {
-            LogToFile($"[FunctionGetAllDatas] ERROR: Failed to prepare Twitch API request: {exOuter.Message}", "ERROR");
+            LogToFile($"[FunctionGetAllDatas] ERROR: Failed to prepare the Twitch API request: {exOuter.Message}", "ERROR");
             LogToFile($"[FunctionGetAllDatas] Stack: {exOuter.StackTrace}", "DEBUG");
             LogToFile($"[FunctionGetAllDatas] Context: broadcasterId='{broadcasterId}', endpoint='{twitchApiEndpoint}'", "ERROR");
-            LogToFile("<<< Exiting FunctionGetAllDatas() – Fatal preparation error.", "DEBUG");
+            LogToFile("Exiting FunctionGetAllDatas(): Fatal preparation error.", "DEBUG");
             return null;
         }
     }
@@ -5158,12 +5118,12 @@ public class CPHInline
 
             if (string.IsNullOrWhiteSpace(versionNumber))
             {
-                LogToFile("[Version] ERROR: The 'Version' global variable is missing or empty. R=Retrieve version, A=Validate variable, P=Version=null, I=Version must exist, D=Failed.", "ERROR");
+                LogToFile("[Version] ERROR: The 'Version' global variable is missing or empty.", "ERROR");
                 LogToFile("<<< Exiting Version() – Failure (version missing).", "DEBUG");
                 return false;
             }
 
-            LogToFile($"[Version] INFO: Sending version number '{versionNumber}' to chat. R=Display version, A=SendMessage, P=Version={versionNumber}, I=User informed, D=Success.", "INFO");
+            LogToFile($"[Version] INFO: Sending version number '{versionNumber}' to chat.", "INFO");
             CPH.SendMessage(versionNumber, true);
 
             LogToFile($"[Version] INFO: Version number '{versionNumber}' sent to chat successfully.", "INFO");
@@ -5204,11 +5164,11 @@ public class CPHInline
             if (postToChat)
             {
                 CPH.SendMessage("!play", true);
-                LogToFile("[SayPlay] INFO: Sent '!play' command to chat. R=Trigger chat play, A=SendMessage, P=Message='!play', I=User sees play command, D=Success.", "INFO");
+                LogToFile("[SayPlay] INFO: Sent '!play' command to chat.", "INFO");
             }
             else
             {
-                LogToFile("[SayPlay] INFO: 'Post To Chat' is disabled. Skipping '!play' message. R=Check PostToChat, A=Skip message, P=postToChat=false, I=Prevent unwanted chat post, D=Skipped.", "INFO");
+                LogToFile("[SayPlay] INFO: 'Post To Chat' is disabled. Skipping '!play' message.", "INFO");
                 LogToFile("[SayPlay] DEBUG: [Skipped Chat Output] Post To Chat disabled. Message: !play", "DEBUG");
             }
 
@@ -5258,7 +5218,7 @@ public class CPHInline
                     ["illicit_threshold"] = CPH.GetGlobalVar<string>("illicit_threshold", true),
                     ["illicit_violent_threshold"] = CPH.GetGlobalVar<string>("illicit_violent_threshold", true),
                     ["Post To Chat"] = CPH.GetGlobalVar<bool>("Post To Chat", true).ToString(),
-                    // Store as string representation of boolean value
+
                     ["Limit Responses to 500 Characters"] = CPH.GetGlobalVar<bool>("Limit Responses to 500 Characters", true).ToString(),
                     ["Log GPT Questions to Discord"] = CPH.GetGlobalVar<string>("Log GPT Questions to Discord", true),
                     ["Discord Webhook URL"] = CPH.GetGlobalVar<string>("Discord Webhook URL", true),
@@ -5304,7 +5264,7 @@ public class CPHInline
             {
                 if (!settingsDict.ContainsKey(key) || string.IsNullOrWhiteSpace(settingsDict[key]))
                 {
-                    LogToFile($"[SaveSettings] WARN: One or more required settings are missing or empty. R=Validate settings, A=Check requiredKeys, P=Key={key}, I=All required keys present, D=Missing.", "WARN");
+                    LogToFile($"[SaveSettings] WARN: One or more required settings are missing or empty. Required key: {key} is missing or empty.", "WARN");
                     LogToFile("<<< Exiting SaveSettings() – Required key missing.", "DEBUG");
                     return false;
                 }
@@ -5328,7 +5288,7 @@ public class CPHInline
                     LogToFile($"[SaveSettings] DEBUG: Saved setting to DB: {kvp.Key} = {kvp.Value}", "DEBUG");
                 }
 
-                LogToFile("[SaveSettings] INFO: All settings persisted to LiteDB successfully. R=Save settings, A=Write to LiteDB, P=settingsDict.Count=" + settingsDict.Count + ", I=All settings stored, D=Success.", "INFO");
+                LogToFile($"[SaveSettings] INFO: All settings persisted to LiteDB successfully. {settingsDict.Count} settings stored.", "INFO");
             }
             catch (Exception exDb)
             {
@@ -5345,7 +5305,7 @@ public class CPHInline
                 CPH.SetGlobalVar("voice_enabled", settingsDict["voice_enabled"], true);
                 CPH.SetGlobalVar("outbound_webhook_url", settingsDict["outbound_webhook_url"], true);
                 CPH.SetGlobalVar("outbound_webhook_mode", settingsDict["outbound_webhook_mode"], true);
-                LogToFile("[SaveSettings] INFO: Reapplied dynamic runtime globals successfully. R=Reapply key vars, A=SetGlobalVar, I=Ensure runtime consistency, D=Success.", "INFO");
+                LogToFile("[SaveSettings] INFO: Reapplied dynamic runtime global variables successfully.", "INFO");
             }
             catch (Exception exSet)
             {
@@ -5381,7 +5341,7 @@ public class CPHInline
 
             if (settings.Count == 0)
             {
-                LogToFile("[ReadSettings] WARN: No settings found in LiteDB. R=Read settings, A=FindAll(), P=settings.Count=0, I=Expect populated DB, D=Empty result.", "WARN");
+                LogToFile("[ReadSettings] WARN: No settings found in LiteDB. No settings entries were found in the database.", "WARN");
                 LogToFile("<<< Exiting ReadSettings() – No data available.", "DEBUG");
                 return false;
             }
@@ -5414,9 +5374,9 @@ public class CPHInline
                     }
 
                     if (success)
-                        LogToFile($"[ReadSettings] DEBUG: Restored global var '{key}' with value='{value}'.", "DEBUG");
+                        LogToFile($"[ReadSettings] DEBUG: Restored global variable '{key}' with value='{value}'.", "DEBUG");
                     else
-                        LogToFile($"[ReadSettings] WARN: Unable to restore key='{key}' due to unsupported type. R=SetGlobalVar, A=Assign value, P=key={key}, I=Restore all globals, D=Partial.", "WARN");
+                        LogToFile($"[ReadSettings] WARN: Unable to restore key '{key}' due to unsupported type.", "WARN");
                 }
                 catch (Exception exKey)
                 {
@@ -5426,8 +5386,7 @@ public class CPHInline
                 }
             }
 
-
-            LogToFile($"[ReadSettings] INFO: Successfully loaded and applied {settings.Count} settings from LiteDB. R=Load settings, A=Restore globals, I=App ready, D=Success.", "INFO");
+            LogToFile($"[ReadSettings] INFO: Successfully loaded and applied {settings.Count} settings from LiteDB.", "INFO");
             LogToFile("<<< Exiting ReadSettings() – Completed successfully.", "DEBUG");
             return true;
         }
@@ -5451,21 +5410,21 @@ public class CPHInline
 
     private string EncryptData(string data)
     {
-        LogToFile("[EncryptData] Entry: R=Encrypt data, A=Protect bytes, P=Input validation, I=Begin encryption, D=Start.", "DEBUG");
+        LogToFile("[EncryptData] Entry: Starting encryption process for input data.", "DEBUG");
 
         if (string.IsNullOrWhiteSpace(data))
         {
-            LogToFile("[EncryptData] ERROR: Input data is null or empty. R=Encrypt data, A=Validate input, P=data=null, I=Require valid input, D=Failed.", "ERROR");
+            LogToFile("[EncryptData] ERROR: Input data is null or empty. Cannot encrypt empty input.", "ERROR");
             LogToFile("[EncryptData] Context: dataLength=0", "ERROR");
-            LogToFile("<<< [EncryptData] Exit: R=Encrypt data, A=Validate input, P=data=null, I=Input invalid, D=Return empty.", "DEBUG");
+            LogToFile("[EncryptData] Exit: Input invalid, returning empty string.", "DEBUG");
             return string.Empty;
         }
 
         try
         {
-            LogToFile("[EncryptData] DEBUG: Preparing to encrypt data using DataProtectionScope.CurrentUser. R=Encrypt data, A=Prepare bytes, P=Data present, I=Ready for encryption, D=Continue.", "DEBUG");
+            LogToFile("[EncryptData] DEBUG: Preparing to encrypt data using DataProtectionScope.CurrentUser.", "DEBUG");
             byte[] inputBytes = Encoding.UTF8.GetBytes(data);
-            LogToFile($"[EncryptData] DEBUG: Converted input string to {inputBytes.Length} bytes. R=Encrypt data, A=Convert to bytes, P=dataLength={inputBytes.Length}, I=Bytes ready, D=Continue.", "DEBUG");
+            LogToFile($"[EncryptData] DEBUG: Converted input string to {inputBytes.Length} bytes.", "DEBUG");
 
             byte[] encryptedData = null;
             try
@@ -5474,55 +5433,55 @@ public class CPHInline
             }
             catch (Exception exProtect)
             {
-                LogToFile($"[EncryptData] ERROR: Exception during ProtectedData.Protect: {exProtect.Message} R=Encrypt data, A=Protect bytes, P=dataLength={inputBytes.Length}, I=DPAPI error, D=Failed.", "ERROR");
+                LogToFile($"[EncryptData] ERROR: Exception during ProtectedData.Protect: {exProtect.Message} (inputBytes.Length={inputBytes.Length})", "ERROR");
                 LogToFile($"[EncryptData] Context: dataLength={data?.Length ?? 0}", "ERROR");
                 LogToFile($"[EncryptData] Stack: {exProtect.StackTrace}", "DEBUG");
-                LogToFile("<<< [EncryptData] Exit: R=Encrypt data, A=Protect bytes, P=dataLength={inputBytes.Length}, I=DPAPI error, D=Return empty.", "DEBUG");
+                LogToFile("[EncryptData] Exit: DPAPI error, returning empty string.", "DEBUG");
                 return string.Empty;
             }
             string base64EncryptedData = Convert.ToBase64String(encryptedData);
 
-            LogToFile("[EncryptData] DEBUG: Data encryption successful. R=Encrypt data, A=Protect bytes, P=DataLength=" + inputBytes.Length + ", I=Return base64 string, D=Success.", "DEBUG");
-            LogToFile("<<< [EncryptData] Exit: R=Encrypt data, A=Protect bytes, P=DataLength=" + inputBytes.Length + ", I=Encryption complete, D=Return encrypted.", "DEBUG");
+            LogToFile($"[EncryptData] DEBUG: Data encryption successful. Returning base64 string. (inputBytes.Length={inputBytes.Length})", "DEBUG");
+            LogToFile("[EncryptData] Exit: Encryption complete, returning encrypted data.", "DEBUG");
             return base64EncryptedData;
         }
         catch (CryptographicException cryptoEx)
         {
-            LogToFile($"[EncryptData] ERROR: Cryptographic exception during encryption: {cryptoEx.Message} R=Encrypt data, A=Protect bytes, P=dataLength={(data?.Length ?? 0)}, I=Crypto error, D=Failed.", "ERROR");
+            LogToFile($"[EncryptData] ERROR: Cryptographic exception during encryption: {cryptoEx.Message} (dataLength={(data?.Length ?? 0)})", "ERROR");
             LogToFile($"[EncryptData] Context: dataLength={(data?.Length ?? 0)}", "ERROR");
             LogToFile($"[EncryptData] Stack: {cryptoEx.StackTrace}", "DEBUG");
-            LogToFile("<<< [EncryptData] Exit: R=Encrypt data, A=Protect bytes, P=dataLength={(data?.Length ?? 0)}, I=Crypto error, D=Return empty.", "DEBUG");
+            LogToFile("[EncryptData] Exit: Cryptographic error, returning empty string.", "DEBUG");
             return string.Empty;
         }
         catch (Exception ex)
         {
-            LogToFile($"[EncryptData] ERROR: Unexpected exception during encryption: {ex.Message} R=Encrypt data, A=Protect bytes, P=dataLength={(data?.Length ?? 0)}, I=Exception, D=Failed.", "ERROR");
+            LogToFile($"[EncryptData] ERROR: Unexpected exception during encryption: {ex.Message} (dataLength={(data?.Length ?? 0)})", "ERROR");
             LogToFile($"[EncryptData] Context: dataLength={(data?.Length ?? 0)}", "ERROR");
             LogToFile($"[EncryptData] Stack: {ex.StackTrace}", "DEBUG");
-            LogToFile("<<< [EncryptData] Exit: R=Encrypt data, A=Protect bytes, P=dataLength={(data?.Length ?? 0)}, I=Exception, D=Return empty.", "DEBUG");
+            LogToFile("[EncryptData] Exit: Exception, returning empty string.", "DEBUG");
             return string.Empty;
         }
     }
 
     private string DecryptData(string encryptedData)
     {
-        LogToFile("[DecryptData] Entry: R=Decrypt data, A=Unprotect bytes, P=Input validation, I=Begin decryption, D=Start.", "DEBUG");
+        LogToFile("[DecryptData] Entry: Starting decryption process for input data.", "DEBUG");
 
         if (string.IsNullOrWhiteSpace(encryptedData))
         {
-            LogToFile("[DecryptData] ERROR: Input encryptedData is null or empty. R=Decrypt data, A=Validate input, P=encryptedData=null, I=Require valid input, D=Failed.", "ERROR");
+            LogToFile("[DecryptData] ERROR: Input encryptedData is null or empty. Cannot decrypt empty input.", "ERROR");
             LogToFile("[DecryptData] Context: encryptedDataLength=0", "ERROR");
-            LogToFile("<<< [DecryptData] Exit: R=Decrypt data, A=Validate input, P=encryptedData=null, I=Input invalid, D=Return empty.", "DEBUG");
+            LogToFile("[DecryptData] Exit: Input invalid, returning empty string.", "DEBUG");
             return string.Empty;
         }
 
         try
         {
-            LogToFile("[DecryptData] DEBUG: Converting Base64 input to byte array. R=Decrypt data, A=Convert base64, P=Input present, I=Ready for decode, D=Continue.", "DEBUG");
+            LogToFile("[DecryptData] DEBUG: Converting Base64 input to byte array.", "DEBUG");
             byte[] encryptedDataBytes = Convert.FromBase64String(encryptedData);
-            LogToFile($"[DecryptData] DEBUG: Converted Base64 to {encryptedDataBytes.Length} bytes. R=Decrypt data, A=Base64 decode, P=encryptedDataLength={encryptedData.Length}, I=Bytes ready, D=Continue.", "DEBUG");
+            LogToFile($"[DecryptData] DEBUG: Converted Base64 to {encryptedDataBytes.Length} bytes.", "DEBUG");
 
-            LogToFile("[DecryptData] DEBUG: Beginning DPAPI decryption using DataProtectionScope.CurrentUser. R=Decrypt data, A=Unprotect bytes, P=Bytes present, I=Ready for unprotect, D=Continue.", "DEBUG");
+            LogToFile("[DecryptData] DEBUG: Beginning DPAPI decryption using DataProtectionScope.CurrentUser.", "DEBUG");
             byte[] decryptedData = null;
             try
             {
@@ -5530,39 +5489,39 @@ public class CPHInline
             }
             catch (Exception exUnprotect)
             {
-                LogToFile($"[DecryptData] ERROR: Exception during ProtectedData.Unprotect: {exUnprotect.Message} R=Decrypt data, A=Unprotect bytes, P=encryptedDataLength={encryptedData.Length}, I=DPAPI error, D=Failed.", "ERROR");
+                LogToFile($"[DecryptData] ERROR: Exception during ProtectedData.Unprotect: {exUnprotect.Message} (encryptedData.Length={encryptedData.Length})", "ERROR");
                 LogToFile($"[DecryptData] Context: encryptedDataLength={(encryptedData?.Length ?? 0)}", "ERROR");
                 LogToFile($"[DecryptData] Stack: {exUnprotect.StackTrace}", "DEBUG");
-                LogToFile("<<< [DecryptData] Exit: R=Decrypt data, A=Unprotect bytes, P=encryptedDataLength={encryptedData.Length}, I=DPAPI error, D=Return empty.", "DEBUG");
+                LogToFile("[DecryptData] Exit: DPAPI error, returning empty string.", "DEBUG");
                 return string.Empty;
             }
             string decryptedString = Encoding.UTF8.GetString(decryptedData);
-            LogToFile($"[DecryptData] DEBUG: Data decryption successful. R=Decrypt data, A=Unprotect bytes, P=InputLength={encryptedData.Length}, I=Return plaintext string, D=Success.", "DEBUG");
-            LogToFile("<<< [DecryptData] Exit: R=Decrypt data, A=Unprotect bytes, P=InputLength=" + encryptedData.Length + ", I=Decryption complete, D=Return decrypted.", "DEBUG");
+            LogToFile($"[DecryptData] DEBUG: Data decryption successful. Returning plaintext string. (encryptedData.Length={encryptedData.Length})", "DEBUG");
+            LogToFile("[DecryptData] Exit: Decryption complete, returning decrypted data.", "DEBUG");
             return decryptedString;
         }
         catch (FormatException fmtEx)
         {
-            LogToFile($"[DecryptData] ERROR: Encrypted data was not valid Base64: {fmtEx.Message} R=Decrypt data, A=Base64 decode, P=encryptedDataLength={(encryptedData?.Length ?? 0)}, I=Format error, D=Failed.", "ERROR");
+            LogToFile($"[DecryptData] ERROR: Encrypted data was not valid Base64: {fmtEx.Message} (encryptedDataLength={(encryptedData?.Length ?? 0)})", "ERROR");
             LogToFile($"[DecryptData] Context: encryptedDataLength={(encryptedData?.Length ?? 0)}", "ERROR");
             LogToFile($"[DecryptData] Stack: {fmtEx.StackTrace}", "DEBUG");
-            LogToFile("<<< [DecryptData] Exit: R=Decrypt data, A=Base64 decode, P=encryptedDataLength={(encryptedData?.Length ?? 0)}, I=Format error, D=Return empty.", "DEBUG");
+            LogToFile("[DecryptData] Exit: Format error, returning empty string.", "DEBUG");
             return string.Empty;
         }
         catch (CryptographicException cryptoEx)
         {
-            LogToFile($"[DecryptData] ERROR: Cryptographic exception during decryption: {cryptoEx.Message} R=Decrypt data, A=Unprotect bytes, P=encryptedDataLength={(encryptedData?.Length ?? 0)}, I=Crypto error, D=Failed.", "ERROR");
+            LogToFile($"[DecryptData] ERROR: Cryptographic exception during decryption: {cryptoEx.Message} (encryptedDataLength={(encryptedData?.Length ?? 0)})", "ERROR");
             LogToFile($"[DecryptData] Context: encryptedDataLength={(encryptedData?.Length ?? 0)}", "ERROR");
             LogToFile($"[DecryptData] Stack: {cryptoEx.StackTrace}", "DEBUG");
-            LogToFile("<<< [DecryptData] Exit: R=Decrypt data, A=Unprotect bytes, P=encryptedDataLength={(encryptedData?.Length ?? 0)}, I=Crypto error, D=Return empty.", "DEBUG");
+            LogToFile("[DecryptData] Exit: Cryptographic error, returning empty string.", "DEBUG");
             return string.Empty;
         }
         catch (Exception ex)
         {
-            LogToFile($"[DecryptData] ERROR: Unexpected exception during decryption: {ex.Message} R=Decrypt data, A=Unprotect bytes, P=encryptedDataLength={(encryptedData?.Length ?? 0)}, I=Exception, D=Failed.", "ERROR");
+            LogToFile($"[DecryptData] ERROR: Unexpected exception during decryption: {ex.Message} (encryptedDataLength={(encryptedData?.Length ?? 0)})", "ERROR");
             LogToFile($"[DecryptData] Context: encryptedDataLength={(encryptedData?.Length ?? 0)}", "ERROR");
             LogToFile($"[DecryptData] Stack: {ex.StackTrace}", "DEBUG");
-            LogToFile("<<< [DecryptData] Exit: R=Decrypt data, A=Unprotect bytes, P=encryptedDataLength={(encryptedData?.Length ?? 0)}, I=Exception, D=Return empty.", "DEBUG");
+            LogToFile("[DecryptData] Exit: Exception, returning empty string.", "DEBUG");
             return string.Empty;
         }
     }
