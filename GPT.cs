@@ -3072,15 +3072,15 @@ public class CPHInline
                 try
                 {
                     // 1️⃣ Get character number (can be int or string)
-                    var charObj = CPH.GetGlobalVar("character", true);
-                    int characterNumber = Convert.ToInt32(charObj);
+                    var charObj = CPH.GetGlobalVar<object>("character", true);
+                    characterNumber = Convert.ToInt32(charObj);
 
                     // 2️⃣ Resolve filename from Streamer.bot globals like character_file_1
                     string characterFileKey = $"character_file_{characterNumber}";
-                    string ctxFileNameLocal = CPH.GetGlobalVar(characterFileKey, true)?.ToString();
+                    string ctxFileNameLocal = CPH.GetGlobalVar<object>(characterFileKey, true)?.ToString();
 
                     // 3️⃣ Get base database path (Streamer.bot variable has space)
-                    string dbPathLocal = CPH.GetGlobalVar("Database Path", true)?.ToString();
+                    string dbPathLocal = CPH.GetGlobalVar<object>("Database Path", true)?.ToString();
 
                     // 4️⃣ Combine path and verify
                     string contextPathLocal = Path.Combine(dbPathLocal ?? string.Empty, ctxFileNameLocal ?? "Context.txt");
@@ -3657,7 +3657,7 @@ public class CPHInline
         int characterNumber = 1;
         try
         {
-            var charObj = CPH.GetGlobalVar("character", true);
+            var charObj = CPH.GetGlobalVar<object>("character", true);
             characterNumber = Convert.ToInt32(charObj);
             LogToFile($"[AskGPTWebhook] DEBUG: Active character number set to {characterNumber}.", "DEBUG");
         }
@@ -3671,7 +3671,7 @@ public class CPHInline
         string voiceAlias = null;
         try
         {
-            voiceAlias = CPH.GetGlobalVar($"character_voice_alias_{characterNumber}", true)?.ToString();
+            voiceAlias = CPH.GetGlobalVar<string>($"character_voice_alias_{characterNumber}", true);
         }
         catch (Exception ex)
         {
@@ -3709,9 +3709,9 @@ public class CPHInline
             {
                 // Get character file name from Streamer.bot globals like character_file_1
                 string characterFileKey = $"character_file_{characterNumber}";
-                characterFileName = CPH.GetGlobalVar(characterFileKey, true)?.ToString();
+                characterFileName = CPH.GetGlobalVar<object>(characterFileKey, true)?.ToString();
                 // Get base database path (Streamer.bot variable has space)
-                databasePath = CPH.GetGlobalVar("Database Path", true)?.ToString();
+                databasePath = CPH.GetGlobalVar<object>("Database Path", true)?.ToString();
                 // Combine for full path
                 contextFilePath = Path.Combine(databasePath ?? string.Empty, characterFileName ?? "Context.txt");
                 if (!File.Exists(contextFilePath))
