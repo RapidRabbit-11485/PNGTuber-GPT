@@ -3068,34 +3068,42 @@ public class CPHInline
             // ==== Begin 6-phase Coaching Mode Context Assembly ====
             try
             {
-                // PHASE 1: Load context file for character with skip-guard and fallback
+                // PHASE 1: Load context file for character with skip-guard and fallback (refactored)
                 try
                 {
-                    characterNumber = CPH.GetGlobalVar<int>("character", true);
-                    string characterFileKey = $"character_file_{characterNumber}";
-                    string contextFileName = CPH.GetGlobalVar<string>(characterFileKey, true);
-                    string databasePath = CPH.GetGlobalVar<string>("DatabasePath", true);
-                    string characterFilePath = Path.Combine(databasePath, contextFileName);
+                    // 1️⃣ Get character number (can be int or string)
+                    var charObj = CPH.GetGlobalVar("character", true);
+                    int characterNumber = Convert.ToInt32(charObj);
 
-                    if (!File.Exists(characterFilePath))
+                    // 2️⃣ Resolve filename from Streamer.bot globals like character_file_1
+                    string characterFileKey = $"character_file_{characterNumber}";
+                    string ctxFileNameLocal = CPH.GetGlobalVar(characterFileKey, true)?.ToString();
+
+                    // 3️⃣ Get base database path (Streamer.bot variable has space)
+                    string dbPathLocal = CPH.GetGlobalVar("Database Path", true)?.ToString();
+
+                    // 4️⃣ Combine path and verify
+                    string contextPathLocal = Path.Combine(dbPathLocal ?? string.Empty, ctxFileNameLocal ?? "Context.txt");
+                    if (!File.Exists(contextPathLocal))
                     {
-                        LogToFile($"[AskGPT] WARN: Context file not found for Character {characterNumber} at {characterFilePath}. Using default Context.txt.", "WARN");
-                        characterFilePath = Path.Combine(databasePath, "Context.txt");
+                        LogToFile($"[{nameof(AskGPT)}] WARN: Context file not found for Character {characterNumber} at {contextPathLocal}. Using default Context.txt.", "WARN");
+                        contextPathLocal = Path.Combine(dbPathLocal ?? string.Empty, "Context.txt");
                     }
 
-                    context = File.ReadAllText(characterFilePath);
-                    LogToFile($"[AskGPT] DEBUG: Loaded context for Character {characterNumber} from '{characterFilePath}' ({context.Length} chars).", "DEBUG");
+                    // 5️⃣ Load and assign
+                    context = File.ReadAllText(contextPathLocal);
+                    LogToFile($"[{nameof(AskGPT)}] DEBUG: Loaded context for Character {characterNumber} from '{contextPathLocal}' ({context.Length} chars).", "DEBUG");
                 }
                 catch (Exception exCtx)
                 {
-                    LogToFile($"[AskGPT] ERROR: Failed to load context: {exCtx.Message}", "ERROR");
-                    LogToFile($"[AskGPT] Stack: {exCtx.StackTrace}", "DEBUG");
+                    LogToFile($"[{nameof(AskGPT)}] ERROR: Failed to load context: {exCtx.Message}", "ERROR");
+                    LogToFile($"[{nameof(AskGPT)}] Stack: {exCtx.StackTrace}", "DEBUG");
                     context = "You are a helpful assistant.";
                 }
-                messages = new List<chatMessage>
-                {
-                    new chatMessage { role = "system", content = context }
-                };
+
+                if (messages == null)
+                    messages = new List<chatMessage>();
+                messages.Insert(0, new chatMessage { role = "system", content = context });
 
                 // PHASE 2: Enter coaching mode
                 LogToFile("[AskGPT] DEBUG: Entering coaching mode for structured context assembly.", "DEBUG");
@@ -3645,10 +3653,12 @@ public class CPHInline
             LogToFile($"[AskGPTWebhook] Stack: {ex.StackTrace}", "DEBUG");
         }
 
+        // Character number (from Streamer.bot global, safe conversion)
         int characterNumber = 1;
         try
         {
-            characterNumber = CPH.GetGlobalVar<int>("character", true);
+            var charObj = CPH.GetGlobalVar("character", true);
+            characterNumber = Convert.ToInt32(charObj);
             LogToFile($"[AskGPTWebhook] DEBUG: Active character number set to {characterNumber}.", "DEBUG");
         }
         catch (Exception ex)
@@ -3657,10 +3667,11 @@ public class CPHInline
             LogToFile($"[AskGPTWebhook] Context: exception={ex.Message}", "DEBUG");
         }
 
+        // Voice alias (from Streamer.bot global)
         string voiceAlias = null;
         try
         {
-            voiceAlias = CPH.GetGlobalVar<string>($"character_voice_alias_{characterNumber}", true);
+            voiceAlias = CPH.GetGlobalVar($"character_voice_alias_{characterNumber}", true)?.ToString();
         }
         catch (Exception ex)
         {
@@ -3679,7 +3690,7 @@ public class CPHInline
             return false;
         }
 
-        string databasePath = null, characterFileName = null, ContextFilePath = null, context = null, broadcaster = null, currentTitle = null, currentGame = null;
+        string databasePath = null, characterFileName = null, contextFilePath = null, context = null, broadcaster = null, currentTitle = null, currentGame = null;
         var allUserProfiles = new List<UserProfile>();
         var keywordDocs = new List<BsonDocument>();
         var userCollection = _db.GetCollection<UserProfile>("user_profiles");
@@ -3694,33 +3705,32 @@ public class CPHInline
         try
         {
             // ---- Context loading (character file) ----
-            string context = null;
             try
             {
-                int characterNumCtx = CPH.GetGlobalVar<int>("character", true);
-                string characterFileKey = $"character_file_{characterNumCtx}";
-                string contextFileName = CPH.GetGlobalVar<string>(characterFileKey, true);
-                string databasePathCtx = CPH.GetGlobalVar<string>("DatabasePath", true);
-                string characterFilePath = Path.Combine(databasePathCtx, contextFileName);
-                if (!File.Exists(characterFilePath))
+                // Get character file name from Streamer.bot globals like character_file_1
+                string characterFileKey = $"character_file_{characterNumber}";
+                characterFileName = CPH.GetGlobalVar(characterFileKey, true)?.ToString();
+                // Get base database path (Streamer.bot variable has space)
+                databasePath = CPH.GetGlobalVar("Database Path", true)?.ToString();
+                // Combine for full path
+                contextFilePath = Path.Combine(databasePath ?? string.Empty, characterFileName ?? "Context.txt");
+                if (!File.Exists(contextFilePath))
                 {
-                    LogToFile($"[AskGPTWebhook] WARN: Context file not found for Character {characterNumCtx} at {characterFilePath}. Using default Context.txt.", "WARN");
-                    characterFilePath = Path.Combine(databasePathCtx, "Context.txt");
+                    LogToFile($"[AskGPTWebhook] WARN: Context file not found for Character {characterNumber} at '{contextFilePath}'. Using default Context.txt.", "WARN");
+                    contextFilePath = Path.Combine(databasePath ?? string.Empty, "Context.txt");
                 }
-                context = File.ReadAllText(characterFilePath);
-                LogToFile($"[AskGPTWebhook] DEBUG: Loaded context for Character {characterNumCtx} from '{characterFilePath}' ({context.Length} chars).", "DEBUG");
+                context = File.ReadAllText(contextFilePath);
+                LogToFile($"[AskGPTWebhook] DEBUG: Loaded context for Character {characterNumber}: file='{characterFileName}', path='{contextFilePath}', chars={context.Length}.", "DEBUG");
             }
             catch (Exception exCtx)
             {
-                LogToFile($"[AskGPTWebhook] ERROR: Failed to load context: {exCtx.Message}", "ERROR");
+                LogToFile($"[AskGPTWebhook] WARN: Failed to load context file: {exCtx.Message}", "WARN");
                 LogToFile($"[AskGPTWebhook] Stack: {exCtx.StackTrace}", "DEBUG");
                 context = "You are a helpful assistant.";
             }
-            // ---- Start messages with system context ----
-            messages = new List<chatMessage>
-            {
-                new chatMessage { role = "system", content = context }
-            };
+            if (messages == null)
+                messages = new List<chatMessage>();
+            messages.Insert(0, new chatMessage { role = "system", content = context });
 
             // PHASE 1: Enter coaching mode
             LogToFile("[AskGPTWebhook] DEBUG: Entering coaching mode for structured context assembly.", "DEBUG");
@@ -3867,7 +3877,7 @@ public class CPHInline
         {
             LogToFile($"[AskGPTWebhook] ERROR: Database/context gathering failed: {exDB.Message}", "ERROR");
             LogToFile($"[AskGPTWebhook] Stack: {exDB.StackTrace}", "DEBUG");
-            LogToFile($"[AskGPTWebhook] Context: databasePath='{databasePath}', characterFileName='{characterFileName}', characterNumber={characterNumber}", "ERROR");
+            LogToFile($"[AskGPTWebhook] Context: databasePath='{databasePath}', characterFileName='{characterFileName}', contextFilePath='{contextFilePath}', characterNumber={characterNumber}", "ERROR");
             return false;
         }
         // ==== End 6-phase Coaching Mode Context Assembly ====
