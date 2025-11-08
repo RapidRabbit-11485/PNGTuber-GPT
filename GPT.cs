@@ -1600,8 +1600,39 @@ public class CPHInline
             // Prevent saving chat commands to the queue
             if (msg.StartsWith("!", StringComparison.OrdinalIgnoreCase))
             {
+                LogToFile($"[SaveMessage] INFO: Skipped message '{msg}' because it is a command.", "INFO");
                 LogToFile($"[SaveMessage] DEBUG: Message '{msg}' identified as command — skipping queue storage.", "DEBUG");
                 LogToFile("<<< [SaveMessage] Exit: Skipped command message", "DEBUG");
+                return false;
+            }
+
+            // Ignore Bot Usernames check -- moved up!
+            try
+            {
+                LogToFile("[SaveMessage] DEBUG: Retrieving 'Ignore Bot Usernames' global var", "DEBUG");
+                ignoreNamesString = CPH.GetGlobalVar<string>("Ignore Bot Usernames", true);
+                if (string.IsNullOrWhiteSpace(ignoreNamesString))
+                {
+                    LogToFile("[SaveMessage] WARN: R=Save message, A=Fetch ignore list, P=string=null, I=Expect valid list, D=Fallback.", "WARN");
+                    LogToFile("<<< [SaveMessage] Exit: Ignore list missing/empty (fail)", "DEBUG");
+                    return false;
+                }
+                ignoreNamesList = ignoreNamesString.Split(',').Select(n => n.Trim()).Where(n => !string.IsNullOrWhiteSpace(n)).ToList();
+                ignoreNamesCount = ignoreNamesList.Count;
+                if (ignoreNamesList.Contains(userName, StringComparer.OrdinalIgnoreCase))
+                {
+                    LogToFile($"[SaveMessage] INFO: Message from '{userName}' skipped because user is in ignore list.", "INFO");
+                    LogToFile($"[SaveMessage] DEBUG: R=Save message, A=Check ignore list, P=userName='{userName}', I=Skip ignored, D=Skipped.", "DEBUG");
+                    LogToFile("<<< [SaveMessage] Exit: userName in ignore list (skip)", "DEBUG");
+                    return false;
+                }
+                LogToFile($"[SaveMessage] DEBUG: Ignore list count={ignoreNamesCount}", "DEBUG");
+            }
+            catch (Exception exIgnore)
+            {
+                LogToFile($"[SaveMessage] ERROR: R=Save message, A=Process ignore list, P=userName='{userName}', I=Valid list, D=Failed: {exIgnore.Message}", "ERROR");
+                LogToFile($"[SaveMessage] Stack: {exIgnore.StackTrace}", "DEBUG");
+                LogToFile("<<< [SaveMessage] Exit: Exception retrieving ignore list", "DEBUG");
                 return false;
             }
 
@@ -1619,34 +1650,6 @@ public class CPHInline
                 LogToFile($"[SaveMessage] ERROR: R=Save message, A=GetOrCreateUserProfile, P=userName='{userName}', I=Profile ready, D=Failed: {exProf.Message}", "ERROR");
                 LogToFile($"[SaveMessage] Stack: {exProf.StackTrace}", "DEBUG");
                 LogToFile("<<< [SaveMessage] Exit: Exception retrieving/creating user profile", "DEBUG");
-                return false;
-            }
-
-            try
-            {
-                LogToFile("[SaveMessage] DEBUG: Retrieving 'Ignore Bot Usernames' global var", "DEBUG");
-                ignoreNamesString = CPH.GetGlobalVar<string>("Ignore Bot Usernames", true);
-                if (string.IsNullOrWhiteSpace(ignoreNamesString))
-                {
-                    LogToFile("[SaveMessage] WARN: R=Save message, A=Fetch ignore list, P=string=null, I=Expect valid list, D=Fallback.", "WARN");
-                    LogToFile("<<< [SaveMessage] Exit: Ignore list missing/empty (fail)", "DEBUG");
-                    return false;
-                }
-                ignoreNamesList = ignoreNamesString.Split(',').Select(n => n.Trim()).Where(n => !string.IsNullOrWhiteSpace(n)).ToList();
-                ignoreNamesCount = ignoreNamesList.Count;
-                if (ignoreNamesList.Contains(userName, StringComparer.OrdinalIgnoreCase))
-                {
-                    LogToFile($"[SaveMessage] DEBUG: R=Save message, A=Check ignore list, P=userName='{userName}', I=Skip ignored, D=Skipped.", "DEBUG");
-                    LogToFile("<<< [SaveMessage] Exit: userName in ignore list (skip)", "DEBUG");
-                    return false;
-                }
-                LogToFile($"[SaveMessage] DEBUG: Ignore list count={ignoreNamesCount}", "DEBUG");
-            }
-            catch (Exception exIgnore)
-            {
-                LogToFile($"[SaveMessage] ERROR: R=Save message, A=Process ignore list, P=userName='{userName}', I=Valid list, D=Failed: {exIgnore.Message}", "ERROR");
-                LogToFile($"[SaveMessage] Stack: {exIgnore.StackTrace}", "DEBUG");
-                LogToFile("<<< [SaveMessage] Exit: Exception retrieving ignore list", "DEBUG");
                 return false;
             }
 
