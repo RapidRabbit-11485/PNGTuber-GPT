@@ -3741,19 +3741,19 @@ public class CPHInline
                 }
 
                 // Get base database path from Streamer.bot (global has a space in its name)
-                string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
-                if (string.IsNullOrWhiteSpace(databasePath))
+                string databasePathLocal = CPH.GetGlobalVar<string>("Database Path", true);
+                if (string.IsNullOrWhiteSpace(databasePathLocal))
                 {
-                    databasePath = "";
+                    databasePathLocal = "";
                     LogToFile("[AskGPTWebhook] WARN: 'Database Path' global variable missing or empty.", "WARN");
                 }
 
                 // Build full path and read context file
-                fullContextFilePath = Path.Combine(databasePath, contextFileName);
+                fullContextFilePath = Path.Combine(databasePathLocal, contextFileName);
                 if (!File.Exists(fullContextFilePath))
                 {
                     LogToFile($"[AskGPTWebhook] WARN: Context file not found at '{fullContextFilePath}'. Falling back to 'Context.txt'.", "WARN");
-                    fullContextFilePath = Path.Combine(databasePath, "Context.txt");
+                    fullContextFilePath = Path.Combine(databasePathLocal, "Context.txt");
                 }
 
                 if (File.Exists(fullContextFilePath))
