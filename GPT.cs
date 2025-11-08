@@ -3627,8 +3627,16 @@ public class CPHInline
                 // ---- Enqueue user/assistant turn into GPTLog ----
                 try
                 {
-                    QueueGPTMessage(fullMessage, GPTResponse);
-                    LogToFile("[AskGPT] DEBUG: Enqueued user/assistant turn into GPTLog.", "DEBUG");
+                    // Retrieve or create the user profile
+                    var profile = GetOrCreateUserProfile(userName);
+                    string displayName = !string.IsNullOrWhiteSpace(profile?.PreferredName) ? profile.PreferredName : userName;
+                    if (!string.IsNullOrWhiteSpace(profile?.Pronouns))
+                    {
+                        displayName = $"{displayName} ({profile.Pronouns})";
+                    }
+                    string formattedUserPrompt = $"{displayName} asks: {fullMessage}";
+                    QueueGPTMessage(formattedUserPrompt, GPTResponse);
+                    LogToFile("[AskGPT] DEBUG: Enqueued contextualized user/assistant turn into GPTLog.", "DEBUG");
                 }
                 catch (Exception ex)
                 {
