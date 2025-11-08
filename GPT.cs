@@ -5372,8 +5372,8 @@ public class CPHInline
 
             foreach (var setting in settings)
             {
-                string key = setting["Key"];
-                string value = setting["Value"];
+                string key = setting["Key"].AsString;
+                string value = setting["Value"].AsString;
 
                 try
                 {
