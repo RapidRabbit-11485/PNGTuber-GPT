@@ -3121,22 +3121,55 @@ public class CPHInline
                 // ---- ChatLog injection (for coaching mode) ----
                 try
                 {
-                    // Inject summarized ChatLog context as one assistant message
+                    // Inject summarized ChatLog context as one assistant message (coaching phase)
+                    LogToFile("[AskGPT] DEBUG: Entering coaching mode for structured context assembly.", "DEBUG");
+                    messages.Add(new chatMessage { role = "system", content = "You will now receive structured context updates. Acknowledge each with 'OK' and wait for instruction to resume normal operation." });
+                    messages.Add(new chatMessage { role = "assistant", content = "OK" });
+
+                    int chatTurns = ChatLog != null ? ChatLog.Count : 0;
+                    LogToFile($"[AskGPT] DEBUG: Injecting chat log with {chatTurns} turns (coaching mode, single block).", "DEBUG");
                     if (ChatLog != null && ChatLog.Count > 0)
                     {
                         int chatHistoryLimit = CPH.GetGlobalVar<int>("max_chat_history", true);
-                        var chatEntries = ChatLog.Reverse().Take(chatHistoryLimit).Reverse()
-                            .Select(m => m.content)
+                        // Compose up to chatHistoryLimit chat messages in "username says: message" format
+                        var chatLines = ChatLog
+                            .Reverse().Take(chatHistoryLimit).Reverse()
+                            .Select(m =>
+                            {
+                                if (!string.IsNullOrWhiteSpace(m.role) && m.role == "user" && m.content != null)
+                                {
+                                    if (m.content.Contains("says:"))
+                                        return m.content;
+                                    var idx = m.content.IndexOf(":");
+                                    if (idx > 0 && idx < 32)
+                                    {
+                                        var user = m.content.Substring(0, idx).Trim();
+                                        var msg = m.content.Substring(idx + 1).Trim();
+                                        return $"{user} says: {msg}";
+                                    }
+                                    return $"User says: {m.content}";
+                                }
+                                else if (!string.IsNullOrWhiteSpace(m.role) && m.role == "assistant" && m.content != null)
+                                {
+                                    return $"Assistant says: {m.content}";
+                                }
+                                else if (!string.IsNullOrWhiteSpace(m.content))
+                                {
+                                    return m.content;
+                                }
+                                return "";
+                            })
+                            .Where(x => !string.IsNullOrWhiteSpace(x))
                             .ToList();
-                        if (chatEntries.Count > 0)
+                        if (chatLines.Count > 0)
                         {
-                            string compiledChat = "Here is recent chat context for reference:\n" + string.Join("\n", chatEntries);
+                            string compiledChat = "Here is recent chat context for reference:\n" + string.Join("\n", chatLines);
                             messages.Add(new chatMessage
                             {
                                 role = "assistant",
                                 content = compiledChat
                             });
-                            LogToFile($"[AskGPT] DEBUG: Injected summarized ChatLog ({chatEntries.Count} lines) into context.", "DEBUG");
+                            LogToFile($"[AskGPT] DEBUG: Injected {chatLines.Count} chat log lines as a single assistant message.", "DEBUG");
                         }
                     }
                 }
@@ -3144,22 +3177,6 @@ public class CPHInline
                 {
                     LogToFile($"[AskGPT] WARN: Exception while enriching ChatLog context: {exCtx.Message}", "WARN");
                     LogToFile($"[AskGPT] Stack: {exCtx.StackTrace}", "DEBUG");
-                }
-
-                LogToFile("[AskGPT] DEBUG: Entering coaching mode for structured context assembly.", "DEBUG");
-                messages.Add(new chatMessage { role = "system", content = "You will now receive structured context updates. Acknowledge each with 'OK' and wait for instruction to resume normal operation." });
-                messages.Add(new chatMessage { role = "assistant", content = "OK" });
-
-                int chatTurns = ChatLog != null ? ChatLog.Count : 0;
-                LogToFile($"[AskGPT] DEBUG: Injecting chat log with {chatTurns} turns.", "DEBUG");
-                if (ChatLog != null)
-                {
-                    int chatHistoryLimit = CPH.GetGlobalVar<int>("max_chat_history", true);
-                    foreach (var chatMessage in ChatLog.Reverse().Take(chatHistoryLimit).Reverse())
-                    {
-                        messages.Add(chatMessage);
-                        messages.Add(new chatMessage { role = "assistant", content = "OK" });
-                    }
                 }
 
                 LogToFile("[AskGPT] DEBUG: Querying LiteDB for keyword definitions (normalized).", "DEBUG");
@@ -3829,26 +3846,19 @@ public class CPHInline
             messages.Add(new chatMessage { role = "system", content = "You will now receive structured context updates. Acknowledge each with 'OK' and wait for instruction to resume normal operation." });
             messages.Add(new chatMessage { role = "assistant", content = "OK" });
 
-            // --- ChatLog injection as a single structured assistant message ---
+            // --- ChatLog injection as a single structured assistant message (one block, coaching phase) ---
             int chatTurns = ChatLog != null ? ChatLog.Count : 0;
             LogToFile($"[AskGPTWebhook] DEBUG: Injecting chat log with {chatTurns} turns (coaching mode, single block).", "DEBUG");
             if (ChatLog != null && ChatLog.Count > 0)
             {
-                // Add a primer assistant message
-                messages.Add(new chatMessage { role = "assistant", content = "Here is recent chat context for reference:" });
-                // Compose up to chatHistoryLimit chat messages in "username says: message" format
                 int chatHistoryLimit = maxChatHistory;
                 var chatLines = ChatLog
                     .Reverse().Take(chatHistoryLimit).Reverse()
-                    .Select(m => {
-                        // Try to extract username: for user role, otherwise just use content.
+                    .Select(m =>
+                    {
                         if (!string.IsNullOrWhiteSpace(m.role) && m.role == "user" && m.content != null)
                         {
-                            // Attempt to parse "X says: Y" or fallback to just content
-                            // If content already has "says:" just use as is, else try to extract
-                            if (m.content.Contains("says:"))
-                                return m.content;
-                            // Try to extract username from "username: message"
+                            // Parse as "username: message" if possible
                             var idx = m.content.IndexOf(":");
                             if (idx > 0 && idx < 32)
                             {
@@ -3873,9 +3883,9 @@ public class CPHInline
                     .ToList();
                 if (chatLines.Count > 0)
                 {
-                    string combined = string.Join("\n", chatLines);
+                    string combined = "Here is recent chat context for reference:\n" + string.Join("\n", chatLines);
                     messages.Add(new chatMessage { role = "assistant", content = combined });
-                    LogToFile($"[AskGPTWebhook] DEBUG: Injected {chatLines.Count} chat log lines as a single assistant message.", "DEBUG");
+                    LogToFile($"[AskGPTWebhook] DEBUG: Injected {chatLines.Count} chat log lines as a single assistant message block.", "DEBUG");
                 }
             }
 
@@ -4001,14 +4011,12 @@ public class CPHInline
 
             LogToFile("[AskGPTWebhook] DEBUG: Finishing context transmission and resuming normal conversation mode.", "DEBUG");
             messages.Add(new chatMessage { role = "system", content = "All context updates received. Resume normal conversation mode." });
-            messages.Add(new chatMessage { role = "assistant", content = "OK" });
-
-            // ---- Inject GPTLog conversation history after context transmission ----
+            // ---- Inject GPTLog conversation history after context resumption and before new prompt ----
             try
             {
                 if (GPTLog != null && GPTLog.Count > 0)
                 {
-                    int promptHistoryLimit = maxPromptHistory; // already loaded above
+                    int promptHistoryLimit = maxPromptHistory;
                     var priorTurns = GPTLog.Reverse().Take(promptHistoryLimit * 2).Reverse().ToList();
                     foreach (var turn in priorTurns)
                     {
@@ -4018,7 +4026,7 @@ public class CPHInline
                             content = turn.content
                         });
                     }
-                    LogToFile($"[AskGPTWebhook] DEBUG: Injected {priorTurns.Count} GPT turns after context transmission.", "DEBUG");
+                    LogToFile($"[AskGPTWebhook] DEBUG: Injected {priorTurns.Count} GPT turns after context resumption.", "DEBUG");
                 }
             }
             catch (Exception exCtx)
