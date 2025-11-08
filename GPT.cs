@@ -1545,7 +1545,6 @@ public class CPHInline
 
     public bool SaveMessage()
     {
-
         LogToFile(">>> [SaveMessage] Entry: Begin SaveMessage operation", "DEBUG");
         string msg = null;
         string userName = null;
@@ -1559,7 +1558,6 @@ public class CPHInline
 
         try
         {
-
             try
             {
                 LogToFile("[SaveMessage] DEBUG: TryGetArg('rawInput')", "DEBUG");
@@ -1598,6 +1596,14 @@ public class CPHInline
             }
             LogToFile($"[SaveMessage] DEBUG: Args OK. userName='{userName}', msg='{msg}'", "DEBUG");
 
+            // Prevent saving chat commands to the queue
+            if (msg.StartsWith("!", StringComparison.OrdinalIgnoreCase))
+            {
+                LogToFile($"[SaveMessage] DEBUG: Message '{msg}' identified as command — skipping queue storage.", "DEBUG");
+                LogToFile("<<< [SaveMessage] Exit: Skipped command message", "DEBUG");
+                return false;
+            }
+
             UserProfile profile = null;
             try
             {
@@ -1629,7 +1635,7 @@ public class CPHInline
                 ignoreNamesCount = ignoreNamesList.Count;
                 if (ignoreNamesList.Contains(userName, StringComparer.OrdinalIgnoreCase))
                 {
-                    LogToFile($"[SaveMessage] INFO: R=Save message, A=Check ignore list, P=userName='{userName}', I=Skip ignored, D=Skipped.", "INFO");
+                    LogToFile($"[SaveMessage] DEBUG: R=Save message, A=Check ignore list, P=userName='{userName}', I=Skip ignored, D=Skipped.", "DEBUG");
                     LogToFile("<<< [SaveMessage] Exit: userName in ignore list (skip)", "DEBUG");
                     return false;
                 }
@@ -1670,7 +1676,6 @@ public class CPHInline
                     content = messageContent
                 };
                 QueueMessage(chatMsg);
-                LogToFile($"[SaveMessage] INFO: R=Save message, A=QueueMessage(), P=userName='{userName}', I=Message stored, D=Success.", "INFO");
             }
             catch (Exception exQueue)
             {
@@ -1681,7 +1686,7 @@ public class CPHInline
             }
 
             success = true;
-            LogToFile($"[SaveMessage] INFO: R=Save message, A=Complete pipeline, P=userName='{userName}', msgLength={msg.Length}, ignoreNamesCount={ignoreNamesCount}, chatLogCount={ChatLog?.Count ?? -1}, I=Message queued, D=Success.", "INFO");
+            LogToFile($"Saved message from {userName}: {msg}", "INFO");
             LogToFile($"<<< [SaveMessage] Exit: userName='{userName}', msg='{msg}', chatLogCount={ChatLog?.Count ?? -1}, success={success}", "DEBUG");
             return true;
         }
@@ -1702,11 +1707,11 @@ public class CPHInline
         string message = null;
         try
         {
-
             if (ChatLog == null)
             {
                 LogToFile("[ClearChatHistory] WARN: ChatLog is not initialized and cannot be cleared.", "WARN");
                 message = "Chat history is already empty.";
+
                 try
                 {
                     LogToFile("[ClearChatHistory] Retrieving 'Post To Chat' global variable.", "DEBUG");
@@ -1718,6 +1723,7 @@ public class CPHInline
                     LogToFile($"[ClearChatHistory] WARN: Failed to retrieve 'Post To Chat': {exChat.Message}", "WARN");
                     postToChat = false;
                 }
+
                 if (postToChat)
                 {
                     try
@@ -1734,6 +1740,7 @@ public class CPHInline
                 {
                     LogToFile($"[ClearChatHistory] [Skipped Chat Output] Post To Chat disabled. Message: {message}", "WARN");
                 }
+
                 LogToFile($@"<<< [ClearChatHistory] Exit: success=false, postToChat={postToChat}, message='{message}'", "DEBUG");
                 return false;
             }
@@ -1760,6 +1767,7 @@ public class CPHInline
                     LogToFile($"[ClearChatHistory] WARN: Failed to retrieve 'Post To Chat' in exception path: {exChat.Message}", "WARN");
                     postToChat = false;
                 }
+
                 string errMsg = "I was unable to clear the chat history. Please check the log file for more details.";
                 if (postToChat)
                 {
@@ -1808,6 +1816,7 @@ public class CPHInline
             {
                 LogToFile($"[ClearChatHistory] [Skipped Chat Output] Post To Chat disabled. Message: {message}", "WARN");
             }
+
             success = true;
             LogToFile($@"<<< [ClearChatHistory] Exit: success={success}, postToChat={postToChat}, message='{message}'", "DEBUG");
             return true;
@@ -1829,6 +1838,7 @@ public class CPHInline
                 LogToFile($"[ClearChatHistory] WARN: Failed to retrieve 'Post To Chat' in fatal exception path: {exChat.Message}", "WARN");
                 postToChat = false;
             }
+
             if (postToChat)
             {
                 try
@@ -2878,7 +2888,7 @@ public class CPHInline
 
     public bool AskGPT()
     {
-        LogToFile("==== Begin AskGPT Execution ====", "INFO");
+        LogToFile("==== Begin AskGPT Execution ====", "DEBUG");
         LogToFile("Entering AskGPT method (streamer.bot pronouns, LiteDB context, webhook/discord sync).", "DEBUG");
 
         bool postToChat = false;
@@ -2941,7 +2951,7 @@ public class CPHInline
                 try
                 {
                     characterNumber = CPH.GetGlobalVar<int>("character", true);
-                    LogToFile($"Active character number set to {characterNumber}.", "INFO");
+                    LogToFile($"Active character number set to {characterNumber}.", "DEBUG");
                 }
                 catch
                 {
@@ -2957,7 +2967,7 @@ public class CPHInline
                         CPH.SendMessage(err, true);
                     else
                         LogToFile($"[AskGPT] [Skipped Chat Output] Post To Chat disabled. Message: {err}", "DEBUG");
-                    LogToFile("==== End AskGPT Execution ====", "INFO");
+                    LogToFile("==== End AskGPT Execution ====", "DEBUG");
                     return false;
                 }
             }
@@ -2974,12 +2984,12 @@ public class CPHInline
                 if (ChatLog == null)
                 {
                     ChatLog = new Queue<chatMessage>();
-                    LogToFile("ChatLog queue has been initialized for the first time.", "INFO");
+                    LogToFile("ChatLog queue has been initialized for the first time.", "DEBUG");
                 }
                 else
                 {
                     string chatLogAsString = string.Join(Environment.NewLine, ChatLog.Select(m => m.content ?? "null"));
-                    LogToFile($"ChatLog Content before asking GPT: {Environment.NewLine}{chatLogAsString}", "INFO");
+                    LogToFile($"ChatLog Content before asking GPT: {Environment.NewLine}{chatLogAsString}", "DEBUG");
                 }
             }
             catch (Exception exCL)
@@ -2998,7 +3008,7 @@ public class CPHInline
                         CPH.SendMessage(msg, true);
                     else
                         LogToFile($"[AskGPT] [Skipped Chat Output] Post To Chat disabled. Message: {msg}", "DEBUG");
-                    LogToFile("==== End AskGPT Execution ====", "INFO");
+                    LogToFile("==== End AskGPT Execution ====", "DEBUG");
                     return false;
                 }
                 LogToFile("Retrieved and validated 'userName' argument.", "DEBUG");
@@ -3029,10 +3039,11 @@ public class CPHInline
                         CPH.SendMessage(msg, true);
                     else
                         LogToFile($"[AskGPT] [Skipped Chat Output] Post To Chat disabled. Message: {msg}", "DEBUG");
-                    LogToFile("==== End AskGPT Execution ====", "INFO");
+                    LogToFile("==== End AskGPT Execution ====", "DEBUG");
                     return false;
                 }
                 prompt = $"{userToSpeak} asks: {fullMessage}";
+                LogToFile($"[AskGPT] INFO: Prompt input: {prompt}", "INFO");
                 LogToFile($"Constructed prompt for GPT: {prompt}", "DEBUG");
             }
             catch (Exception exArgs)
@@ -3108,6 +3119,73 @@ public class CPHInline
                     string pronounContext = "Known pronouns for participants: " + string.Join(" ", pronounContextEntries);
                     enrichmentSections.Add(pronounContext);
                     LogToFile($"Added pronoun context system message: {pronounContext}", "DEBUG");
+
+                    // --- Dynamic Context Assembly (Keywords + User Knowledge) ---
+                    try
+                    {
+                        LogToFile("[AskGPT] DEBUG: Starting dynamic context assembly.", "DEBUG");
+
+                        var keywordDocs = _db.GetCollection<BsonDocument>("keywords").FindAll().ToList();
+                        var profileDocs = _db.GetCollection<BsonDocument>("user_profiles").FindAll().ToList();
+
+                        var keywordDict = keywordDocs.ToDictionary(
+                            k => k["Keyword"].AsString.ToLowerInvariant(),
+                            k => k["Definition"].AsString);
+
+                        var userDict = profileDocs.ToDictionary(
+                            u => u["UserName"].AsString.ToLowerInvariant(),
+                            u => u);
+
+                        var words = prompt.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                                          .Select(w => w.TrimStart('@').ToLowerInvariant())
+                                          .Distinct()
+                                          .ToList();
+
+                        var insertedCount = 0;
+
+                        foreach (var word in words)
+                        {
+                            if (keywordDict.TryGetValue(word, out var def))
+                            {
+                                var line = $"Something you remember about {word} is {def}.";
+                                contextBody.AppendLine(line);
+                                insertedCount++;
+                                LogToFile($"[AskGPT] INFO: Inserted context for keyword '{word}' -> \"{def}\"", "INFO");
+                            }
+
+                            if (userDict.TryGetValue(word, out var profile))
+                            {
+                                if (profile["Knowledge"].IsArray && profile["Knowledge"].AsArray.Count > 0)
+                                {
+                                    var know = string.Join(", ", profile["Knowledge"].AsArray.Select(k => k.AsString));
+                                    var line = $"Something I remember about {word} is {know}.";
+                                    contextBody.AppendLine(line);
+                                    insertedCount++;
+                                    LogToFile($"[AskGPT] INFO: Inserted context for user '{word}' -> \"{know}\"", "INFO");
+                                }
+                            }
+                        }
+
+                        LogToFile($"[AskGPT] DEBUG: Dynamic context assembly complete. Inserted {insertedCount} entries.", "DEBUG");
+                    }
+                    catch (Exception ex)
+                    {
+                        LogToFile($"[AskGPT] ERROR: Context assembly failed: {ex.Message}", "ERROR");
+                        LogToFile($"[AskGPT] Stack: {ex.StackTrace}", "DEBUG");
+                    }
+                    finally
+                    {
+                        // Explicit cleanup
+                        LogToFile("[AskGPT] DEBUG: Clearing context dictionaries from memory.", "DEBUG");
+                        keywordDocs?.Clear();
+                        profileDocs?.Clear();
+                        keywordDict?.Clear();
+                        userDict?.Clear();
+                        keywordDocs = profileDocs = null;
+                        keywordDict = userDict = null;
+                        LogToFile("[AskGPT] DEBUG: Context dictionaries cleared from memory.", "DEBUG");
+                    }
+                    // --- End Dynamic Context Assembly ---
                 }
                 enrichmentSections.Add($"{context}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}");
                 foreach (string uname in mentionedUsers.Distinct(StringComparer.OrdinalIgnoreCase))
@@ -3274,11 +3352,11 @@ public class CPHInline
             {
                 if (apiSuccess && completionsJsonResponse?.Usage != null)
                 {
-                    LogPromptScorecard(
-                        "AskGPT",
-                        AIModel,
-                        completionsJsonResponse.Usage
-                    );
+                LogPromptScorecard(
+                    "AskGPT",
+                    AIModel,
+                    completionsJsonResponse.Usage
+                );
                 }
             }
             catch (Exception exScore)
@@ -3290,6 +3368,7 @@ public class CPHInline
 
             GPTResponse = CleanAIText(GPTResponse);
             LogToFile("[AskGPT] DEBUG: Applied CleanAIText() to GPT response.", "DEBUG");
+            LogToFile($"[AskGPT] INFO: Model response: {GPTResponse}", "INFO");
             if (!apiSuccess || string.IsNullOrWhiteSpace(GPTResponse))
             {
                 if (!apiSuccess)
@@ -3335,7 +3414,7 @@ public class CPHInline
             {
                 LogToFile($"[AskGPT] DEBUG: GPT model response: {GPTResponse}", "DEBUG");
                 CPH.SetGlobalVar("Response", GPTResponse, true);
-                LogToFile("[AskGPT] INFO: Stored GPT response in global variable 'Response'.", "INFO");
+                LogToFile("[AskGPT] DEBUG: Stored GPT response in global variable 'Response'.", "DEBUG");
 
                 string outboundWebhookUrl = CPH.GetGlobalVar<string>("outbound_webhook_url", true);
                 if (string.IsNullOrWhiteSpace(outboundWebhookUrl))
@@ -3343,7 +3422,7 @@ public class CPHInline
                 string outboundWebhookMode = CPH.GetGlobalVar<string>("outbound_webhook_mode", true);
                 if ((outboundWebhookMode ?? "").Equals("Disabled", StringComparison.OrdinalIgnoreCase))
                 {
-                    LogToFile("[AskGPT] INFO: Outbound webhook mode is set to 'Disabled'. Skipping webhook.", "INFO");
+                    LogToFile("[AskGPT] DEBUG: Outbound webhook mode is set to 'Disabled'. Skipping webhook.", "DEBUG");
                 }
                 else if (!string.IsNullOrWhiteSpace(outboundWebhookUrl))
                 {
@@ -3367,7 +3446,7 @@ public class CPHInline
                     {
                         payload = JsonConvert.SerializeObject(new { response = GPTResponse });
                     }
-                    LogToFile($"[AskGPT] INFO: Sending outbound webhook payload: {payload}", "INFO");
+                    LogToFile($"[AskGPT] DEBUG: Sending outbound webhook payload: {payload}", "DEBUG");
                     try
                     {
                         var request = WebRequest.Create(outboundWebhookUrl);
@@ -3383,7 +3462,7 @@ public class CPHInline
                         }
                         using (var response = request.GetResponse())
                         {
-                            LogToFile("[AskGPT] INFO: Outbound webhook POST successful.", "INFO");
+                            LogToFile("[AskGPT] DEBUG: Outbound webhook POST successful.", "DEBUG");
                         }
                     }
                     catch (WebException webEx)
@@ -3426,7 +3505,7 @@ public class CPHInline
                 if (voiceEnabled)
                 {
                     CPH.TtsSpeak(voiceAlias, GPTResponse, false);
-                    LogToFile($"[AskGPT] INFO: Character {characterNumber} spoke GPT's response.", "INFO");
+                    LogToFile($"[AskGPT] DEBUG: Character {characterNumber} spoke GPT's response.", "DEBUG");
                 }
                 else
                 {
@@ -3435,7 +3514,7 @@ public class CPHInline
                 if (postToChat)
                 {
                     CPH.SendMessage(GPTResponse, true);
-                    LogToFile("[AskGPT] INFO: Sent GPT response to chat.", "INFO");
+                    LogToFile("[AskGPT] DEBUG: Sent GPT response to chat.", "DEBUG");
                 }
                 else
                 {
@@ -3445,7 +3524,7 @@ public class CPHInline
                 if (logDiscord)
                 {
                     PostToDiscord(prompt, GPTResponse);
-                    LogToFile("[AskGPT] INFO: Posted GPT result to Discord.", "INFO");
+                    LogToFile("[AskGPT] DEBUG: Posted GPT result to Discord.", "DEBUG");
                 }
             }
             catch (Exception exOut)
@@ -3465,7 +3544,7 @@ public class CPHInline
                 keywordDocs.Clear();
                 keywordDocs = null;
             }
-            LogToFile("==== End AskGPT Execution ====", "INFO");
+            LogToFile("==== End AskGPT Execution ====", "DEBUG");
             return true;
         }
         catch (Exception ex)
@@ -3479,14 +3558,14 @@ public class CPHInline
                 CPH.SendMessage("An internal error occurred in AskGPT.", true);
             else
                 LogToFile("[AskGPT] [Skipped Chat Output] Post To Chat disabled. Message: An internal error occurred in AskGPT.", "WARN");
-            LogToFile("==== End AskGPT Execution ====", "INFO");
+            LogToFile("==== End AskGPT Execution ====", "DEBUG");
             return false;
         }
     }
 
     public bool AskGPTWebhook()
     {
-        LogToFile("==== Begin AskGPTWebhook Execution ====", "INFO");
+        LogToFile("==== Begin AskGPTWebhook Execution ====", "DEBUG");
         LogToFile("Entering AskGPTWebhook (LiteDB context enrichment, outbound webhook, pronoun support, TTS/chat/discord parity).", "DEBUG");
 
         bool postToChat = false;
@@ -3509,12 +3588,12 @@ public class CPHInline
             if (CPH.TryGetArg("moderatedMessage", out string moderatedMessage) && !string.IsNullOrWhiteSpace(moderatedMessage))
             {
                 fullMessage = moderatedMessage;
-                LogToFile("Retrieved 'moderatedMessage' via TryGetArg in AskGPTWebhook.", "DEBUG");
+                LogToFile("[AskGPTWebhook] INFO: Moderation applied. Using 'moderatedMessage' as prompt input.", "INFO");
             }
             else if (CPH.TryGetArg("rawInput", out string rawInput) && !string.IsNullOrWhiteSpace(rawInput))
             {
                 fullMessage = rawInput;
-                LogToFile("Retrieved 'rawInput' via TryGetArg in AskGPTWebhook.", "DEBUG");
+                LogToFile("[AskGPTWebhook] INFO: Using 'rawInput' as prompt input.", "INFO");
             }
             if (string.IsNullOrWhiteSpace(fullMessage))
             {
@@ -3547,7 +3626,7 @@ public class CPHInline
         try
         {
             characterNumber = CPH.GetGlobalVar<int>("character", true);
-            LogToFile($"Active character number set to {characterNumber}.", "INFO");
+            LogToFile($"Active character number set to {characterNumber}.", "DEBUG");
         }
         catch (Exception ex)
         {
@@ -3565,17 +3644,17 @@ public class CPHInline
             LogToFile($"[AskGPTWebhook] ERROR: Could not get voice alias for Character {characterNumber}: {ex.Message}", "ERROR");
             LogToFile($"[AskGPTWebhook] Stack: {ex.StackTrace}", "DEBUG");
         }
-        if (string.IsNullOrWhiteSpace(voiceAlias))
-        {
-            string err = $"No voice alias configured for Character {characterNumber}. Please set 'character_voice_alias_{characterNumber}'.";
-            LogToFile(err, "ERROR");
-            if (postToChat)
-                CPH.SendMessage(err, true);
-            else
-                LogToFile($"[AskGPTWebhook] [Skipped Chat Output] Post To Chat disabled. Message: {err}", "DEBUG");
-            LogToFile("==== End AskGPTWebhook Execution ====", "INFO");
-            return false;
-        }
+            if (string.IsNullOrWhiteSpace(voiceAlias))
+            {
+                string err = $"No voice alias configured for Character {characterNumber}. Please set 'character_voice_alias_{characterNumber}'.";
+                LogToFile(err, "ERROR");
+                if (postToChat)
+                    CPH.SendMessage(err, true);
+                else
+                    LogToFile($"[AskGPTWebhook] [Skipped Chat Output] Post To Chat disabled. Message: {err}", "DEBUG");
+                LogToFile("==== End AskGPTWebhook Execution ====", "DEBUG");
+                return false;
+            }
 
         string databasePath = null, characterFileName = null, ContextFilePath = null, context = null, broadcaster = null, currentTitle = null, currentGame = null;
         var allUserProfiles = new List<UserProfile>();
@@ -3653,7 +3732,7 @@ public class CPHInline
             {
                 string pronounContext = "Known pronouns for participants: " + string.Join(" ", pronounContextEntries);
                 enrichmentSections.Add(pronounContext);
-                LogToFile($"Added pronoun context system message: {pronounContext}", "DEBUG");
+                LogToFile($"[AskGPTWebhook] INFO: Pronoun context: {pronounContext}", "INFO");
             }
             enrichmentSections.Add($"{context}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}");
             foreach (string uname in mentionedUsers.Distinct(StringComparer.OrdinalIgnoreCase))
@@ -3692,7 +3771,8 @@ public class CPHInline
             }
             contextBody = string.Join("\n", enrichmentSections);
             prompt = $"{userToSpeak} asks: {fullMessage}";
-            LogToFile($"Assembled enriched context for webhook:\n{contextBody}", "DEBUG");
+            LogToFile($"[AskGPTWebhook] DEBUG: Assembled enriched context for webhook:\n{contextBody}", "DEBUG");
+            LogToFile($"[AskGPTWebhook] INFO: Prompt input: {prompt}", "INFO");
         }
         catch (Exception ex)
         {
@@ -3814,7 +3894,7 @@ public class CPHInline
         finally
         {
             sw.Stop();
-            LogToFile($"[AskGPTWebhook] INFO: OpenAI API call completed in {sw.ElapsedMilliseconds} ms.", "INFO");
+            LogToFile($"[AskGPTWebhook] DEBUG: OpenAI API call completed in {sw.ElapsedMilliseconds} ms.", "DEBUG");
         }
 
         GPTResponse = CleanAIText(GPTResponse);
@@ -3845,14 +3925,14 @@ public class CPHInline
 
             if (allUserProfiles != null) { allUserProfiles.Clear(); allUserProfiles = null; }
             if (keywordDocs != null) { keywordDocs.Clear(); keywordDocs = null; }
-            LogToFile("==== End AskGPTWebhook Execution ====", "INFO");
+            LogToFile("==== End AskGPTWebhook Execution ====", "DEBUG");
             return false;
         }
-        LogToFile($"[AskGPTWebhook] DEBUG: GPT model response: {GPTResponse}", "DEBUG");
+        LogToFile($"[AskGPTWebhook] INFO: Model response: {GPTResponse}", "INFO");
         try
         {
             CPH.SetGlobalVar("Response", GPTResponse, true);
-            LogToFile("[AskGPTWebhook] INFO: Stored GPT response in global variable 'Response'.", "INFO");
+            LogToFile("[AskGPTWebhook] DEBUG: Stored GPT response in global variable 'Response'.", "DEBUG");
         }
         catch (Exception ex)
         {
@@ -3894,7 +3974,7 @@ public class CPHInline
             swWebhook.Start();
             if ((outboundWebhookMode ?? "").Equals("Disabled", StringComparison.OrdinalIgnoreCase))
             {
-                LogToFile("[AskGPTWebhook] INFO: Outbound webhook mode is set to 'Disabled'. Skipping webhook.", "INFO");
+                LogToFile("[AskGPTWebhook] DEBUG: Outbound webhook mode is set to 'Disabled'. Skipping webhook.", "DEBUG");
             }
             else if (!string.IsNullOrWhiteSpace(outboundWebhookUrl))
             {
@@ -3918,7 +3998,7 @@ public class CPHInline
                 {
                     payload = JsonConvert.SerializeObject(new { response = GPTResponse });
                 }
-                LogToFile($"[AskGPTWebhook] INFO: Sending outbound webhook payload: {payload}", "INFO");
+                LogToFile($"[AskGPTWebhook] DEBUG: Sending outbound webhook payload: {payload}", "DEBUG");
                 int maxWebhookAttempts = 3;
                 webhookSuccess = false;
                 for (int attempt = 0; attempt < maxWebhookAttempts && !webhookSuccess; attempt++)
@@ -3938,7 +4018,7 @@ public class CPHInline
                         }
                         using (var response = request.GetResponse())
                         {
-                            LogToFile("[AskGPTWebhook] INFO: Outbound webhook POST successful.", "INFO");
+                            LogToFile("[AskGPTWebhook] DEBUG: Outbound webhook POST successful.", "DEBUG");
                             webhookSuccess = true;
                         }
                     }
@@ -4002,7 +4082,7 @@ public class CPHInline
         finally
         {
             swWebhook.Stop();
-            LogToFile($"[AskGPTWebhook] INFO: Webhook POST (if attempted) completed in {swWebhook.ElapsedMilliseconds} ms.", "INFO");
+            LogToFile($"[AskGPTWebhook] DEBUG: Webhook POST (if attempted) completed in {swWebhook.ElapsedMilliseconds} ms.", "DEBUG");
         }
         if (!webhookSuccess)
         {
@@ -4024,7 +4104,7 @@ public class CPHInline
             if (voiceEnabled)
             {
                 CPH.TtsSpeak(voiceAlias, GPTResponse, false);
-                LogToFile($"[AskGPTWebhook] INFO: Character {characterNumber} spoke GPT's response.", "INFO");
+                LogToFile($"[AskGPTWebhook] DEBUG: Character {characterNumber} spoke GPT's response.", "DEBUG");
             }
             else
             {
@@ -4034,7 +4114,7 @@ public class CPHInline
             if (postToChat)
             {
                 CPH.SendMessage(GPTResponse, true);
-                LogToFile("[AskGPTWebhook] INFO: Sent GPT response to chat.", "INFO");
+                LogToFile("[AskGPTWebhook] DEBUG: Sent GPT response to chat.", "DEBUG");
             }
             else
             {
@@ -4052,7 +4132,7 @@ public class CPHInline
             if (logDiscord)
             {
                 PostToDiscord(prompt, GPTResponse);
-                LogToFile("[AskGPTWebhook] INFO: Posted GPT result to Discord.", "INFO");
+                LogToFile("[AskGPTWebhook] DEBUG: Posted GPT result to Discord.", "DEBUG");
             }
             CPH.SetGlobalVar("character", 1, true);
             LogToFile("[AskGPTWebhook] DEBUG: Reset 'character' global to 1 after AskGPTWebhook.", "DEBUG");
@@ -4075,7 +4155,7 @@ public class CPHInline
             keywordDocs.Clear();
             keywordDocs = null;
         }
-        LogToFile("==== End AskGPTWebhook Execution ====", "INFO");
+        LogToFile("==== End AskGPTWebhook Execution ====", "DEBUG");
         return true;
     }
 
