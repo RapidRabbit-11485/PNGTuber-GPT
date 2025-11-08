@@ -560,22 +560,22 @@ public class CPHInline
             LogToFile($"[QueueMessage] Chat message enqueued. Message: {chatMsg}", "DEBUG");
             LogToFile($"[QueueMessage] ChatLog.Count after enqueue: {ChatLog.Count}", "DEBUG");
 
-            int maxChatHistory;
+            int chatHistoryLimit;
             try
             {
-                maxChatHistory = CPH.GetGlobalVar<int>("max_chat_history", true);
-                LogToFile($"[QueueMessage] Retrieved maxChatHistory: {maxChatHistory}", "DEBUG");
+                chatHistoryLimit = CPH.GetGlobalVar<int>("max_chat_history", true);
+                LogToFile($"[QueueMessage] Retrieved chatHistoryLimit: {chatHistoryLimit}", "DEBUG");
             }
             catch (Exception exLimit)
             {
                 LogToFile($"[QueueMessage] WARN: Failed to retrieve 'max_chat_history' global variable: {exLimit.Message}", "WARN");
-                maxChatHistory = 20; 
-                LogToFile($"[QueueMessage] Using fallback maxChatHistory: {maxChatHistory}", "WARN");
+                chatHistoryLimit = 20; 
+                LogToFile($"[QueueMessage] Using fallback chatHistoryLimit: {chatHistoryLimit}", "WARN");
             }
 
-            if (ChatLog.Count > maxChatHistory)
+            if (ChatLog.Count > chatHistoryLimit)
             {
-                LogToFile($"[QueueMessage] INFO: ChatLog.Count ({ChatLog.Count}) > maxChatHistory ({maxChatHistory}). Oldest message will be dequeued.", "INFO");
+                LogToFile($"[QueueMessage] INFO: ChatLog.Count ({ChatLog.Count}) > chatHistoryLimit ({chatHistoryLimit}). Oldest message will be dequeued.", "INFO");
                 chatMessage dequeuedMessage = null;
                 try
                 {
@@ -594,14 +594,14 @@ public class CPHInline
                 catch (Exception exDequeue)
                 {
                     LogToFile($"[QueueMessage] ERROR: Exception during dequeue: {exDequeue.Message}", "ERROR");
-                    LogToFile($"[QueueMessage] ChatLog.Count: {ChatLog.Count}, maxChatHistory: {maxChatHistory}", "ERROR");
+                    LogToFile($"[QueueMessage] ChatLog.Count: {ChatLog.Count}, chatHistoryLimit: {chatHistoryLimit}", "ERROR");
                 }
                 LogToFile($"[QueueMessage] INFO: Oldest message dropped to enforce queue limit. Current ChatLog.Count: {ChatLog.Count}", "INFO");
             }
             else
             {
-                LogToFile($"[QueueMessage] DEBUG: ChatLog.Count ({ChatLog.Count}) <= maxChatHistory ({maxChatHistory}). No dequeue needed.", "DEBUG");
-                LogToFile($"[QueueMessage] INFO: Message successfully queued. ChatLog.Count: {ChatLog.Count}, maxChatHistory: {maxChatHistory}", "INFO");
+                LogToFile($"[QueueMessage] DEBUG: ChatLog.Count ({ChatLog.Count}) <= chatHistoryLimit ({chatHistoryLimit}). No dequeue needed.", "DEBUG");
+                LogToFile($"[QueueMessage] INFO: Message successfully queued. ChatLog.Count: {ChatLog.Count}, chatHistoryLimit: {chatHistoryLimit}", "INFO");
             }
         }
         catch (Exception ex)
@@ -649,21 +649,21 @@ public class CPHInline
 
             LogToFile("Queued GPT conversation pair for processing.", "INFO");
 
-            int maxPromptHistory = 10; 
+            int promptHistoryLimit = 10; 
             try
             {
-                maxPromptHistory = CPH.GetGlobalVar<int>("max_prompt_history", true);
-                LogToFile($"[QueueGPTMessage] Retrieved max_prompt_history: {maxPromptHistory}", "DEBUG");
+                promptHistoryLimit = CPH.GetGlobalVar<int>("max_prompt_history", true);
+                LogToFile($"[QueueGPTMessage] Retrieved max_prompt_history: {promptHistoryLimit}", "DEBUG");
             }
             catch (Exception exLimit)
             {
                 LogToFile($"[QueueGPTMessage] WARN: Failed to retrieve 'max_prompt_history' global variable: {exLimit.Message}", "WARN");
-                LogToFile($"[QueueGPTMessage] Using fallback maxPromptHistory: {maxPromptHistory}", "WARN");
+                LogToFile($"[QueueGPTMessage] Using fallback promptHistoryLimit: {promptHistoryLimit}", "WARN");
             }
 
-            if (GPTLog.Count > maxPromptHistory * 2)
+            if (GPTLog.Count > promptHistoryLimit * 2)
             {
-                LogToFile($"[QueueGPTMessage] GPTLog.Count ({GPTLog.Count}) > maxPromptHistory*2 ({maxPromptHistory * 2}). Trimming oldest pair.", "DEBUG");
+                LogToFile($"[QueueGPTMessage] GPTLog.Count ({GPTLog.Count}) > promptHistoryLimit*2 ({promptHistoryLimit * 2}). Trimming oldest pair.", "DEBUG");
                 trimmed = true;
                 chatMessage dequeuedUser = null, dequeuedAssistant = null;
                 try
@@ -704,7 +704,7 @@ public class CPHInline
             }
             else
             {
-                LogToFile($"[QueueGPTMessage] GPTLog.Count ({GPTLog.Count}) <= maxPromptHistory*2 ({maxPromptHistory * 2}). No trimming needed.", "DEBUG");
+                LogToFile($"[QueueGPTMessage] GPTLog.Count ({GPTLog.Count}) <= promptHistoryLimit*2 ({promptHistoryLimit * 2}). No trimming needed.", "DEBUG");
             }
         }
         catch (Exception ex)
