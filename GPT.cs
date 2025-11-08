@@ -3184,8 +3184,10 @@ public class CPHInline
                             profileDocs?.Clear();
                             keywordDict?.Clear();
                             userDict?.Clear();
-                            keywordDocs = profileDocs = null;
-                            keywordDict = userDict = null;
+                            keywordDocs = null;
+                            profileDocs = null;
+                            keywordDict = null;
+                            userDict = null;
                             LogToFile("[AskGPT] DEBUG: Context dictionaries cleared from memory.", "DEBUG");
                         }
                     }
