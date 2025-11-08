@@ -3146,44 +3146,49 @@ public class CPHInline
                 }
 
                 // PHASE 4: Keyword definitions
-                int keywordDefCount = 0;
-                List<string> keywordSummaryList = new List<string>();
-                Dictionary<string, string> keywordDict = null;
-                LogToFile("[AskGPT] DEBUG: Querying LiteDB for keyword definitions.", "DEBUG");
+                LogToFile("[AskGPT] DEBUG: Querying LiteDB for keyword definitions (normalized).", "DEBUG");
                 try
                 {
+                    // Normalize input
+                    string normalizedPrompt = Regex.Replace(prompt.ToLowerInvariant(), "[^a-z0-9 ]", " ");
+                    normalizedPrompt = Regex.Replace(normalizedPrompt, @"\s+", " ").Trim();
+
                     keywordDocs = keywordsCol.FindAll().ToList();
-                    if (keywordDocs != null && keywordDocs.Count > 0)
-                    {
-                        keywordDict = keywordDocs
-                            .Where(k => k.ContainsKey("Keyword") && k.ContainsKey("Definition"))
-                            .ToDictionary(k => k["Keyword"].AsString.ToLowerInvariant(), k => k["Definition"].AsString);
-                        var words = prompt.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
-                                        .Select(w => w.TrimStart('@').ToLowerInvariant())
-                                        .Distinct()
-                                        .ToList();
-                        foreach (var word in words)
+                    var keywordEntries = keywordDocs
+                        .Where(k => k.ContainsKey("Keyword") && k.ContainsKey("Definition"))
+                        .Select(k => new
                         {
-                            if (keywordDict.TryGetValue(word, out var def))
+                            Key = k["Keyword"].AsString.ToLowerInvariant().Trim(),
+                            Def = k["Definition"].AsString.Trim()
+                        })
+                        .ToList();
+
+                    int keywordDefCount = 0;
+                    foreach (var kw in keywordEntries)
+                    {
+                        if (normalizedPrompt.Contains(kw.Key))
+                        {
+                            LogToFile($"[AskGPT] DEBUG: Matched keyword '{kw.Key}' in prompt.", "DEBUG");
+                            messages.Add(new chatMessage
                             {
-                                LogToFile($"[AskGPT] DEBUG: Found keyword match for '{word}' -> {def}", "DEBUG");
-                                messages.Add(new chatMessage { role = "user", content = $"Context update: Something you remember about {word} is {def}." });
-                                messages.Add(new chatMessage { role = "assistant", content = "OK" });
-                                keywordDefCount++;
-                                keywordSummaryList.Add(word);
-                            }
+                                role = "user",
+                                content = $"Context update: Something you remember about {kw.Key} is {kw.Def}."
+                            });
+                            messages.Add(new chatMessage { role = "assistant", content = "OK" });
+                            keywordDefCount++;
                         }
                     }
+
+                    if (keywordDefCount > 0)
+                        LogToFile($"[AskGPT] INFO: Added {keywordDefCount} keyword definitions to dynamic context.", "INFO");
+                    else
+                        LogToFile("[AskGPT] INFO: No keyword definitions matched. Skipping keyword context.", "INFO");
                 }
                 catch (Exception exKey)
                 {
                     LogToFile($"[AskGPT] ERROR: Failed to retrieve keyword definitions: {exKey.Message}", "ERROR");
                     LogToFile($"[AskGPT] Stack: {exKey.StackTrace}", "DEBUG");
                 }
-                if (keywordDefCount > 0)
-                    LogToFile($"[AskGPT] INFO: Added {keywordDefCount} keyword definitions to dynamic context.", "INFO");
-                else
-                    LogToFile("[AskGPT] INFO: No keyword definitions matched. Skipping keyword context.", "INFO");
 
                 // PHASE 5: User knowledge
                 int userKnowledgeCount = 0;
@@ -3810,42 +3815,50 @@ public class CPHInline
             }
 
             // PHASE 3: Keyword definitions
-            int keywordDefCount = 0;
-            List<string> keywordSummaryList = new List<string>();
-            Dictionary<string, string> keywordDict = null;
-            LogToFile("[AskGPTWebhook] DEBUG: Querying LiteDB for keyword definitions.", "DEBUG");
+            LogToFile("[AskGPTWebhook] DEBUG: Querying LiteDB for keyword definitions (normalized).", "DEBUG");
+
             try
             {
+                // Normalize input
+                string normalizedPrompt = Regex.Replace(fullMessage.ToLowerInvariant(), "[^a-z0-9 ]", " ");
+                normalizedPrompt = Regex.Replace(normalizedPrompt, @"\s+", " ").Trim();
+
                 keywordDocs = keywordsCol.FindAll().ToList();
-                keywordDict = keywordDocs
+                var keywordEntries = keywordDocs
                     .Where(k => k.ContainsKey("Keyword") && k.ContainsKey("Definition"))
-                    .ToDictionary(k => k["Keyword"].AsString.ToLowerInvariant(), k => k["Definition"].AsString);
-                var words = fullMessage.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
-                                  .Select(w => w.TrimStart('@').ToLowerInvariant())
-                                  .Distinct()
-                                  .ToList();
-                foreach (var word in words)
-                {
-                    if (keywordDict.TryGetValue(word, out var def))
+                    .Select(k => new
                     {
-                        LogToFile($"[AskGPTWebhook] DEBUG: Found keyword match for '{word}' -> {def}", "DEBUG");
-                        messages.Add(new chatMessage { role = "user", content = $"Context update: Something you remember about {word} is {def}." });
+                        Key = k["Keyword"].AsString.ToLowerInvariant().Trim(),
+                        Def = k["Definition"].AsString.Trim()
+                    })
+                    .ToList();
+
+                int keywordDefCount = 0;
+                foreach (var kw in keywordEntries)
+                {
+                    if (normalizedPrompt.Contains(kw.Key))
+                    {
+                        LogToFile($"[AskGPTWebhook] DEBUG: Matched keyword '{kw.Key}' in prompt.", "DEBUG");
+                        messages.Add(new chatMessage
+                        {
+                            role = "user",
+                            content = $"Context update: Something you remember about {kw.Key} is {kw.Def}."
+                        });
                         messages.Add(new chatMessage { role = "assistant", content = "OK" });
                         keywordDefCount++;
-                        keywordSummaryList.Add(word);
                     }
                 }
-                LogToFile($"[AskGPTWebhook] DEBUG: Finished querying LiteDB for keyword definitions.", "DEBUG");
+
+                if (keywordDefCount > 0)
+                    LogToFile($"[AskGPTWebhook] INFO: Added {keywordDefCount} keyword definitions to dynamic context.", "INFO");
+                else
+                    LogToFile("[AskGPTWebhook] INFO: No keyword definitions matched. Skipping keyword context.", "INFO");
             }
             catch (Exception exKey)
             {
                 LogToFile($"[AskGPTWebhook] ERROR: Failed to retrieve keyword definitions: {exKey.Message}", "ERROR");
                 LogToFile($"[AskGPTWebhook] Stack: {exKey.StackTrace}", "DEBUG");
             }
-            if (keywordDefCount > 0)
-                LogToFile($"[AskGPTWebhook] INFO: Added {keywordDefCount} keyword definitions to dynamic context.", "INFO");
-            else
-                LogToFile("[AskGPTWebhook] INFO: No keyword definitions matched. Skipping keyword context.", "INFO");
 
             // PHASE 4: User knowledge
             int userKnowledgeCount = 0;
