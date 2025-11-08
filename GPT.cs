@@ -4335,6 +4335,33 @@ public class CPHInline
         return true;
     }
 
+    private void SendChunkedMessage(string message, bool postToChat)
+    {
+        try
+        {
+            if (!postToChat || string.IsNullOrWhiteSpace(message))
+            {
+                LogToFile($"[SendChunkedMessage] Skipped: postToChat={postToChat}, message empty={string.IsNullOrWhiteSpace(message)}", "DEBUG");
+                return;
+            }
+
+            const int chunkSize = 500; // Twitch chat message limit (approx 514 with buffer)
+            for (int i = 0; i < message.Length; i += chunkSize)
+            {
+                string chunk = message.Substring(i, Math.Min(chunkSize, message.Length - i));
+                CPH.SendMessage(chunk, true);
+                LogToFile($"[SendChunkedMessage] DEBUG: Sent chunk ({i / chunkSize + 1})/{Math.Ceiling(message.Length / (double)chunkSize)}", "DEBUG");
+            }
+
+            LogToFile($"[SendChunkedMessage] INFO: Completed chunked message send. Total length={message.Length}", "INFO");
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"[SendChunkedMessage] ERROR: Exception while sending chunked message: {ex.Message}", "ERROR");
+            LogToFile($"[SendChunkedMessage] Stack: {ex.StackTrace}", "DEBUG");
+        }
+    }
+    
     private string CleanAIText(string text)
     {
         LogToFile("Entering CleanAIText method.", "DEBUG");
