@@ -3118,10 +3118,9 @@ public class CPHInline
                     LogToFile($"[AskGPT] Stack: {exCtx.StackTrace}", "DEBUG");
                 }
 
-                // ---- ChatLog injection (for coaching mode) ----
                 try
                 {
-                    // Inject summarized ChatLog context as one assistant message (coaching phase)
+
                     LogToFile("[AskGPT] DEBUG: Entering coaching mode for structured context assembly.", "DEBUG");
                     messages.Add(new chatMessage { role = "system", content = "You will now receive structured context updates. Acknowledge each with 'OK' and wait for instruction to resume normal operation." });
                     messages.Add(new chatMessage { role = "assistant", content = "OK" });
@@ -3131,7 +3130,7 @@ public class CPHInline
                     if (ChatLog != null && ChatLog.Count > 0)
                     {
                         int chatHistoryLimit = CPH.GetGlobalVar<int>("max_chat_history", true);
-                        // Compose up to chatHistoryLimit chat messages in "username says: message" format
+
                         var chatLines = ChatLog
                             .Reverse().Take(chatHistoryLimit).Reverse()
                             .Select(m =>
@@ -3305,7 +3304,6 @@ public class CPHInline
                 messages.Add(new chatMessage { role = "system", content = "All context updates received. Resume normal conversation mode." });
                 messages.Add(new chatMessage { role = "assistant", content = "OK" });
 
-                // ---- Inject GPTLog conversation history at the very last possible moment before the final user prompt ----
                 try
                 {
                     if (GPTLog != null && GPTLog.Count > 0)
@@ -3327,7 +3325,6 @@ public class CPHInline
                 {                    LogToFile($"[AskGPT] WARN: Exception while injecting GPTLog near final prompt: {exCtx.Message}", "WARN");
                     LogToFile($"[AskGPT] Stack: {exCtx.StackTrace}", "DEBUG");
                 }
-                // ---- End GPTLog injection ----
 
                 string finalPrompt = limit500
                     ? $"{userToSpeak} asks: {fullMessage} You must respond in less than 500 characters."
@@ -3624,10 +3621,9 @@ public class CPHInline
                     LogToFile("[AskGPT] DEBUG: Posted GPT result to Discord.", "DEBUG");
                 }
 
-                // ---- Enqueue user/assistant turn into GPTLog ----
                 try
                 {
-                    // Retrieve or create the user profile
+
                     var profile = GetOrCreateUserProfile(userName);
                     string displayName = !string.IsNullOrWhiteSpace(profile?.PreferredName) ? profile.PreferredName : userName;
                     if (!string.IsNullOrWhiteSpace(profile?.Pronouns))
@@ -3643,7 +3639,7 @@ public class CPHInline
                     LogToFile($"[AskGPT] WARN: Failed to enqueue GPT turn: {ex.Message}", "WARN");
                     LogToFile($"[AskGPT] Stack: {ex.StackTrace}", "DEBUG");
                 }
-                // ---- End GPTLog enqueue ----
+
             }
             catch (Exception exOut)
             {
@@ -3866,7 +3862,6 @@ public class CPHInline
             messages.Add(new chatMessage { role = "system", content = "You will now receive structured context updates. Acknowledge each with 'OK' and wait for instruction to resume normal operation." });
             messages.Add(new chatMessage { role = "assistant", content = "OK" });
 
-            // --- ChatLog injection as a single structured assistant message (one block, coaching phase) ---
             int chatTurns = ChatLog != null ? ChatLog.Count : 0;
             LogToFile($"[AskGPTWebhook] DEBUG: Injecting chat log with {chatTurns} turns (coaching mode, single block).", "DEBUG");
             if (ChatLog != null && ChatLog.Count > 0)
@@ -3878,7 +3873,7 @@ public class CPHInline
                     {
                         if (!string.IsNullOrWhiteSpace(m.role) && m.role == "user" && m.content != null)
                         {
-                            // Parse as "username: message" if possible
+
                             var idx = m.content.IndexOf(":");
                             if (idx > 0 && idx < 32)
                             {
@@ -3886,7 +3881,7 @@ public class CPHInline
                                 var msg = m.content.Substring(idx + 1).Trim();
                                 return $"{user} says: {msg}";
                             }
-                            // Fallback
+
                             return $"User says: {m.content}";
                         }
                         else if (!string.IsNullOrWhiteSpace(m.role) && m.role == "assistant" && m.content != null)
@@ -4031,7 +4026,7 @@ public class CPHInline
 
             LogToFile("[AskGPTWebhook] DEBUG: Finishing context transmission and resuming normal conversation mode.", "DEBUG");
             messages.Add(new chatMessage { role = "system", content = "All context updates received. Resume normal conversation mode." });
-            // ---- Inject GPTLog conversation history after context resumption and before new prompt ----
+
             try
             {
                 if (GPTLog != null && GPTLog.Count > 0)
@@ -4054,7 +4049,6 @@ public class CPHInline
                 LogToFile($"[AskGPTWebhook] WARN: Exception while injecting GPTLog after context: {exCtx.Message}", "WARN");
                 LogToFile($"[AskGPTWebhook] Stack: {exCtx.StackTrace}", "DEBUG");
             }
-            // ---- End GPTLog injection ----
 
             string finalPrompt = limit500
                 ? $"{userToSpeak} asks: {fullMessage} You must respond in less than 500 characters."
@@ -4427,7 +4421,6 @@ public class CPHInline
                 LogToFile("[AskGPTWebhook] DEBUG: Posted GPT result to Discord.", "DEBUG");
             }
 
-            // ---- Enqueue user/assistant turn into GPTLog ----
             try
             {
                 QueueGPTMessage(fullMessage, GPTResponse);
@@ -4438,7 +4431,6 @@ public class CPHInline
                 LogToFile($"[AskGPTWebhook] WARN: Failed to enqueue GPT turn: {ex.Message}", "WARN");
                 LogToFile($"[AskGPTWebhook] Stack: {ex.StackTrace}", "DEBUG");
             }
-            // ---- End GPTLog enqueue ----
 
             CPH.SetGlobalVar("character", 1, true);
             LogToFile("[AskGPTWebhook] DEBUG: Reset 'character' global to 1 after AskGPTWebhook.", "DEBUG");
