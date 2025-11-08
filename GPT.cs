@@ -1970,12 +1970,12 @@ public class CPHInline
         sw.Stop();
         LogToFile($"OpenAI API call completed in {sw.ElapsedMilliseconds} ms.", "INFO");
 
-        if (apiSuccess && completionsJsonResponse?.usage != null)
+        if (apiSuccess && completionsJsonResponse?.Usage != null)
         {
             LogPromptScorecard(
                 "AskGPT",
                 AIModel,
-                completionsJsonResponse.usage
+                completionsJsonResponse.Usage
             );
         }
 
@@ -2464,12 +2464,12 @@ public class CPHInline
         try
         {
             var completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
-            if (apiSuccess && completionsJsonResponse?.usage != null)
+            if (apiSuccess && completionsJsonResponse?.Usage != null)
             {
                 LogPromptScorecard(
                     "AskGPTWebhook",
                     CPH.GetGlobalVar<string>("OpenAI Model", true),
-                    completionsJsonResponse.usage
+                    completionsJsonResponse.Usage
                 );
             }
         }
