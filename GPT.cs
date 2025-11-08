@@ -3124,8 +3124,8 @@ public class CPHInline
                     // Inject summarized ChatLog context as one assistant message
                     if (ChatLog != null && ChatLog.Count > 0)
                     {
-                        int maxChatHistory = CPH.GetGlobalVar<int>("max_chat_history", true);
-                        var chatEntries = ChatLog.Reverse().Take(maxChatHistory).Reverse()
+                        int chatHistoryLimit = CPH.GetGlobalVar<int>("max_chat_history", true);
+                        var chatEntries = ChatLog.Reverse().Take(chatHistoryLimit).Reverse()
                             .Select(m => m.content)
                             .ToList();
                         if (chatEntries.Count > 0)
@@ -3154,7 +3154,8 @@ public class CPHInline
                 LogToFile($"[AskGPT] DEBUG: Injecting chat log with {chatTurns} turns.", "DEBUG");
                 if (ChatLog != null)
                 {
-                    foreach (var chatMessage in ChatLog.Reverse().Take(maxChatHistory).Reverse())
+                    int chatHistoryLimit = CPH.GetGlobalVar<int>("max_chat_history", true);
+                    foreach (var chatMessage in ChatLog.Reverse().Take(chatHistoryLimit).Reverse())
                     {
                         messages.Add(chatMessage);
                         messages.Add(new chatMessage { role = "assistant", content = "OK" });
@@ -3292,8 +3293,8 @@ public class CPHInline
                 {
                     if (GPTLog != null && GPTLog.Count > 0)
                     {
-                        int maxPromptHistory = CPH.GetGlobalVar<int>("max_prompt_history", true);
-                        var priorTurns = GPTLog.Reverse().Take(maxPromptHistory * 2).Reverse().ToList();
+                        int promptHistoryLimit = CPH.GetGlobalVar<int>("max_prompt_history", true);
+                        var priorTurns = GPTLog.Reverse().Take(promptHistoryLimit * 2).Reverse().ToList();
                         foreach (var turn in priorTurns)
                         {
                             messages.Add(new chatMessage
@@ -3835,9 +3836,10 @@ public class CPHInline
             {
                 // Add a primer assistant message
                 messages.Add(new chatMessage { role = "assistant", content = "Here is recent chat context for reference:" });
-                // Compose up to maxChatHistory chat messages in "username says: message" format
+                // Compose up to chatHistoryLimit chat messages in "username says: message" format
+                int chatHistoryLimit = maxChatHistory;
                 var chatLines = ChatLog
-                    .Reverse().Take(maxChatHistory).Reverse()
+                    .Reverse().Take(chatHistoryLimit).Reverse()
                     .Select(m => {
                         // Try to extract username: for user role, otherwise just use content.
                         if (!string.IsNullOrWhiteSpace(m.role) && m.role == "user" && m.content != null)
@@ -4006,8 +4008,8 @@ public class CPHInline
             {
                 if (GPTLog != null && GPTLog.Count > 0)
                 {
-                    int maxPromptHistoryLocal = maxPromptHistory; // already loaded above
-                    var priorTurns = GPTLog.Reverse().Take(maxPromptHistoryLocal * 2).Reverse().ToList();
+                    int promptHistoryLimit = maxPromptHistory; // already loaded above
+                    var priorTurns = GPTLog.Reverse().Take(promptHistoryLimit * 2).Reverse().ToList();
                     foreach (var turn in priorTurns)
                     {
                         messages.Add(new chatMessage
