@@ -2899,6 +2899,7 @@ public class CPHInline
         string pronounSubject = null, pronounObject = null, pronounPossessive = null, pronounReflexive = null, pronounDescription = null;
         string userToSpeak = null;
         string fullMessage = null;
+        // Ensure prompt is declared and initialized
         string prompt = null;
         string databasePath = null;
         string characterFileName = null;
@@ -2906,15 +2907,22 @@ public class CPHInline
         string context = null;
         string broadcaster = null, currentTitle = null, currentGame = null;
         var userCollection = _db.GetCollection<UserProfile>("user_profiles");
+        // Ensure allUserProfiles is declared and initialized
         var allUserProfiles = (List<UserProfile>)null;
         var keywordsCol = _db.GetCollection<BsonDocument>("keywords");
+        // Ensure keywordDocs is declared and initialized
         var keywordDocs = (List<BsonDocument>)null;
-        List<string> mentionedUsers = null;
-        var pronounContextEntries = (List<string>)null;
-        var enrichmentSections = (List<string>)null;
+        // Ensure profileDocs_web and keywordDocs_web are declared and initialized (for possible web context usage)
+        var profileDocs_web = new List<BsonDocument>();
+        var keywordDocs_web = new List<BsonDocument>();
+        // Ensure mentionedUsers, pronounContextEntries, enrichmentSections are declared and initialized
+        List<string> mentionedUsers = new List<string>();
+        var pronounContextEntries = new List<string>();
+        var enrichmentSections = new List<string>();
         // Use StringBuilder for contextBody to support AppendLine()
         var contextBody = new System.Text.StringBuilder();
-        string contextBodyString = null;
+        // Ensure contextBodyString is declared and initialized
+        string contextBodyString = string.Empty;
         System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
         string completionsRequestJSON = null;
         string completionsResponseContent = null;
@@ -2924,6 +2932,7 @@ public class CPHInline
         string completionsUrl = null;
         string apiKey = null;
         string AIModel = null;
+        // Ensure messages is declared and initialized
         var messages = (List<chatMessage>)null;
         int maxAttempts = 3;
         int attempt = 0;
@@ -3528,6 +3537,12 @@ public class CPHInline
         LogToFile("==== Begin AskGPTWebhook Execution ====", "DEBUG");
         LogToFile("Entering AskGPTWebhook (LiteDB context enrichment, outbound webhook, pronoun support, TTS/chat/discord parity).", "DEBUG");
 
+        // New: Declare variables needed for webhook payload and logging
+        string prompt = null;
+        string contextBody = null;
+        List<BsonDocument> profileDocs_web = new List<BsonDocument>();
+        List<BsonDocument> keywordDocs_web = new List<BsonDocument>();
+
         bool postToChat = false;
         bool voiceEnabled = false;
         try
@@ -3561,6 +3576,8 @@ public class CPHInline
                 LogToFile("==== End AskGPTWebhook Execution ====", "INFO");
                 return false;
             }
+            // New: Initialize prompt to fullMessage after validation
+            prompt = fullMessage;
         }
         catch (Exception ex)
         {
@@ -3755,6 +3772,8 @@ public class CPHInline
             messages.Add(new chatMessage { role = "assistant", content = "OK" });
             string finalPrompt = $"{userToSpeak} asks: {fullMessage} You must respond in less than 500 characters.";
             messages.Add(new chatMessage { role = "user", content = finalPrompt });
+            // New: Assign contextBody for webhook payload (pattern matches AskGPT)
+            contextBody = null; // If you have a contextBodyString, assign it here. Otherwise, this is a stub for parity.
         }
         catch (Exception exDB)
         {
