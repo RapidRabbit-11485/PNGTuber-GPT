@@ -262,6 +262,7 @@ public class CPHInline
         public string DiscordBotUsername { get; set; }
         public string DiscordAvatarUrl { get; set; }
         public string PostToChat { get; set; }
+        public string LimitResponsesTo500Characters { get; set; }
 
         public string VoiceEnabled { get; set; }
         public string OutboundWebhookUrl { get; set; }
@@ -2893,6 +2894,7 @@ public class CPHInline
 
         bool postToChat = false;
         bool voiceEnabled = false;
+        bool limit500 = false;
         int characterNumber = 1;
         string voiceAlias = null;
         string userName = null;
@@ -2944,13 +2946,14 @@ public class CPHInline
             {
                 postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
                 voiceEnabled = CPH.GetGlobalVar<bool>("voice_enabled", true);
-                LogToFile($"[AskGPT] DEBUG: postToChat={postToChat}, voiceEnabled={voiceEnabled}", "DEBUG");
+                limit500 = CPH.GetGlobalVar<bool>("Limit Responses to 500 Characters", true);
+                LogToFile($"[AskGPT] DEBUG: postToChat={postToChat}, voiceEnabled={voiceEnabled}, limit500={limit500}", "DEBUG");
             }
             catch (Exception exInit)
             {
                 LogToFile($"[AskGPT] ERROR: Initialization failed: {exInit.Message}", "ERROR");
                 LogToFile($"[AskGPT] Stack: {exInit.StackTrace}", "DEBUG");
-                LogToFile($"[AskGPT] Context: postToChat={postToChat}, voiceEnabled={voiceEnabled}", "ERROR");
+                LogToFile($"[AskGPT] Context: postToChat={postToChat}, voiceEnabled={voiceEnabled}, limit500={limit500}", "ERROR");
                 return false;
             }
 
@@ -3263,7 +3266,9 @@ public class CPHInline
                 LogToFile("[AskGPT] DEBUG: Finishing context transmission and resuming normal conversation mode.", "DEBUG");
                 messages.Add(new chatMessage { role = "system", content = "All context updates received. Resume normal conversation mode." });
                 messages.Add(new chatMessage { role = "assistant", content = "OK" });
-                string finalPrompt = $"{userToSpeak} asks: {fullMessage} You must respond in less than 500 characters.";
+                string finalPrompt = limit500
+                    ? $"{userToSpeak} asks: {fullMessage} You must respond in less than 500 characters."
+                    : $"{userToSpeak} asks: {fullMessage}";
                 messages.Add(new chatMessage { role = "user", content = finalPrompt });
             }
             catch (Exception exDB)
@@ -3541,7 +3546,10 @@ public class CPHInline
                 }
                 if (postToChat)
                 {
-                    CPH.SendMessage(GPTResponse, true);
+                    if (limit500)
+                        CPH.SendMessage(GPTResponse, true);
+                    else
+                        SendChunkedMessage(GPTResponse, postToChat);
                     LogToFile("[AskGPT] DEBUG: Sent GPT response to chat.", "DEBUG");
                 }
                 else
@@ -3722,6 +3730,8 @@ public class CPHInline
         List<string> pronounContextEntries = new List<string>();
         List<string> enrichmentSections = new List<string>();
         // ==== Begin 6-phase Coaching Mode Context Assembly ====
+        // Retrieve global variable for 500 character limit
+        bool limit500 = CPH.GetGlobalVar<bool>("Limit Responses to 500 Characters", true);
         List<chatMessage> messages = null;
         try
         {
@@ -3915,7 +3925,9 @@ public class CPHInline
             LogToFile("[AskGPTWebhook] DEBUG: Finishing context transmission and resuming normal conversation mode.", "DEBUG");
             messages.Add(new chatMessage { role = "system", content = "All context updates received. Resume normal conversation mode." });
             messages.Add(new chatMessage { role = "assistant", content = "OK" });
-            string finalPrompt = $"{userToSpeak} asks: {fullMessage} You must respond in less than 500 characters.";
+            string finalPrompt = limit500
+                ? $"{userToSpeak} asks: {fullMessage} You must respond in less than 500 characters."
+                : $"{userToSpeak} asks: {fullMessage}";
             messages.Add(new chatMessage { role = "user", content = finalPrompt });
         }
         catch (Exception exDB)
@@ -4262,7 +4274,10 @@ public class CPHInline
 
             if (postToChat)
             {
-                CPH.SendMessage(GPTResponse, true);
+                if (limit500)
+                    CPH.SendMessage(GPTResponse, true);
+                else
+                    SendChunkedMessage(GPTResponse, postToChat);
                 LogToFile("[AskGPTWebhook] DEBUG: Sent GPT response to chat.", "DEBUG");
             }
             else
@@ -5200,6 +5215,8 @@ public class CPHInline
                     ["illicit_threshold"] = CPH.GetGlobalVar<string>("illicit_threshold", true),
                     ["illicit_violent_threshold"] = CPH.GetGlobalVar<string>("illicit_violent_threshold", true),
                     ["Post To Chat"] = CPH.GetGlobalVar<bool>("Post To Chat", true).ToString(),
+                    // Insert the new setting after "Post To Chat"
+                    ["Limit Responses to 500 Characters"] = CPH.GetGlobalVar<string>("Limit Responses to 500 Characters", true),
                     ["Log GPT Questions to Discord"] = CPH.GetGlobalVar<string>("Log GPT Questions to Discord", true),
                     ["Discord Webhook URL"] = CPH.GetGlobalVar<string>("Discord Webhook URL", true),
                     ["Discord Bot Username"] = CPH.GetGlobalVar<string>("Discord Bot Username", true),
@@ -5346,7 +5363,6 @@ public class CPHInline
                     }
                     catch
                     {
-
                         if (bool.TryParse(value, out bool boolValue))
                         {
                             CPH.SetGlobalVar(key, boolValue, true);
@@ -5365,6 +5381,18 @@ public class CPHInline
                     LogToFile($"[ReadSettings] Stack: {exKey.StackTrace}", "DEBUG");
                     LogToFile($"[ReadSettings] Context: key='{setting["Key"]}', value='{setting["Value"]}'", "ERROR");
                 }
+            }
+
+            // Restore "Limit Responses to 500 Characters" global variable explicitly
+            var limitResponsesSetting = settings.FirstOrDefault(s => s["Key"] == "Limit Responses to 500 Characters");
+            if (limitResponsesSetting != null)
+            {
+                CPH.SetGlobalVar("Limit Responses to 500 Characters", limitResponsesSetting["Value"], true);
+                LogToFile("[ReadSettings] INFO: Restored 'Limit Responses to 500 Characters' global variable successfully.", "INFO");
+            }
+            else
+            {
+                LogToFile("[ReadSettings] WARN: 'Limit Responses to 500 Characters' setting not found in database. Using default.", "WARN");
             }
 
             LogToFile($"[ReadSettings] INFO: Successfully loaded and applied {settings.Count} settings from LiteDB. R=Load settings, A=Restore globals, I=App ready, D=Success.", "INFO");
