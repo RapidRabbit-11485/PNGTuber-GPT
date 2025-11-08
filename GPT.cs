@@ -27,7 +27,7 @@ public class CPHInline
         bool dbFileExists = false;
         try
         {
-            // Step 1: Dispose existing DB if present
+
             LogToFile("[Startup] Checking for existing LiteDB connection.", "DEBUG");
             if (_db != null)
             {
@@ -49,7 +49,6 @@ public class CPHInline
                 LogToFile("[Startup] No existing LiteDB connection found.", "DEBUG");
             }
 
-            // Step 2: Retrieve database path
             try
             {
                 databasePath = CPH.GetGlobalVar<string>("Database Path", true);
@@ -69,7 +68,6 @@ public class CPHInline
                 return false;
             }
 
-            // Step 3: Compose DB file path and check file existence
             try
             {
                 dbFilePath = Path.Combine(databasePath, "PNGTuberGPT.db");
@@ -84,7 +82,6 @@ public class CPHInline
                 return false;
             }
 
-            // Step 4: Open LiteDB connection
             try
             {
                 LogToFile($"[Startup] Attempting to open LiteDB at '{dbFilePath}' (file exists: {dbFileExists})", "DEBUG");
@@ -99,7 +96,6 @@ public class CPHInline
                 return false;
             }
 
-            // Step 5: Setup collections and indexes
             try
             {
                 LogToFile("[Startup] Setting up collections: settings, user_profiles, keywords.", "DEBUG");
@@ -168,7 +164,7 @@ public class CPHInline
         try
         {
             LogToFile("[Execute] INFO: Initializing PNGTuber-GPT application.", "INFO");
-            // (Assuming global variable loading occurs elsewhere or is implicit)
+
             LogToFile("[Execute] INFO: All global variables loaded into memory.", "INFO");
 
             LogToFile("[Execute] DEBUG: Retrieving version number from global variable 'Version'.", "DEBUG");
@@ -401,7 +397,7 @@ public class CPHInline
         bool profileExisted = false;
         try
         {
-            // --- DB Collection retrieval ---
+
             try
             {
                 LogToFile($"[GetOrCreateUserProfile] Retrieving collection 'user_profiles' for userName='{userName}'", "DEBUG");
@@ -415,7 +411,6 @@ public class CPHInline
                 throw;
             }
 
-            // --- Profile retrieval or creation ---
             try
             {
                 LogToFile($"[GetOrCreateUserProfile] Attempting to find profile for userName='{userName}'", "DEBUG");
@@ -441,7 +436,6 @@ public class CPHInline
                 throw;
             }
 
-            // --- Pronoun retrieval and construction ---
             string pronouns = null;
             string pronounSubject = null;
             string pronounObject = null;
@@ -502,12 +496,11 @@ public class CPHInline
             {
                 LogToFile($"[GetOrCreateUserProfile] ERROR: Exception during pronoun retrieval/construction for userName='{userName}': {exPronoun.Message}", "ERROR");
                 LogToFile($"[GetOrCreateUserProfile] Stack: {exPronoun.StackTrace}", "DEBUG");
-                // continue, don't throw
+
             }
 
             LogToFile($"[GetOrCreateUserProfile] Final pronouns value for userName='{userName}': '{pronouns}' (profile.Pronouns='{profile.Pronouns}')", "DEBUG");
 
-            // --- Pronoun update if changed ---
             try
             {
                 if (!string.IsNullOrWhiteSpace(pronouns) && !string.Equals(pronouns, profile.Pronouns, StringComparison.Ordinal))
@@ -530,7 +523,7 @@ public class CPHInline
             {
                 LogToFile($"[GetOrCreateUserProfile] ERROR: Exception updating pronouns for userName='{userName}': {exUpdate.Message}", "ERROR");
                 LogToFile($"[GetOrCreateUserProfile] Stack: {exUpdate.StackTrace}", "DEBUG");
-                // continue, don't throw
+
             }
 
             LogToFile($"<<< [GetOrCreateUserProfile] Exit: userName='{userName}', profileExisted={profileExisted}, pronouns='{pronouns}'", "DEBUG");
@@ -577,7 +570,7 @@ public class CPHInline
             catch (Exception exLimit)
             {
                 LogToFile($"[QueueMessage] WARN: Failed to retrieve 'max_chat_history' global variable: {exLimit.Message}", "WARN");
-                maxChatHistory = 20; // fallback default
+                maxChatHistory = 20; 
                 LogToFile($"[QueueMessage] Using fallback maxChatHistory: {maxChatHistory}", "WARN");
             }
 
@@ -623,7 +616,7 @@ public class CPHInline
 
     private void QueueGPTMessage(string userContent, string assistantContent)
     {
-        // RAPID Logging Standard: DEBUG entry with parameter context
+
         LogToFile($">>> [QueueGPTMessage] Entry: userContent.Length={userContent?.Length ?? 0}, assistantContent.Length={assistantContent?.Length ?? 0}", "DEBUG");
         bool trimmed = false;
         int priorCount = GPTLog != null ? GPTLog.Count : -1;
@@ -643,7 +636,6 @@ public class CPHInline
             };
             LogToFile($"[QueueGPTMessage] Created assistantMessage: role='{assistantMessage.role}', content.Length={assistantMessage.content?.Length ?? 0}", "DEBUG");
 
-            // Queue operation
             if (GPTLog == null)
             {
                 LogToFile("[QueueGPTMessage] WARN: GPTLog queue is null. Initializing new queue.", "WARN");
@@ -658,7 +650,7 @@ public class CPHInline
 
             LogToFile("Queued GPT conversation pair for processing.", "INFO");
 
-            int maxPromptHistory = 10; // fallback
+            int maxPromptHistory = 10; 
             try
             {
                 maxPromptHistory = CPH.GetGlobalVar<int>("max_prompt_history", true);
@@ -735,7 +727,6 @@ public class CPHInline
         LiteCollection<UserProfile> userCollection = null;
         bool success = false;
 
-        // Step 1: Retrieve arguments
         try
         {
             LogToFile("[UpdateUserPreferredName] Attempting to retrieve 'userName' argument via TryGetArg.", "DEBUG");
@@ -778,7 +769,6 @@ public class CPHInline
             return false;
         }
 
-        // Step 2: DB profile update
         try
         {
             LogToFile("[UpdateUserPreferredName] Retrieving user_profiles collection from LiteDB.", "DEBUG");
@@ -808,7 +798,6 @@ public class CPHInline
             return false;
         }
 
-        // Step 3: Prepare and possibly send chat output
         string message = $"{userName}, your nickname has been set to {preferredName}.";
         try
         {
@@ -819,8 +808,7 @@ public class CPHInline
         catch (Exception exChat)
         {
             LogToFile($"[UpdateUserPreferredName] WARN: Failed to retrieve 'Post To Chat': {exChat.Message}", "WARN");
-            // Remove stack trace logging for recoverable/warning cases
-            // LogToFile($"[UpdateUserPreferredName] Stack: {exChat.StackTrace}", "DEBUG");
+
             postToChat = false;
         }
         if (postToChat)
@@ -834,8 +822,7 @@ public class CPHInline
             catch (Exception exSend)
             {
                 LogToFile($"[UpdateUserPreferredName] WARN: Exception sending chat message: {exSend.Message}", "WARN");
-                // Remove stack trace logging for recoverable/warning cases
-                // LogToFile($"[UpdateUserPreferredName] Stack: {exSend.StackTrace}", "DEBUG");
+
             }
         }
         else
@@ -857,7 +844,7 @@ public class CPHInline
         bool result = false;
         UserProfile profile = null;
         LiteCollection<UserProfile> userCollection = null;
-        // Step 1: Retrieve arguments
+
         try
         {
             LogToFile("[DeleteUserProfile] Attempting to retrieve 'userName' argument via TryGetArg.", "DEBUG");
@@ -876,7 +863,7 @@ public class CPHInline
             LogToFile("[DeleteUserProfile] Context: retrieving userName", "ERROR");
             return false;
         }
-        // Step 2: DB profile search and update
+
         try
         {
             LogToFile("[DeleteUserProfile] Retrieving user_profiles collection from LiteDB.", "DEBUG");
@@ -888,7 +875,7 @@ public class CPHInline
             {
                 string message = $"{userName}, you don't have a custom nickname set.";
                 LogToFile($"[DeleteUserProfile] No profile found for userName='{userName}'.", "INFO");
-                // Step 3: Prepare and possibly send chat output
+
                 try
                 {
                     LogToFile("[DeleteUserProfile] Retrieving 'Post To Chat' global variable.", "DEBUG");
@@ -923,7 +910,7 @@ public class CPHInline
                 LogToFile($@"<<< [DeleteUserProfile] Exit: userName='{userName}', profileExisted={profileExisted}, postToChat={postToChat}", "DEBUG");
                 return result;
             }
-            // Profile exists, reset preferred name
+
             string oldPreferredName = profile.PreferredName;
             profile.PreferredName = userName;
             userCollection.Update(profile);
@@ -935,7 +922,7 @@ public class CPHInline
             LogToFile($"[DeleteUserProfile] ERROR updating or finding profile: {exDb.Message}", "ERROR");
             LogToFile($"[DeleteUserProfile] Stack: {exDb.StackTrace}", "DEBUG");
             LogToFile($"[DeleteUserProfile] Context: userName='{userName}', profileExisted={profileExisted}, profileReset={profileReset}", "ERROR");
-            // try to send error chat message
+
             try
             {
                 postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
@@ -966,7 +953,7 @@ public class CPHInline
             LogToFile($@"<<< [DeleteUserProfile] Exit: userName='{userName}', profileExisted={profileExisted}, postToChat={postToChat}", "DEBUG");
             return false;
         }
-        // Step 3: Prepare and possibly send chat output for reset
+
         string resetMessage = $"{userName}, your nickname has been reset to your username.";
         try
         {
@@ -1015,7 +1002,7 @@ public class CPHInline
         bool profileFound = false;
         try
         {
-            // --- Argument retrieval ---
+
             try
             {
                 LogToFile("[ShowCurrentUserProfile] Attempting to retrieve 'userName' argument via TryGetArg.", "DEBUG");
@@ -1037,7 +1024,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- DB profile retrieval ---
             try
             {
                 LogToFile("[ShowCurrentUserProfile] Retrieving user_profiles collection from LiteDB.", "DEBUG");
@@ -1063,7 +1049,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- Display name/message construction ---
             if (profileFound)
             {
                 displayName = profile.PreferredName;
@@ -1078,7 +1063,6 @@ public class CPHInline
             }
             LogToFile($"[ShowCurrentUserProfile] Prepared message: {message}", "DEBUG");
 
-            // --- Global variable access ---
             try
             {
                 LogToFile("[ShowCurrentUserProfile] Retrieving 'Post To Chat' global variable.", "DEBUG");
@@ -1091,7 +1075,6 @@ public class CPHInline
                 postToChat = false;
             }
 
-            // --- Chat output ---
             if (postToChat)
             {
                 try
@@ -1134,7 +1117,7 @@ public class CPHInline
         bool success = false;
         try
         {
-            // --- Retrieve 'Post To Chat' global variable ---
+
             try
             {
                 postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
@@ -1143,11 +1126,10 @@ public class CPHInline
             catch (Exception exChat)
             {
                 LogToFile($"[ForgetThis] WARN: Failed to retrieve 'Post To Chat': {exChat.Message}", "WARN");
-                // No stack trace for recoverable/warning cases
+
                 postToChat = false;
             }
 
-            // --- Retrieve 'rawInput' argument ---
             try
             {
                 if (!CPH.TryGetArg("rawInput", out keywordToRemove) || string.IsNullOrWhiteSpace(keywordToRemove))
@@ -1163,7 +1145,7 @@ public class CPHInline
                         catch (Exception exSend)
                         {
                             LogToFile($"[ForgetThis] ERROR: Exception sending missing input chat message: {exSend.Message}", "ERROR");
-                            // No stack trace for recoverable/warning cases
+
                         }
                     }
                     else
@@ -1183,7 +1165,7 @@ public class CPHInline
             catch (Exception exArg)
             {
                 LogToFile($"[ForgetThis] ERROR: Exception retrieving 'rawInput' argument: {exArg.Message}", "ERROR");
-                // No stack trace for recoverable/warning argument retrieval
+
                 if (postToChat)
                 {
                     try
@@ -1194,7 +1176,7 @@ public class CPHInline
                     catch (Exception exSend)
                     {
                         LogToFile($"[ForgetThis] ERROR: Exception sending missing input chat message: {exSend.Message}", "ERROR");
-                        // No stack trace for recoverable/warning cases
+
                     }
                 }
                 else
@@ -1207,7 +1189,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- DB operation: Remove keyword ---
             BsonDocument existing = null;
             try
             {
@@ -1219,7 +1200,7 @@ public class CPHInline
                 {
                     keywordsCol.Delete(existing["_id"]);
                     LogToFile($"[ForgetThis] Removed keyword '{keywordToRemove}' from LiteDB.", "INFO");
-                    // --- Chat output for successful removal ---
+
                     try
                     {
                         if (postToChat)
@@ -1235,14 +1216,14 @@ public class CPHInline
                     catch (Exception exChatSend)
                     {
                         LogToFile($"[ForgetThis] ERROR: Exception sending chat output for removal: {exChatSend.Message}", "ERROR");
-                        // No stack trace for recoverable/warning cases
+
                         LogToFile($"[ForgetThis] Context: keywordToRemove='{keywordToRemove}', postToChat={postToChat}", "ERROR");
                     }
                 }
                 else
                 {
                     LogToFile($"[ForgetThis] No definition found for keyword '{keywordToRemove}'.", "INFO");
-                    // --- Chat output for not found ---
+
                     try
                     {
                         if (postToChat)
@@ -1258,7 +1239,7 @@ public class CPHInline
                     catch (Exception exChatSend)
                     {
                         LogToFile($"[ForgetThis] ERROR: Exception sending chat output for not found: {exChatSend.Message}", "ERROR");
-                        // No stack trace for recoverable/warning cases
+
                         LogToFile($"[ForgetThis] Context: keywordToRemove='{keywordToRemove}', postToChat={postToChat}", "ERROR");
                     }
                 }
@@ -1266,9 +1247,9 @@ public class CPHInline
             catch (Exception exDb)
             {
                 LogToFile($"[ForgetThis] ERROR: Exception during DB keyword removal: {exDb.Message}", "ERROR");
-                // No stack trace for recoverable DB exceptions where method continues gracefully
+
                 LogToFile($"[ForgetThis] Context: keywordToRemove='{keywordToRemove}'", "ERROR");
-                // Try to notify user
+
                 try
                 {
                     if (postToChat)
@@ -1279,7 +1260,7 @@ public class CPHInline
                 catch (Exception exSend)
                 {
                     LogToFile($"[ForgetThis] ERROR: Exception sending error chat message: {exSend.Message}", "ERROR");
-                    // No stack trace for recoverable/warning cases
+
                 }
                 LogToFile("<<< [ForgetThis] Exit (failure: exception during DB operation)", "DEBUG");
                 success = false;
@@ -1296,7 +1277,7 @@ public class CPHInline
             LogToFile($"[ForgetThis] ERROR: Unexpected error: {ex.Message}", "ERROR");
             LogToFile($"[ForgetThis] Stack: {ex.StackTrace}", "DEBUG");
             LogToFile($"[ForgetThis] Context: keywordToRemove='{keywordToRemove}', postToChat={postToChat}", "ERROR");
-            // Try to notify user
+
             try
             {
                 if (postToChat)
@@ -1325,7 +1306,6 @@ public class CPHInline
         LiteCollection<UserProfile> userCollection = null;
         bool success = false;
 
-        // --- Argument Retrieval Section ---
         try
         {
             LogToFile("[ForgetThisAboutMe] Attempting to retrieve 'userName' argument via TryGetArg.", "DEBUG");
@@ -1347,7 +1327,6 @@ public class CPHInline
             return false;
         }
 
-        // --- DB Access Section ---
         try
         {
             LogToFile("[ForgetThisAboutMe] Retrieving user_profiles collection from LiteDB.", "DEBUG");
@@ -1379,7 +1358,6 @@ public class CPHInline
             return false;
         }
 
-        // --- Retrieve 'Post To Chat' Setting ---
         try
         {
             LogToFile("[ForgetThisAboutMe] Retrieving 'Post To Chat' global variable.", "DEBUG");
@@ -1389,11 +1367,10 @@ public class CPHInline
         catch (Exception exChat)
         {
             LogToFile($"[ForgetThisAboutMe] WARN: Failed to retrieve 'Post To Chat': {exChat.Message}", "WARN");
-            // No stack trace for recoverable/warning cases
+
             postToChat = false;
         }
 
-        // --- Chat Messaging & Memory Clearing Section ---
         if (profile == null || memoryCount == 0)
         {
             LogToFile($"[ForgetThisAboutMe] No memories to clear for userName='{userName}'.", "INFO");
@@ -1413,14 +1390,13 @@ public class CPHInline
             catch (Exception exMsg)
             {
                 LogToFile($"[ForgetThisAboutMe] ERROR: Exception sending 'no memories' chat message: {exMsg.Message}", "ERROR");
-                // No stack trace for recoverable/warning chat send failures
+
             }
             success = true;
             LogToFile($@"<<< [ForgetThisAboutMe] Exit: userName='{userName}', postToChat={postToChat}, memoryCount=0, success={success}", "DEBUG");
             return true;
         }
 
-        // --- Clear Memories and Update DB ---
         try
         {
             LogToFile($"[ForgetThisAboutMe] Clearing all {memoryCount} memories for userName='{userName}'.", "DEBUG");
@@ -1443,13 +1419,12 @@ public class CPHInline
             catch (Exception exSend)
             {
                 LogToFile($"[ForgetThisAboutMe] ERROR: Exception sending error chat message: {exSend.Message}", "ERROR");
-                // No stack trace for recoverable/warning chat send failures
+
             }
             LogToFile($@"<<< [ForgetThisAboutMe] Exit: userName='{userName}', postToChat={postToChat}, memoryCount={memoryCount}, success=false", "DEBUG");
             return false;
         }
 
-        // --- Confirmation Chat Output for Successful Clear ---
         try
         {
             if (postToChat)
@@ -1466,7 +1441,7 @@ public class CPHInline
         catch (Exception exSend)
         {
             LogToFile($"[ForgetThisAboutMe] ERROR: Exception sending 'memories cleared' chat message: {exSend.Message}", "ERROR");
-            // No stack trace for recoverable/warning chat send failures
+
         }
 
         success = true;
@@ -1487,7 +1462,7 @@ public class CPHInline
         bool memoryFound = false;
         try
         {
-            // --- Argument retrieval ---
+
             try
             {
                 LogToFile("[GetMemory] Attempting to retrieve 'userName' argument via TryGetArg.", "DEBUG");
@@ -1508,7 +1483,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- DB Access ---
             try
             {
                 LogToFile("[GetMemory] Retrieving user_profiles collection from LiteDB.", "DEBUG");
@@ -1536,7 +1510,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- Prepare message ---
             if (memoryCount == 0)
             {
                 message = $"I don’t have any saved memories for {userName}.";
@@ -1549,7 +1522,6 @@ public class CPHInline
                 LogToFile($"[GetMemory] Prepared message: {message}", "DEBUG");
             }
 
-            // --- Retrieve 'Post To Chat' setting ---
             try
             {
                 LogToFile("[GetMemory] Retrieving 'Post To Chat' global variable.", "DEBUG");
@@ -1559,11 +1531,10 @@ public class CPHInline
             catch (Exception exChat)
             {
                 LogToFile($"[GetMemory] WARN: Failed to retrieve 'Post To Chat': {exChat.Message}", "WARN");
-                // No stack trace for recoverable/warning cases
+
                 postToChat = false;
             }
 
-            // --- Chat Output ---
             try
             {
                 if (postToChat)
@@ -1583,7 +1554,7 @@ public class CPHInline
             catch (Exception exSend)
             {
                 LogToFile($"[GetMemory] WARN: Exception sending chat message: {exSend.Message}", "WARN");
-                // No stack trace for recoverable/warning chat send failures
+
             }
 
             LogToFile($@"<<< [GetMemory] Exit: userName='{userName}', postToChat={postToChat}, memoryFound={memoryFound}, success=true", "DEBUG");
@@ -1614,7 +1585,7 @@ public class CPHInline
 
     public bool SaveMessage()
     {
-        // Logging Contract v2.1: Structured DEBUG entry/exit, RAPID INFO/WARN/ERROR, DEBUG stack traces on errors, preserve all functionality.
+
         LogToFile(">>> [SaveMessage] Entry: Begin SaveMessage operation", "DEBUG");
         string msg = null;
         string userName = null;
@@ -1628,7 +1599,7 @@ public class CPHInline
 
         try
         {
-            // --- Argument Retrieval ---
+
             try
             {
                 LogToFile("[SaveMessage] DEBUG: TryGetArg('rawInput')", "DEBUG");
@@ -1667,7 +1638,6 @@ public class CPHInline
             }
             LogToFile($"[SaveMessage] DEBUG: Args OK. userName='{userName}', msg='{msg}'", "DEBUG");
 
-            // --- User Profile & DisplayName ---
             UserProfile profile = null;
             try
             {
@@ -1685,7 +1655,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- Ignore List ---
             try
             {
                 LogToFile("[SaveMessage] DEBUG: Retrieving 'Ignore Bot Usernames' global var", "DEBUG");
@@ -1714,7 +1683,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- ChatLog ---
             try
             {
                 if (ChatLog == null)
@@ -1732,7 +1700,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- Queue Message ---
             try
             {
                 messageContent = $"{displayName} says: {msg}";
@@ -1753,7 +1720,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- Finalization ---
             success = true;
             LogToFile($"[SaveMessage] INFO: R=Save message, A=Complete pipeline, P=userName='{userName}', msgLength={msg.Length}, ignoreNamesCount={ignoreNamesCount}, chatLogCount={ChatLog?.Count ?? -1}, I=Message queued, D=Success.", "INFO");
             LogToFile($"<<< [SaveMessage] Exit: userName='{userName}', msg='{msg}', chatLogCount={ChatLog?.Count ?? -1}, success={success}", "DEBUG");
@@ -1776,7 +1742,7 @@ public class CPHInline
         string message = null;
         try
         {
-            // --- ChatLog null check ---
+
             if (ChatLog == null)
             {
                 LogToFile("[ClearChatHistory] WARN: ChatLog is not initialized and cannot be cleared.", "WARN");
@@ -1812,7 +1778,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- Clear ChatLog ---
             try
             {
                 ChatLog.Clear();
@@ -1824,7 +1789,7 @@ public class CPHInline
                 LogToFile($"[ClearChatHistory] ERROR: Exception clearing ChatLog: {exClear.Message}", "ERROR");
                 LogToFile($"[ClearChatHistory] Stack: {exClear.StackTrace}", "DEBUG");
                 LogToFile($@"<<< [ClearChatHistory] Exit: success=false, postToChat={postToChat}, message='(exception during clear)'", "DEBUG");
-                // Try to notify user
+
                 try
                 {
                     LogToFile("[ClearChatHistory] Retrieving 'Post To Chat' global variable (exception path).", "DEBUG");
@@ -1855,7 +1820,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- Post To Chat Retrieval ---
             try
             {
                 LogToFile("[ClearChatHistory] Retrieving 'Post To Chat' global variable.", "DEBUG");
@@ -1868,7 +1832,6 @@ public class CPHInline
                 postToChat = false;
             }
 
-            // --- Chat Output ---
             if (postToChat)
             {
                 try
@@ -1894,7 +1857,7 @@ public class CPHInline
             LogToFile($"[ClearChatHistory] ERROR: Fatal exception: {ex.Message}", "ERROR");
             LogToFile($"[ClearChatHistory] Stack: {ex.StackTrace}", "DEBUG");
             LogToFile($"[ClearChatHistory] Context: postToChat={postToChat}, message='{message ?? "null"}'", "ERROR");
-            // Try to notify user
+
             string errMsg = "I was unable to clear the chat history. Please check the log file for more details.";
             try
             {
@@ -1941,13 +1904,12 @@ public class CPHInline
         bool postToChat = false;
         try
         {
-            // --- Retrieve Settings ---
+
             moderationEnabled = CPH.GetGlobalVar<bool>("moderation_enabled", true);
             rebukeEnabled = CPH.GetGlobalVar<bool>("moderation_rebuke_enabled", true);
             postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
             LogToFile($"[PerformModeration] Settings: postToChat={postToChat}, moderationEnabled={moderationEnabled}, rebukeEnabled={rebukeEnabled}", "DEBUG");
 
-            // --- Input Retrieval ---
             if (!CPH.TryGetArg("rawInput", out input) || string.IsNullOrWhiteSpace(input))
             {
                 LogToFile("[PerformModeration] ERROR: Missing or invalid rawInput.", "ERROR");
@@ -1959,7 +1921,6 @@ public class CPHInline
             }
             inputLength = input.Length;
 
-            // --- Moderation Disabled Path ---
             if (!moderationEnabled)
             {
                 LogToFile("[PerformModeration] Moderation is globally disabled by settings.", "INFO");
@@ -1971,7 +1932,6 @@ public class CPHInline
 
             LogToFile($"[PerformModeration] Message for moderation: {input}", "DEBUG");
 
-            // --- Moderation API Call ---
             try
             {
                 response = CallModerationEndpoint(input);
@@ -1979,7 +1939,7 @@ public class CPHInline
             catch (Exception exApi)
             {
                 LogToFile($"[PerformModeration] ERROR: Exception during moderation API call: {exApi.Message}", "ERROR");
-                // Only stack trace for fatal, method-ending exceptions (see below)
+
                 LogToFile("[PerformModeration] WARN: Moderation API call failed (recoverable, will handle as failure).", "WARN");
                 response = null;
             }
@@ -1995,7 +1955,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- Category Evaluation ---
             ModerationResult result = null;
             Dictionary<string, double> scores = null;
             try
@@ -2060,7 +2019,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- Chat Output & Rebuke Handling ---
             bool passed = !flaggedCategories.Any();
             try
             {
@@ -2116,7 +2074,7 @@ public class CPHInline
 
         try
         {
-            // --- Retrieve Settings ---
+
             try
             {
                 postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
@@ -2131,7 +2089,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- Passed Case ---
             if (!flaggedCategories.Any())
             {
                 LogToFile("[HandleModerationResponse] Message passed moderation cleanly. Setting moderatedMessage and returning.", "INFO");
@@ -2140,7 +2097,6 @@ public class CPHInline
                 return true;
             }
 
-            // --- Post To Chat Disabled ---
             if (!postToChat)
             {
                 LogToFile("[HandleModerationResponse] INFO: Post To Chat disabled; skipping moderation output, TTS, and chat.", "INFO");
@@ -2148,7 +2104,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- Rebuke Disabled ---
             if (!rebukeEnabled)
             {
                 LogToFile("[HandleModerationResponse] INFO: Moderation rebuke disabled; skipping TTS and chat output.", "INFO");
@@ -2156,12 +2111,10 @@ public class CPHInline
                 return false;
             }
 
-            // --- Prepare Output ---
             flaggedCategoriesString = string.Join(", ", flaggedCategories);
             outputMessage = $"This message was flagged in the following categories: {flaggedCategoriesString}. Repeated attempts at abuse may result in a ban.";
             LogToFile($"[HandleModerationResponse] Moderation summary prepared: {outputMessage}", "INFO");
 
-            // --- TTS Handling ---
             try
             {
                 if (postToChat && rebukeEnabled && voiceEnabled && !string.IsNullOrWhiteSpace(voiceAlias))
@@ -2181,7 +2134,6 @@ public class CPHInline
                 LogToFile($"[HandleModerationResponse] Stack: {exTTS.StackTrace}", "DEBUG");
             }
 
-            // --- Chat Output ---
             try
             {
                 if (postToChat && rebukeEnabled)
@@ -2324,7 +2276,6 @@ public class CPHInline
                 threshold = fallback;
             }
 
-            // Clamp value
             if (threshold < 0.0)
             {
                 LogToFile($"[ParseThreshold] WARN: Threshold below 0.0 detected ({threshold}), clamping to 0.0.", "WARN");
@@ -2360,7 +2311,7 @@ public class CPHInline
         string userName = null;
         try
         {
-            // --- Character Retrieval ---
+
             try
             {
                 characterNumber = CPH.GetGlobalVar<int>("character", true);
@@ -2371,7 +2322,6 @@ public class CPHInline
                 LogToFile("[Speak] WARN: No active 'character' variable found, defaulting to 1.", "WARN");
             }
 
-            // --- Voice Alias Retrieval ---
             voiceAlias = CPH.GetGlobalVar<string>($"character_voice_alias_{characterNumber}", true);
             if (string.IsNullOrWhiteSpace(voiceAlias))
             {
@@ -2386,7 +2336,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- Message Retrieval ---
             if (CPH.TryGetArg("moderatedMessage", out string moderatedMessage) && !string.IsNullOrWhiteSpace(moderatedMessage))
             {
                 messageToSpeak = moderatedMessage;
@@ -2416,7 +2365,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- Username and Profile ---
             if (!CPH.TryGetArg("userName", out userName) || string.IsNullOrWhiteSpace(userName))
             {
                 LogToFile("[Speak] ERROR: 'userName' argument is missing or empty.", "ERROR");
@@ -2428,14 +2376,12 @@ public class CPHInline
             string formattedUser = profile?.PreferredName ?? userName;
             LogToFile($"[Speak] Using PreferredName='{formattedUser}' for user '{userName}'.", "DEBUG");
 
-            // --- Output Message ---
             string outputMessage = $"{formattedUser} said: {messageToSpeak}";
             LogToFile($"[Speak] Constructed speech output: {outputMessage}", "DEBUG");
 
             bool postToChatFlag = CPH.GetGlobalVar<bool>("Post To Chat", true);
             bool voiceEnabled = CPH.GetGlobalVar<bool>("voice_enabled", true);
 
-            // --- Chat Output ---
             try
             {
                 if (postToChatFlag)
@@ -2453,7 +2399,6 @@ public class CPHInline
                 LogToFile($"[Speak] ERROR: Exception sending chat message: {exChat.Message}", "ERROR");
             }
 
-            // --- TTS Output ---
             try
             {
                 if (voiceEnabled)
@@ -2508,7 +2453,7 @@ public class CPHInline
 
         try
         {
-            // --- Retrieve Arguments ---
+
             try
             {
                 userName = CPH.GetArg<string>("userName");
@@ -2530,7 +2475,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- Retrieve Post To Chat ---
             try
             {
                 postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
@@ -2542,7 +2486,6 @@ public class CPHInline
                 postToChat = false;
             }
 
-            // --- Database Operation ---
             try
             {
                 using (var db = new LiteDatabase(DB_PATH))
@@ -2574,7 +2517,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- Chat Output ---
             try
             {
                 if (postToChat)
@@ -2615,7 +2557,7 @@ public class CPHInline
 
         try
         {
-            // --- Retrieve Post To Chat ---
+
             try
             {
                 postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
@@ -2627,7 +2569,6 @@ public class CPHInline
                 postToChat = false;
             }
 
-            // --- Retrieve Username ---
             try
             {
                 if (!CPH.TryGetArg("userName", out userName) || string.IsNullOrWhiteSpace(userName))
@@ -2650,7 +2591,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- Retrieve Message ---
             try
             {
                 if (CPH.TryGetArg("moderatedMessage", out string moderatedMessage) && !string.IsNullOrWhiteSpace(moderatedMessage))
@@ -2682,7 +2622,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- Retrieve or Create Profile ---
             UserProfile profile = null;
             try
             {
@@ -2719,7 +2658,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- Database Update ---
             try
             {
                 var userCollection = _db.GetCollection<UserProfile>("user_profiles");
@@ -2733,7 +2671,6 @@ public class CPHInline
                 return false;
             }
 
-            // --- Chat Output ---
             try
             {
                 string displayName = !string.IsNullOrWhiteSpace(profile.PreferredName) ? profile.PreferredName : userName;
@@ -2774,7 +2711,7 @@ public class CPHInline
 
         try
         {
-            // Retrieve Post To Chat flag
+
             try
             {
                 postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
@@ -2786,7 +2723,6 @@ public class CPHInline
                 postToChat = false;
             }
 
-            // Validate GPTLog state
             if (GPTLog == null)
             {
                 LogToFile("[ClearPromptHistory] WARN: GPTLog is not initialized and cannot be cleared.", "WARN");
@@ -2804,7 +2740,6 @@ public class CPHInline
                 return false;
             }
 
-            // Attempt clear operation
             try
             {
                 GPTLog.Clear();
@@ -2857,7 +2792,7 @@ public class CPHInline
         LogToFile($">>> [LogPromptScorecard] Entry: Logging token usage for method '{methodName}', model '{model}'.", "DEBUG");
         try
         {
-            // --- Validation ---
+
             if (usage == null)
             {
                 LogToFile($"[LogPromptScorecard] WARN: No usage data available for {methodName}. Skipping scorecard logging.", "WARN");
@@ -2865,14 +2800,12 @@ public class CPHInline
                 return;
             }
 
-            // --- Extract Token Counts ---
             long promptTokens = 0, completionTokens = 0, totalTokens = 0;
             try { promptTokens = usage?.PromptTokens ?? 0; } catch { promptTokens = 0; }
             try { completionTokens = usage?.CompletionTokens ?? 0; } catch { completionTokens = 0; }
             try { totalTokens = usage?.TotalTokens ?? 0; } catch { totalTokens = 0; }
             LogToFile($"[LogPromptScorecard] Token counts extracted: prompt={promptTokens}, completion={completionTokens}, total={totalTokens}", "DEBUG");
 
-            // --- Rolling Totals (30 Days) ---
             long rollingPromptTokens = 0;
             long rollingCompletionTokens = 0;
             long rollingTotalTokens = 0;
@@ -2906,7 +2839,6 @@ public class CPHInline
                 LogToFile($"[LogPromptScorecard] Stack: {exLiteDb.StackTrace}", "DEBUG");
             }
 
-            // --- Retrieve Model Rates ---
             double inputRate = 0, outputRate = 0;
             try
             {
@@ -2923,14 +2855,12 @@ public class CPHInline
                 outputRate = 10.00;
             }
 
-            // --- Cost Calculation ---
             double promptCost = Math.Round((promptTokens / 1_000_000.0) * inputRate, 6);
             double completionCost = Math.Round((completionTokens / 1_000_000.0) * outputRate, 6);
             double totalPromptCost = Math.Round(promptCost + completionCost, 6);
             double rollingCost = Math.Round(((rollingPromptTokens / 1_000_000.0) * inputRate) + ((rollingCompletionTokens / 1_000_000.0) * outputRate), 4);
             LogToFile($"[LogPromptScorecard] Calculated costs: prompt={promptCost:C4}, completion={completionCost:C4}, total={totalPromptCost:C4}, rolling={rollingCost:C2}", "DEBUG");
 
-            // --- Output Summary ---
             LogToFile($"[LogPromptScorecard] INFO: Prompt Scorecard ({methodName})", "INFO");
             LogToFile("--------------------------------------------------", "INFO");
             LogToFile($"{"Metric",-30}{"Value",-10}", "INFO");
@@ -3000,7 +2930,7 @@ public class CPHInline
         ChatCompletionsResponse completionsJsonResponse = null;
         try
         {
-            // --- Initialization ---
+
             try
             {
                 postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
@@ -3014,7 +2944,7 @@ public class CPHInline
                 LogToFile($"[AskGPT] Context: postToChat={postToChat}, voiceEnabled={voiceEnabled}", "ERROR");
                 return false;
             }
-            // --- Character/Voice Argument Parsing ---
+
             try
             {
                 try
@@ -3047,7 +2977,7 @@ public class CPHInline
                 LogToFile($"[AskGPT] Context: characterNumber={characterNumber}, voiceAlias='{voiceAlias}'", "ERROR");
                 return false;
             }
-            // --- ChatLog State ---
+
             try
             {
                 if (ChatLog == null)
@@ -3066,7 +2996,7 @@ public class CPHInline
                 LogToFile($"[AskGPT] ERROR: ChatLog state error: {exCL.Message}", "ERROR");
                 LogToFile($"[AskGPT] Stack: {exCL.StackTrace}", "DEBUG");
             }
-            // --- Argument Parsing: userName, pronouns, message ---
+
             try
             {
                 if (!CPH.TryGetArg("userName", out userName) || string.IsNullOrWhiteSpace(userName))
@@ -3121,7 +3051,7 @@ public class CPHInline
                 LogToFile($"[AskGPT] Context: userName='{userName}', fullMessage='{fullMessage}'", "ERROR");
                 return false;
             }
-            // --- Database/Context Gathering ---
+
             try
             {
                 databasePath = CPH.GetGlobalVar<string>("Database Path", true);
@@ -3235,7 +3165,7 @@ public class CPHInline
                 LogToFile($"[AskGPT] Context: databasePath='{databasePath}', characterFileName='{characterFileName}', userName='{userName}'", "ERROR");
                 return false;
             }
-            // --- API Request/Response ---
+
             sw.Start();
             try
             {
@@ -3348,7 +3278,7 @@ public class CPHInline
                 sw.Stop();
                 LogToFile($"[AskGPT] INFO: OpenAI API call completed in {sw.ElapsedMilliseconds} ms.", "INFO");
             }
-            // --- Moderation/Scorecard ---
+
             try
             {
                 if (apiSuccess && completionsJsonResponse?.Usage != null)
@@ -3366,7 +3296,7 @@ public class CPHInline
                 LogToFile($"[AskGPT] Stack: {exScore.StackTrace}", "DEBUG");
                 LogToFile($"[AskGPT] Context: AIModel='{AIModel}', userName='{userName}'", "ERROR");
             }
-            // --- Clean/Moderate GPT Response ---
+
             GPTResponse = CleanAIText(GPTResponse);
             LogToFile("[AskGPT] DEBUG: Applied CleanAIText() to GPT response.", "DEBUG");
             if (!apiSuccess || string.IsNullOrWhiteSpace(GPTResponse))
@@ -3409,7 +3339,7 @@ public class CPHInline
                 LogToFile("==== End AskGPT Execution ====", "INFO");
                 return false;
             }
-            // --- Chat/Webhook/TTS Output ---
+
             try
             {
                 LogToFile($"[AskGPT] DEBUG: GPT model response: {GPTResponse}", "DEBUG");
@@ -3656,7 +3586,6 @@ public class CPHInline
             return false;
         }
 
-        // --- Database/Context Setup ---
         string databasePath = null, characterFileName = null, ContextFilePath = null, context = null, broadcaster = null, currentTitle = null, currentGame = null;
         var allUserProfiles = new List<UserProfile>();
         var keywordDocs = new List<BsonDocument>();
@@ -3782,7 +3711,6 @@ public class CPHInline
             return false;
         }
 
-        // --- API Request/Response ---
         string completionsRequestJSON = null;
         string completionsResponseContent = null;
         string GPTResponse = null;
@@ -3941,7 +3869,6 @@ public class CPHInline
             LogToFile($"[AskGPTWebhook] Stack: {ex.StackTrace}", "DEBUG");
         }
 
-        // Scorecard Logging
         try
         {
             var completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
@@ -3960,7 +3887,6 @@ public class CPHInline
             LogToFile($"[AskGPTWebhook] Stack: {ex.StackTrace}", "DEBUG");
         }
 
-        // --- Webhook Handling ---
         string outboundWebhookUrl = null;
         string outboundWebhookMode = null;
         bool webhookSuccess = true;
@@ -4102,7 +4028,6 @@ public class CPHInline
             }
         }
 
-        // --- Output Delivery (TTS, Chat, Discord) ---
         try
         {
             if (voiceEnabled)
@@ -4394,7 +4319,7 @@ public class CPHInline
             {
                 LogToFile($"[CleanAIText] ERROR: Exception during dash/space normalization (HumanFriendly): {ex.Message}", "ERROR");
                 LogToFile($"[CleanAIText] Context: mode='{mode}', inputLength={text?.Length ?? 0}", "ERROR");
-                // Proceed with whatever we have
+
             }
         }
 
@@ -4415,7 +4340,7 @@ public class CPHInline
         string completionsUrl = null;
         try
         {
-            // Config fetch
+
             apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
             voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
             AIModel = CPH.GetGlobalVar<string>("OpenAI Model", true);
@@ -4813,7 +4738,6 @@ public class CPHInline
             throw new ArgumentException(errorMessage);
         }
 
-        // Higher severity = lower numeric value
         Dictionary<string, int> logLevelPriority = new Dictionary<string, int>
         {
             { "ERROR", 1 },
@@ -5099,7 +5023,7 @@ public class CPHInline
 
             try
             {
-                // Reapply key globals
+
                 CPH.SetGlobalVar("voice_enabled", settingsDict["voice_enabled"], true);
                 CPH.SetGlobalVar("outbound_webhook_url", settingsDict["outbound_webhook_url"], true);
                 CPH.SetGlobalVar("outbound_webhook_mode", settingsDict["outbound_webhook_mode"], true);
@@ -5164,7 +5088,7 @@ public class CPHInline
                     }
                     catch
                     {
-                        // fallback for non-string types
+
                         if (bool.TryParse(value, out bool boolValue))
                         {
                             CPH.SetGlobalVar(key, boolValue, true);
