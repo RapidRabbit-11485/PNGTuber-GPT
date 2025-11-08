@@ -5410,18 +5410,6 @@ public class CPHInline
                 }
             }
 
-            // Restore "Limit Responses to 500 Characters" global variable explicitly with boolean conversion
-            var limitResponsesSetting = settings.FirstOrDefault(s => s["Key"] == "Limit Responses to 500 Characters");
-            if (limitResponsesSetting != null)
-            {
-                bool limitResponses = bool.TryParse(limitResponsesSetting["Value"].AsString, out var result) ? result : false;
-                CPH.SetGlobalVar("Limit Responses to 500 Characters", limitResponses, true);
-                LogToFile("[ReadSettings] INFO: Restored 'Limit Responses to 500 Characters' global variable successfully.", "INFO");
-            }
-            else
-            {
-                LogToFile("[ReadSettings] WARN: 'Limit Responses to 500 Characters' setting not found in database. Using default.", "WARN");
-            }
 
             LogToFile($"[ReadSettings] INFO: Successfully loaded and applied {settings.Count} settings from LiteDB. R=Load settings, A=Restore globals, I=App ready, D=Success.", "INFO");
             LogToFile("<<< Exiting ReadSettings() – Completed successfully.", "DEBUG");
