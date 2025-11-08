@@ -3068,13 +3068,41 @@ public class CPHInline
             // ==== Begin 6-phase Coaching Mode Context Assembly ====
             try
             {
-                // PHASE 1: Enter coaching mode
+                // PHASE 1: Load context file for character with skip-guard and fallback
+                try
+                {
+                    characterNumber = CPH.GetGlobalVar<int>("character", true);
+                    string characterFileKey = $"character_file_{characterNumber}";
+                    string contextFileName = CPH.GetGlobalVar<string>(characterFileKey, true);
+                    string databasePath = CPH.GetGlobalVar<string>("DatabasePath", true);
+                    string characterFilePath = Path.Combine(databasePath, contextFileName);
+
+                    if (!File.Exists(characterFilePath))
+                    {
+                        LogToFile($"[AskGPT] WARN: Context file not found for Character {characterNumber} at {characterFilePath}. Using default Context.txt.", "WARN");
+                        characterFilePath = Path.Combine(databasePath, "Context.txt");
+                    }
+
+                    context = File.ReadAllText(characterFilePath);
+                    LogToFile($"[AskGPT] DEBUG: Loaded context for Character {characterNumber} from '{characterFilePath}' ({context.Length} chars).", "DEBUG");
+                }
+                catch (Exception exCtx)
+                {
+                    LogToFile($"[AskGPT] ERROR: Failed to load context: {exCtx.Message}", "ERROR");
+                    LogToFile($"[AskGPT] Stack: {exCtx.StackTrace}", "DEBUG");
+                    context = "You are a helpful assistant.";
+                }
+                messages = new List<chatMessage>
+                {
+                    new chatMessage { role = "system", content = context }
+                };
+
+                // PHASE 2: Enter coaching mode
                 LogToFile("[AskGPT] DEBUG: Entering coaching mode for structured context assembly.", "DEBUG");
-                messages = new List<chatMessage>();
                 messages.Add(new chatMessage { role = "system", content = "You will now receive structured context updates. Acknowledge each with 'OK' and wait for instruction to resume normal operation." });
                 messages.Add(new chatMessage { role = "assistant", content = "OK" });
 
-                // PHASE 2: Chat Log injection
+                // PHASE 3: Chat Log injection
                 int chatTurns = ChatLog != null ? ChatLog.Count : 0;
                 LogToFile($"[AskGPT] DEBUG: Injecting chat log with {chatTurns} turns.", "DEBUG");
                 if (ChatLog != null)
@@ -3086,7 +3114,7 @@ public class CPHInline
                     }
                 }
 
-                // PHASE 3: Keyword definitions
+                // PHASE 4: Keyword definitions
                 int keywordDefCount = 0;
                 List<string> keywordSummaryList = new List<string>();
                 Dictionary<string, string> keywordDict = null;
@@ -3094,49 +3122,57 @@ public class CPHInline
                 try
                 {
                     keywordDocs = keywordsCol.FindAll().ToList();
-                    keywordDict = keywordDocs
-                        .Where(k => k.ContainsKey("Keyword") && k.ContainsKey("Definition"))
-                        .ToDictionary(k => k["Keyword"].AsString.ToLowerInvariant(), k => k["Definition"].AsString);
-                    var words = prompt.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
-                                      .Select(w => w.TrimStart('@').ToLowerInvariant())
-                                      .Distinct()
-                                      .ToList();
-                    foreach (var word in words)
+                    if (keywordDocs != null && keywordDocs.Count > 0)
                     {
-                        if (keywordDict.TryGetValue(word, out var def))
+                        keywordDict = keywordDocs
+                            .Where(k => k.ContainsKey("Keyword") && k.ContainsKey("Definition"))
+                            .ToDictionary(k => k["Keyword"].AsString.ToLowerInvariant(), k => k["Definition"].AsString);
+                        var words = prompt.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                                        .Select(w => w.TrimStart('@').ToLowerInvariant())
+                                        .Distinct()
+                                        .ToList();
+                        foreach (var word in words)
                         {
-                            LogToFile($"[AskGPT] DEBUG: Found keyword match for '{word}' -> {def}", "DEBUG");
-                            messages.Add(new chatMessage { role = "user", content = $"Context update: Something you remember about {word} is {def}." });
-                            messages.Add(new chatMessage { role = "assistant", content = "OK" });
-                            keywordDefCount++;
-                            keywordSummaryList.Add(word);
+                            if (keywordDict.TryGetValue(word, out var def))
+                            {
+                                LogToFile($"[AskGPT] DEBUG: Found keyword match for '{word}' -> {def}", "DEBUG");
+                                messages.Add(new chatMessage { role = "user", content = $"Context update: Something you remember about {word} is {def}." });
+                                messages.Add(new chatMessage { role = "assistant", content = "OK" });
+                                keywordDefCount++;
+                                keywordSummaryList.Add(word);
+                            }
                         }
                     }
-                    LogToFile($"[AskGPT] DEBUG: Finished querying LiteDB for keyword definitions.", "DEBUG");
                 }
                 catch (Exception exKey)
                 {
                     LogToFile($"[AskGPT] ERROR: Failed to retrieve keyword definitions: {exKey.Message}", "ERROR");
                     LogToFile($"[AskGPT] Stack: {exKey.StackTrace}", "DEBUG");
                 }
-                LogToFile($"[AskGPT] INFO: Added {keywordDefCount} keyword definitions to dynamic context.", "INFO");
+                if (keywordDefCount > 0)
+                    LogToFile($"[AskGPT] INFO: Added {keywordDefCount} keyword definitions to dynamic context.", "INFO");
+                else
+                    LogToFile("[AskGPT] INFO: No keyword definitions matched. Skipping keyword context.", "INFO");
 
-                // PHASE 4: User knowledge
+                // PHASE 5: User knowledge
                 int userKnowledgeCount = 0;
                 LogToFile("[AskGPT] DEBUG: Querying LiteDB for user knowledge.", "DEBUG");
                 try
                 {
                     allUserProfiles = userCollection.FindAll().ToList();
-                    foreach (var profile in allUserProfiles)
+                    if (allUserProfiles != null && allUserProfiles.Count > 0)
                     {
-                        if (profile.Knowledge != null && profile.Knowledge.Count > 0)
+                        foreach (var profile in allUserProfiles)
                         {
-                            string displayName = !string.IsNullOrWhiteSpace(profile.PreferredName) ? profile.PreferredName : profile.UserName;
-                            string knowledge = string.Join("; ", profile.Knowledge);
-                            LogToFile($"[AskGPT] DEBUG: Found user knowledge for '{profile.UserName}' ({displayName}) -> {knowledge}", "DEBUG");
-                            messages.Add(new chatMessage { role = "user", content = $"Context update: Something you remember about {profile.UserName} who goes by {displayName} is {knowledge}." });
-                            messages.Add(new chatMessage { role = "assistant", content = "OK" });
-                            userKnowledgeCount++;
+                            if (profile.Knowledge != null && profile.Knowledge.Count > 0)
+                            {
+                                string displayName = !string.IsNullOrWhiteSpace(profile.PreferredName) ? profile.PreferredName : profile.UserName;
+                                string knowledge = string.Join("; ", profile.Knowledge);
+                                LogToFile($"[AskGPT] DEBUG: Found user knowledge for '{profile.UserName}' ({displayName}) -> {knowledge}", "DEBUG");
+                                messages.Add(new chatMessage { role = "user", content = $"Context update: Something you remember about {profile.UserName} who goes by {displayName} is {knowledge}." });
+                                messages.Add(new chatMessage { role = "assistant", content = "OK" });
+                                userKnowledgeCount++;
+                            }
                         }
                     }
                 }
@@ -3145,9 +3181,12 @@ public class CPHInline
                     LogToFile($"[AskGPT] ERROR: Failed to retrieve user knowledge: {exUser.Message}", "ERROR");
                     LogToFile($"[AskGPT] Stack: {exUser.StackTrace}", "DEBUG");
                 }
-                LogToFile($"[AskGPT] INFO: Added user knowledge for {userKnowledgeCount} users to dynamic context.", "INFO");
+                if (userKnowledgeCount > 0)
+                    LogToFile($"[AskGPT] INFO: Added user knowledge for {userKnowledgeCount} users to dynamic context.", "INFO");
+                else
+                    LogToFile("[AskGPT] INFO: No user knowledge found. Skipping user knowledge context.", "INFO");
 
-                // PHASE 5: Pronoun coaching
+                // PHASE 6: Pronoun coaching
                 LogToFile("[AskGPT] DEBUG: Adding pronoun awareness coaching.", "DEBUG");
                 pronounContextEntries = new List<string>();
                 // Re-gather pronoun context for all users mentioned/broadcaster/asker
@@ -3184,11 +3223,18 @@ public class CPHInline
                 }
                 string pronounBehavior = "It is important to remain context-aware of participants' self-identified pronouns and to use them correctly and respectfully in all responses.";
                 string pronounData = "Known pronouns for participants: " + string.Join("; ", pronounContextEntries) + ".";
-                messages.Add(new chatMessage { role = "user", content = $"{pronounBehavior} {pronounData}" });
-                messages.Add(new chatMessage { role = "assistant", content = "OK" });
-                LogToFile($"[AskGPT] INFO: Added {pronounContextEntries.Count} pronoun entries to context.", "INFO");
+                if (pronounContextEntries.Count > 0)
+                {
+                    messages.Add(new chatMessage { role = "user", content = $"{pronounBehavior} {pronounData}" });
+                    messages.Add(new chatMessage { role = "assistant", content = "OK" });
+                    LogToFile($"[AskGPT] INFO: Added {pronounContextEntries.Count} pronoun entries to context.", "INFO");
+                }
+                else
+                {
+                    LogToFile("[AskGPT] INFO: No pronoun entries found. Skipping pronoun coaching.", "INFO");
+                }
 
-                // PHASE 6: Hand-off and final prompt
+                // PHASE 7: Hand-off and final prompt (was phase 6)
                 LogToFile("[AskGPT] DEBUG: Finishing context transmission and resuming normal conversation mode.", "DEBUG");
                 messages.Add(new chatMessage { role = "system", content = "All context updates received. Resume normal conversation mode." });
                 messages.Add(new chatMessage { role = "assistant", content = "OK" });
@@ -3644,9 +3690,38 @@ public class CPHInline
         List<string> pronounContextEntries = new List<string>();
         List<string> enrichmentSections = new List<string>();
         // ==== Begin 6-phase Coaching Mode Context Assembly ====
-        List<chatMessage> messages = new List<chatMessage>();
+        List<chatMessage> messages = null;
         try
         {
+            // ---- Context loading (character file) ----
+            string context = null;
+            try
+            {
+                int characterNumCtx = CPH.GetGlobalVar<int>("character", true);
+                string characterFileKey = $"character_file_{characterNumCtx}";
+                string contextFileName = CPH.GetGlobalVar<string>(characterFileKey, true);
+                string databasePathCtx = CPH.GetGlobalVar<string>("DatabasePath", true);
+                string characterFilePath = Path.Combine(databasePathCtx, contextFileName);
+                if (!File.Exists(characterFilePath))
+                {
+                    LogToFile($"[AskGPTWebhook] WARN: Context file not found for Character {characterNumCtx} at {characterFilePath}. Using default Context.txt.", "WARN");
+                    characterFilePath = Path.Combine(databasePathCtx, "Context.txt");
+                }
+                context = File.ReadAllText(characterFilePath);
+                LogToFile($"[AskGPTWebhook] DEBUG: Loaded context for Character {characterNumCtx} from '{characterFilePath}' ({context.Length} chars).", "DEBUG");
+            }
+            catch (Exception exCtx)
+            {
+                LogToFile($"[AskGPTWebhook] ERROR: Failed to load context: {exCtx.Message}", "ERROR");
+                LogToFile($"[AskGPTWebhook] Stack: {exCtx.StackTrace}", "DEBUG");
+                context = "You are a helpful assistant.";
+            }
+            // ---- Start messages with system context ----
+            messages = new List<chatMessage>
+            {
+                new chatMessage { role = "system", content = context }
+            };
+
             // PHASE 1: Enter coaching mode
             LogToFile("[AskGPTWebhook] DEBUG: Entering coaching mode for structured context assembly.", "DEBUG");
             messages.Add(new chatMessage { role = "system", content = "You will now receive structured context updates. Acknowledge each with 'OK' and wait for instruction to resume normal operation." });
@@ -3697,7 +3772,10 @@ public class CPHInline
                 LogToFile($"[AskGPTWebhook] ERROR: Failed to retrieve keyword definitions: {exKey.Message}", "ERROR");
                 LogToFile($"[AskGPTWebhook] Stack: {exKey.StackTrace}", "DEBUG");
             }
-            LogToFile($"[AskGPTWebhook] INFO: Added {keywordDefCount} keyword definitions to dynamic context.", "INFO");
+            if (keywordDefCount > 0)
+                LogToFile($"[AskGPTWebhook] INFO: Added {keywordDefCount} keyword definitions to dynamic context.", "INFO");
+            else
+                LogToFile("[AskGPTWebhook] INFO: No keyword definitions matched. Skipping keyword context.", "INFO");
 
             // PHASE 4: User knowledge
             int userKnowledgeCount = 0;
@@ -3723,7 +3801,10 @@ public class CPHInline
                 LogToFile($"[AskGPTWebhook] ERROR: Failed to retrieve user knowledge: {exUser.Message}", "ERROR");
                 LogToFile($"[AskGPTWebhook] Stack: {exUser.StackTrace}", "DEBUG");
             }
-            LogToFile($"[AskGPTWebhook] INFO: Added user knowledge for {userKnowledgeCount} users to dynamic context.", "INFO");
+            if (userKnowledgeCount > 0)
+                LogToFile($"[AskGPTWebhook] INFO: Added user knowledge for {userKnowledgeCount} users to dynamic context.", "INFO");
+            else
+                LogToFile("[AskGPTWebhook] INFO: No user knowledge found. Skipping user knowledge context.", "INFO");
 
             // PHASE 5: Pronoun coaching
             LogToFile("[AskGPTWebhook] DEBUG: Adding pronoun awareness coaching.", "DEBUG");
@@ -3762,9 +3843,16 @@ public class CPHInline
             }
             string pronounBehavior = "It is important to remain context-aware of participants' self-identified pronouns and to use them correctly and respectfully in all responses.";
             string pronounData = "Known pronouns for participants: " + string.Join("; ", pronounContextEntries) + ".";
-            messages.Add(new chatMessage { role = "user", content = $"{pronounBehavior} {pronounData}" });
-            messages.Add(new chatMessage { role = "assistant", content = "OK" });
-            LogToFile($"[AskGPTWebhook] INFO: Added {pronounContextEntries.Count} pronoun entries to context.", "INFO");
+            if (pronounContextEntries.Count > 0)
+            {
+                messages.Add(new chatMessage { role = "user", content = $"{pronounBehavior} {pronounData}" });
+                messages.Add(new chatMessage { role = "assistant", content = "OK" });
+                LogToFile($"[AskGPTWebhook] INFO: Added {pronounContextEntries.Count} pronoun entries to context.", "INFO");
+            }
+            else
+            {
+                LogToFile("[AskGPTWebhook] INFO: No pronoun entries found. Skipping pronoun coaching.", "INFO");
+            }
 
             // PHASE 6: Hand-off and final prompt
             LogToFile("[AskGPTWebhook] DEBUG: Finishing context transmission and resuming normal conversation mode.", "DEBUG");
