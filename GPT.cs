@@ -3045,7 +3045,7 @@ public class CPHInline
                     return false;
                 }
                 prompt = $"{userToSpeak} asks: {fullMessage}";
-                LogToFile($"[AskGPT] INFO: Prompt input: {prompt}", "INFO");
+                // LogToFile($"[AskGPT] INFO: Prompt input: {prompt}", "INFO"); // Moved after scorecard
                 LogToFile($"Constructed prompt for GPT: {prompt}", "DEBUG");
             }
             catch (Exception exArgs)
@@ -3304,11 +3304,10 @@ public class CPHInline
                             {
                                 rawContent = "[Error parsing content from JSON]";
                             }
-                            // REMOVE: LogToFile($"[AskGPT] INFO: Raw model output: {rawContent}", "INFO");
+                            // (INFO logs for raw/uncleaned model output moved after scorecard)
                             LogToFile($"[AskGPT] DEBUG: Response JSON: {completionsResponseContent}", "DEBUG");
                             completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
                             GPTResponse = completionsJsonResponse?.Choices?.FirstOrDefault()?.Message?.content ?? string.Empty;
-                            // REMOVE: LogToFile($"[AskGPT] INFO: Parsed model output (uncleaned): {GPTResponse}", "INFO");
                             apiSuccess = true;
                         }
                     }
@@ -3385,7 +3384,6 @@ public class CPHInline
             // New INFO-level logs after scorecard, before cleaning
             LogToFile($"[AskGPT] INFO: Prompt input: {prompt}", "INFO");
             LogToFile($"[AskGPT] INFO: Model output (uncleaned): {GPTResponse}", "INFO");
-
             GPTResponse = CleanAIText(GPTResponse);
             LogToFile("[AskGPT] DEBUG: Applied CleanAIText() to GPT response.", "DEBUG");
             LogToFile($"[AskGPT] INFO: Model output (cleaned): {GPTResponse}", "INFO");
@@ -3804,7 +3802,6 @@ public class CPHInline
             contextBody = string.Join("\n", enrichmentSections);
             prompt = $"{userToSpeak} asks: {fullMessage}";
             LogToFile($"[AskGPTWebhook] DEBUG: Assembled enriched context for webhook:\n{contextBody}", "DEBUG");
-            LogToFile($"[AskGPTWebhook] INFO: Prompt input: {prompt}", "INFO");
         }
         catch (Exception ex)
         {
@@ -3995,13 +3992,7 @@ public class CPHInline
             LogToFile($"[AskGPTWebhook] DEBUG: OpenAI API call completed in {sw.ElapsedMilliseconds} ms.", "DEBUG");
         }
 
-        // INFO-level logs after scorecard, before cleaning (order matches AskGPT)
-        LogToFile($"[AskGPTWebhook] INFO: Prompt input: {prompt}", "INFO");
-        LogToFile($"[AskGPTWebhook] INFO: Model output (uncleaned): {GPTResponse}", "INFO");
-
-        GPTResponse = CleanAIText(GPTResponse);
-        LogToFile("[AskGPTWebhook] DEBUG: Applied CleanAIText() to GPT response.", "DEBUG");
-        LogToFile($"[AskGPTWebhook] INFO: Model output (cleaned): {GPTResponse}", "INFO");
+        // The following INFO-level logs are now moved after scorecard logging, matching AskGPT's flow.
         if (!apiSuccess || string.IsNullOrWhiteSpace(GPTResponse))
         {
             if (!apiSuccess)
@@ -4061,6 +4052,13 @@ public class CPHInline
             LogToFile($"[AskGPTWebhook] ERROR: Failed to log prompt scorecard: {ex.Message}", "ERROR");
             LogToFile($"[AskGPTWebhook] Stack: {ex.StackTrace}", "DEBUG");
         }
+
+        // INFO-level logs after scorecard, before cleaning (order matches AskGPT)
+        LogToFile($"[AskGPTWebhook] INFO: Prompt input: {prompt}", "INFO");
+        LogToFile($"[AskGPTWebhook] INFO: Model output (uncleaned): {GPTResponse}", "INFO");
+        GPTResponse = CleanAIText(GPTResponse);
+        LogToFile("[AskGPTWebhook] DEBUG: Applied CleanAIText() to GPT response.", "DEBUG");
+        LogToFile($"[AskGPTWebhook] INFO: Model output (cleaned): {GPTResponse}", "INFO");
 
         string outboundWebhookUrl = null;
         string outboundWebhookMode = null;
