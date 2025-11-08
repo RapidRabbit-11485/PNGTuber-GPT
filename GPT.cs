@@ -5242,8 +5242,8 @@ public class CPHInline
                     ["illicit_threshold"] = CPH.GetGlobalVar<string>("illicit_threshold", true),
                     ["illicit_violent_threshold"] = CPH.GetGlobalVar<string>("illicit_violent_threshold", true),
                     ["Post To Chat"] = CPH.GetGlobalVar<bool>("Post To Chat", true).ToString(),
-                    // Insert the new setting after "Post To Chat"
-                    ["Limit Responses to 500 Characters"] = CPH.GetGlobalVar<string>("Limit Responses to 500 Characters", true),
+                    // Store as string representation of boolean value
+                    ["Limit Responses to 500 Characters"] = CPH.GetGlobalVar<bool>("Limit Responses to 500 Characters", true).ToString(),
                     ["Log GPT Questions to Discord"] = CPH.GetGlobalVar<string>("Log GPT Questions to Discord", true),
                     ["Discord Webhook URL"] = CPH.GetGlobalVar<string>("Discord Webhook URL", true),
                     ["Discord Bot Username"] = CPH.GetGlobalVar<string>("Discord Bot Username", true),
@@ -5410,11 +5410,12 @@ public class CPHInline
                 }
             }
 
-            // Restore "Limit Responses to 500 Characters" global variable explicitly
+            // Restore "Limit Responses to 500 Characters" global variable explicitly with boolean conversion
             var limitResponsesSetting = settings.FirstOrDefault(s => s["Key"] == "Limit Responses to 500 Characters");
             if (limitResponsesSetting != null)
             {
-                CPH.SetGlobalVar("Limit Responses to 500 Characters", limitResponsesSetting["Value"], true);
+                bool limitResponses = bool.TryParse(limitResponsesSetting["Value"].AsString, out var result) ? result : false;
+                CPH.SetGlobalVar("Limit Responses to 500 Characters", limitResponses, true);
                 LogToFile("[ReadSettings] INFO: Restored 'Limit Responses to 500 Characters' global variable successfully.", "INFO");
             }
             else
