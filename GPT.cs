@@ -3305,7 +3305,7 @@ public class CPHInline
                 messages.Add(new chatMessage { role = "system", content = "All context updates received. Resume normal conversation mode." });
                 messages.Add(new chatMessage { role = "assistant", content = "OK" });
 
-                // ---- Inject GPTLog conversation history after context transmission ----
+                // ---- Inject GPTLog conversation history at the very last possible moment before the final user prompt ----
                 try
                 {
                     if (GPTLog != null && GPTLog.Count > 0)
@@ -3320,12 +3320,12 @@ public class CPHInline
                                 content = turn.content
                             });
                         }
-                        LogToFile($"[AskGPT] DEBUG: Injected {priorTurns.Count} GPT turns after context transmission.", "DEBUG");
+                        LogToFile($"[AskGPT] DEBUG: Injected {priorTurns.Count} GPT turns just before final prompt.", "DEBUG");
                     }
                 }
                 catch (Exception exCtx)
                 {
-                    LogToFile($"[AskGPT] WARN: Exception while injecting GPTLog after context: {exCtx.Message}", "WARN");
+                    LogToFile($"[AskGPT] WARN: Exception while injecting GPTLog near final prompt: {exCtx.Message}", "WARN");
                     LogToFile($"[AskGPT] Stack: {exCtx.StackTrace}", "DEBUG");
                 }
                 // ---- End GPTLog injection ----
