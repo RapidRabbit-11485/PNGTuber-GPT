@@ -3056,33 +3056,92 @@ public class CPHInline
                 return false;
             }
 
+            // ==== Begin 6-phase Coaching Mode Context Assembly ====
             try
             {
-                databasePath = CPH.GetGlobalVar<string>("Database Path", true);
-                if (string.IsNullOrWhiteSpace(databasePath))
+                // PHASE 1: Enter coaching mode
+                LogToFile("[AskGPT] DEBUG: Entering coaching mode for structured context assembly.", "DEBUG");
+                messages = new List<chatMessage>();
+                messages.Add(new chatMessage { role = "system", content = "You will now receive structured context updates. Acknowledge each with 'OK' and wait for instruction to resume normal operation." });
+                messages.Add(new chatMessage { role = "assistant", content = "OK" });
+
+                // PHASE 2: Chat Log injection
+                int chatTurns = ChatLog != null ? ChatLog.Count : 0;
+                LogToFile($"[AskGPT] DEBUG: Injecting chat log with {chatTurns} turns.", "DEBUG");
+                if (ChatLog != null)
                 {
-                    LogToFile("'Database Path' global variable is not found or not a valid string.", "ERROR");
-                    string msg = "I'm sorry, but I can't answer that question right now. Please check the log for details.";
-                    if (postToChat)
-                        CPH.SendMessage(msg, true);
-                    else
-                        LogToFile($"[AskGPT] [Skipped Chat Output] Post To Chat disabled. Message: {msg}", "DEBUG");
-                    LogToFile("==== End AskGPT Execution ====", "INFO");
-                    return false;
+                    foreach (var chatMessage in ChatLog.Reverse().Take(maxChatHistory).Reverse())
+                    {
+                        messages.Add(chatMessage);
+                        messages.Add(new chatMessage { role = "assistant", content = "OK" });
+                    }
                 }
-                characterFileName = CPH.GetGlobalVar<string>($"character_file_{characterNumber}", true);
-                if (string.IsNullOrWhiteSpace(characterFileName))
+
+                // PHASE 3: Keyword definitions
+                int keywordDefCount = 0;
+                List<string> keywordSummaryList = new List<string>();
+                Dictionary<string, string> keywordDict = null;
+                LogToFile("[AskGPT] DEBUG: Querying LiteDB for keyword definitions.", "DEBUG");
+                try
                 {
-                    characterFileName = "context.txt";
-                    LogToFile($"Character file not set for {characterNumber}, defaulting to context.txt", "WARN");
+                    keywordDocs = keywordsCol.FindAll().ToList();
+                    keywordDict = keywordDocs
+                        .Where(k => k.ContainsKey("Keyword") && k.ContainsKey("Definition"))
+                        .ToDictionary(k => k["Keyword"].AsString.ToLowerInvariant(), k => k["Definition"].AsString);
+                    var words = prompt.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                                      .Select(w => w.TrimStart('@').ToLowerInvariant())
+                                      .Distinct()
+                                      .ToList();
+                    foreach (var word in words)
+                    {
+                        if (keywordDict.TryGetValue(word, out var def))
+                        {
+                            LogToFile($"[AskGPT] DEBUG: Found keyword match for '{word}' -> {def}", "DEBUG");
+                            messages.Add(new chatMessage { role = "user", content = $"Context update: Something you remember about {word} is {def}." });
+                            messages.Add(new chatMessage { role = "assistant", content = "OK" });
+                            keywordDefCount++;
+                            keywordSummaryList.Add(word);
+                        }
+                    }
+                    LogToFile($"[AskGPT] DEBUG: Finished querying LiteDB for keyword definitions.", "DEBUG");
                 }
-                ContextFilePath = Path.Combine(databasePath, characterFileName);
-                context = File.Exists(ContextFilePath) ? File.ReadAllText(ContextFilePath) : "";
-                broadcaster = CPH.GetGlobalVar<string>("broadcaster", false);
-                currentTitle = CPH.GetGlobalVar<string>("currentTitle", false);
-                currentGame = CPH.GetGlobalVar<string>("currentGame", false);
-                allUserProfiles = userCollection.FindAll().ToList();
-                keywordDocs = keywordsCol.FindAll().ToList();
+                catch (Exception exKey)
+                {
+                    LogToFile($"[AskGPT] ERROR: Failed to retrieve keyword definitions: {exKey.Message}", "ERROR");
+                    LogToFile($"[AskGPT] Stack: {exKey.StackTrace}", "DEBUG");
+                }
+                LogToFile($"[AskGPT] INFO: Added {keywordDefCount} keyword definitions to dynamic context.", "INFO");
+
+                // PHASE 4: User knowledge
+                int userKnowledgeCount = 0;
+                LogToFile("[AskGPT] DEBUG: Querying LiteDB for user knowledge.", "DEBUG");
+                try
+                {
+                    allUserProfiles = userCollection.FindAll().ToList();
+                    foreach (var profile in allUserProfiles)
+                    {
+                        if (profile.Knowledge != null && profile.Knowledge.Count > 0)
+                        {
+                            string displayName = !string.IsNullOrWhiteSpace(profile.PreferredName) ? profile.PreferredName : profile.UserName;
+                            string knowledge = string.Join("; ", profile.Knowledge);
+                            LogToFile($"[AskGPT] DEBUG: Found user knowledge for '{profile.UserName}' ({displayName}) -> {knowledge}", "DEBUG");
+                            messages.Add(new chatMessage { role = "user", content = $"Context update: Something you remember about {profile.UserName} who goes by {displayName} is {knowledge}." });
+                            messages.Add(new chatMessage { role = "assistant", content = "OK" });
+                            userKnowledgeCount++;
+                        }
+                    }
+                }
+                catch (Exception exUser)
+                {
+                    LogToFile($"[AskGPT] ERROR: Failed to retrieve user knowledge: {exUser.Message}", "ERROR");
+                    LogToFile($"[AskGPT] Stack: {exUser.StackTrace}", "DEBUG");
+                }
+                LogToFile($"[AskGPT] INFO: Added user knowledge for {userKnowledgeCount} users to dynamic context.", "INFO");
+
+                // PHASE 5: Pronoun coaching
+                LogToFile("[AskGPT] DEBUG: Adding pronoun awareness coaching.", "DEBUG");
+                pronounContextEntries = new List<string>();
+                // Re-gather pronoun context for all users mentioned/broadcaster/asker
                 mentionedUsers = new List<string>();
                 if (!mentionedUsers.Contains(userName, StringComparer.OrdinalIgnoreCase))
                     mentionedUsers.Add(userName);
@@ -3102,151 +3161,30 @@ public class CPHInline
                     if (!mentionedUsers.Contains(muser, StringComparer.OrdinalIgnoreCase))
                         mentionedUsers.Add(muser);
                 }
-                pronounContextEntries = new List<string>();
-                var askerProfile = allUserProfiles.FirstOrDefault(x => x.UserName != null && x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
+                var askerProfile = allUserProfiles?.FirstOrDefault(x => x.UserName != null && x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
                 if (askerProfile != null && !string.IsNullOrWhiteSpace(askerProfile.Pronouns))
                     pronounContextEntries.Add($"{askerProfile.PreferredName} uses pronouns {askerProfile.Pronouns}.");
-                var broadcasterProfile = allUserProfiles.FirstOrDefault(x => x.UserName != null && x.UserName.Equals(broadcaster, StringComparison.OrdinalIgnoreCase));
+                var broadcasterProfile = allUserProfiles?.FirstOrDefault(x => x.UserName != null && x.UserName.Equals(broadcaster, StringComparison.OrdinalIgnoreCase));
                 if (broadcasterProfile != null && !string.IsNullOrWhiteSpace(broadcasterProfile.Pronouns))
                     pronounContextEntries.Add($"{broadcasterProfile.PreferredName} uses pronouns {broadcasterProfile.Pronouns}.");
                 foreach (var uname in mentionedUsers.Distinct(StringComparer.OrdinalIgnoreCase))
                 {
-                    var mentionedProfile = allUserProfiles.FirstOrDefault(x => x.UserName != null && x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
+                    var mentionedProfile = allUserProfiles?.FirstOrDefault(x => x.UserName != null && x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
                     if (mentionedProfile != null && !string.IsNullOrWhiteSpace(mentionedProfile.Pronouns))
                         pronounContextEntries.Add($"{mentionedProfile.PreferredName} uses pronouns {mentionedProfile.Pronouns}.");
                 }
-                enrichmentSections = new List<string>();
-                if (pronounContextEntries.Count > 0)
-                {
-                    string pronounContext = "Known pronouns for participants: " + string.Join(" ", pronounContextEntries);
-                    enrichmentSections.Add(pronounContext);
-                    LogToFile($"Added pronoun context system message: {pronounContext}", "DEBUG");
-                }
-                // --- Dynamic Context Assembly (Keywords + User Knowledge) ---
-                List<string> keywordMatches = new List<string>();
-                try
-                {
-                    LogToFile("[AskGPT] DEBUG: Starting dynamic context assembly.", "DEBUG");
+                string pronounBehavior = "It is important to remain context-aware of participants' self-identified pronouns and to use them correctly and respectfully in all responses.";
+                string pronounData = "Known pronouns for participants: " + string.Join("; ", pronounContextEntries) + ".";
+                messages.Add(new chatMessage { role = "user", content = $"{pronounBehavior} {pronounData}" });
+                messages.Add(new chatMessage { role = "assistant", content = "OK" });
+                LogToFile($"[AskGPT] INFO: Added {pronounContextEntries.Count} pronoun entries to context.", "INFO");
 
-                    List<BsonDocument> profileDocs = null;
-                    Dictionary<string, string> keywordDict = null;
-                    Dictionary<string, BsonDocument> userDict = null;
-                    // Use the existing keywordDocs variable already declared
-                    profileDocs = _db.GetCollection<BsonDocument>("user_profiles").FindAll().ToList();
-
-                    // Null safety for ToDictionary()
-                    keywordDict = keywordDocs
-                        .Where(k => k.ContainsKey("Keyword") && k.ContainsKey("Definition"))
-                        .ToDictionary(k => k["Keyword"].AsString.ToLowerInvariant(), k => k["Definition"].AsString);
-
-                    userDict = profileDocs
-                        .Where(u => u.ContainsKey("UserName"))
-                        .ToDictionary(u => u["UserName"].AsString.ToLowerInvariant(), u => u);
-
-                    var words = prompt.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
-                                      .Select(w => w.TrimStart('@').ToLowerInvariant())
-                                      .Distinct()
-                                      .ToList();
-
-                    var insertedCount = 0;
-
-                    foreach (var word in words)
-                    {
-                        if (keywordDict.TryGetValue(word, out var def))
-                        {
-                            var line = $"Something you remember about {word} is {def}.";
-                            contextBody.AppendLine(line);
-                            insertedCount++;
-                            LogToFile($"[AskGPT] INFO: Inserted context for keyword '{word}' -> \"{def}\"", "INFO");
-                            keywordMatches.Add(word);
-                        }
-
-                        if (userDict.TryGetValue(word, out var profile))
-                        {
-                            if (profile["Knowledge"].IsArray && profile["Knowledge"].AsArray.Count > 0)
-                            {
-                                var know = string.Join(", ", profile["Knowledge"].AsArray.Select(k => k.AsString));
-                                var line = $"Something I remember about {word} is {know}.";
-                                contextBody.AppendLine(line);
-                                insertedCount++;
-                                LogToFile($"[AskGPT] INFO: Inserted context for user '{word}' -> \"{know}\"", "INFO");
-                            }
-                        }
-                    }
-
-                    LogToFile($"[AskGPT] DEBUG: Dynamic context assembly complete. Inserted {insertedCount} entries.", "DEBUG");
-                }
-                catch (Exception ex)
-                {
-                    LogToFile($"[AskGPT] ERROR: Context assembly failed: {ex.Message}", "ERROR");
-                    LogToFile($"[AskGPT] Stack: {ex.StackTrace}", "DEBUG");
-                }
-                // --- End Dynamic Context Assembly ---
-                // --- Dynamic Context Detection INFO Log ---
-                try
-                {
-                    // mentionedUsers is already a List<string>
-                    if (keywordMatches.Count > 0 || (mentionedUsers != null && mentionedUsers.Count > 0))
-                    {
-                        LogToFile($"[AskGPT] INFO: Dynamic context updated. Keywords detected: [{string.Join(", ", keywordMatches)}]; User mentions detected: [{string.Join(", ", mentionedUsers)}].", "INFO");
-                    }
-                    else
-                    {
-                        LogToFile("[AskGPT] INFO: No dynamic context keywords or user mentions detected.", "INFO");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    LogToFile($"[AskGPT] WARN: Failed to log dynamic context detection: {ex.Message}", "WARN");
-                }
-                // --- End Dynamic Context Detection INFO Log ---
-                enrichmentSections.Add($"{context}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}");
-                foreach (string uname in mentionedUsers.Distinct(StringComparer.OrdinalIgnoreCase))
-                {
-                    var mentionedProfile = allUserProfiles.FirstOrDefault(x => x.UserName != null && x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
-                    if (mentionedProfile != null)
-                    {
-                        string preferred = mentionedProfile.PreferredName;
-                        string pronouns = "";
-                        if (uname.Equals(userName, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(pronounDescription))
-                            pronouns = $" (pronouns: {pronounDescription})";
-                        else if (!string.IsNullOrWhiteSpace(mentionedProfile.Pronouns))
-                            pronouns = $" (pronouns: {mentionedProfile.Pronouns})";
-                        enrichmentSections.Add($"User: {preferred}{pronouns}");
-                        if (mentionedProfile.Knowledge != null && mentionedProfile.Knowledge.Count > 0)
-                            enrichmentSections.Add($"Memories about {preferred}: {string.Join("; ", mentionedProfile.Knowledge)}");
-                    }
-                }
-                foreach (var doc in keywordDocs)
-                {
-                    string keyword = doc["Keyword"]?.AsString;
-                    string definition = doc["Definition"]?.AsString;
-                    if (!string.IsNullOrWhiteSpace(keyword) && !string.IsNullOrWhiteSpace(definition))
-                    {
-                        if (fullMessage.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0)
-                            enrichmentSections.Add($"Something you know about {keyword}: {definition}");
-                    }
-                }
-                foreach (var doc in keywordDocs)
-                {
-                    string keyword = doc["Keyword"]?.AsString;
-                    string definition = doc["Definition"]?.AsString;
-                    if (!string.IsNullOrWhiteSpace(keyword) && !string.IsNullOrWhiteSpace(definition))
-                    {
-                        if (mentionedUsers.Any(n => n.Equals(keyword, StringComparison.OrdinalIgnoreCase)))
-                            enrichmentSections.Add($"Something you know about {keyword}: {definition}");
-                    }
-                }
-                // Null safety for contextBody
-                if (contextBody == null)
-                    contextBody = new System.Text.StringBuilder();
-                // Append enrichment sections to contextBody
-                foreach (var section in enrichmentSections)
-                {
-                    contextBody.AppendLine(section);
-                }
-                contextBodyString = contextBody.ToString();
-                LogToFile("Assembled dynamic context body for GPT prompt (LiteDB):\n" + contextBodyString, "DEBUG");
+                // PHASE 6: Hand-off and final prompt
+                LogToFile("[AskGPT] DEBUG: Finishing context transmission and resuming normal conversation mode.", "DEBUG");
+                messages.Add(new chatMessage { role = "system", content = "All context updates received. Resume normal conversation mode." });
+                messages.Add(new chatMessage { role = "assistant", content = "OK" });
+                string finalPrompt = $"{userToSpeak} asks: {fullMessage} You must respond in less than 500 characters.";
+                messages.Add(new chatMessage { role = "user", content = finalPrompt });
             }
             catch (Exception exDB)
             {
@@ -3255,6 +3193,7 @@ public class CPHInline
                 LogToFile($"[AskGPT] Context: databasePath='{databasePath}', characterFileName='{characterFileName}', userName='{userName}'", "ERROR");
                 return false;
             }
+            // ==== End 6-phase Coaching Mode Context Assembly ====
 
             sw.Start();
             try
@@ -3266,32 +3205,6 @@ public class CPHInline
                     completionsUrl = "https://api.openai.com/v1/chat/completions";
                 apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
                 AIModel = CPH.GetGlobalVar<string>("OpenAI Model", true);
-                messages = new List<chatMessage>();
-                messages.Add(new chatMessage { role = "system", content = contextBodyString });
-                messages.Add(new chatMessage
-                {
-                    role = "user",
-                    content = "I am going to send you the chat log from Twitch. You should reference these messages for all future prompts if it is relevant to the prompt being asked. Each message will be prefixed with the users name that you can refer to them as, if referring to their message in the response. After each message you receive, you will return simply \"OK\" to indicate you have received this message, and no other text. When I am finished I will say FINISHED, and you will again respond with simply \"OK\" and nothing else, and then resume normal operation on all future prompts."
-                });
-                messages.Add(new chatMessage { role = "assistant", content = "OK" });
-                if (ChatLog != null)
-                {
-                    foreach (var chatMessage in ChatLog.Reverse().Take(maxChatHistory).Reverse())
-                    {
-                        messages.Add(chatMessage);
-                        messages.Add(new chatMessage { role = "assistant", content = "OK" });
-                    }
-                }
-                messages.Add(new chatMessage { role = "user", content = "FINISHED" });
-                messages.Add(new chatMessage { role = "assistant", content = "OK" });
-                if (GPTLog != null)
-                {
-                    foreach (var gptMessage in GPTLog.Reverse().Take(maxPromptHistory).Reverse())
-                    {
-                        messages.Add(gptMessage);
-                    }
-                }
-                messages.Add(new chatMessage { role = "user", content = $"{prompt} You must respond in less than 500 characters." });
                 completionsRequestJSON = JsonConvert.SerializeObject(new { model = AIModel, messages = messages }, Formatting.Indented);
                 LogToFile($"[AskGPT] DEBUG: Request JSON: {completionsRequestJSON}", "DEBUG");
                 for (attempt = 0; attempt < maxAttempts && !apiSuccess; attempt++)
@@ -3322,7 +3235,6 @@ public class CPHInline
                             {
                                 rawContent = "[Error parsing content from JSON]";
                             }
-                            // (INFO logs for raw/uncleaned model output moved after scorecard)
                             LogToFile($"[AskGPT] DEBUG: Response JSON: {completionsResponseContent}", "DEBUG");
                             completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
                             GPTResponse = completionsJsonResponse?.Choices?.FirstOrDefault()?.Message?.content ?? string.Empty;
@@ -3714,43 +3626,95 @@ public class CPHInline
         List<string> mentionedUsers = new List<string>();
         List<string> pronounContextEntries = new List<string>();
         List<string> enrichmentSections = new List<string>();
-        string contextBody = null;
-        string prompt = null;
+        // ==== Begin 6-phase Coaching Mode Context Assembly ====
+        List<chatMessage> messages = new List<chatMessage>();
         try
         {
-            databasePath = CPH.GetGlobalVar<string>("Database Path", true);
-            if (string.IsNullOrWhiteSpace(databasePath))
+            // PHASE 1: Enter coaching mode
+            LogToFile("[AskGPTWebhook] DEBUG: Entering coaching mode for structured context assembly.", "DEBUG");
+            messages.Add(new chatMessage { role = "system", content = "You will now receive structured context updates. Acknowledge each with 'OK' and wait for instruction to resume normal operation." });
+            messages.Add(new chatMessage { role = "assistant", content = "OK" });
+
+            // PHASE 2: Chat Log injection
+            int chatTurns = ChatLog != null ? ChatLog.Count : 0;
+            LogToFile($"[AskGPTWebhook] DEBUG: Injecting chat log with {chatTurns} turns.", "DEBUG");
+            if (ChatLog != null)
             {
-                LogToFile("'Database Path' global variable is not found or not a valid string.", "ERROR");
-                LogToFile("==== End AskGPTWebhook Execution ====", "DEBUG");
-                return false;
+                foreach (var chatMessage in ChatLog.Reverse().Take(maxChatHistory).Reverse())
+                {
+                    messages.Add(chatMessage);
+                    messages.Add(new chatMessage { role = "assistant", content = "OK" });
+                }
             }
-            characterFileName = CPH.GetGlobalVar<string>($"character_file_{characterNumber}", true);
-            if (string.IsNullOrWhiteSpace(characterFileName))
+
+            // PHASE 3: Keyword definitions
+            int keywordDefCount = 0;
+            List<string> keywordSummaryList = new List<string>();
+            Dictionary<string, string> keywordDict = null;
+            LogToFile("[AskGPTWebhook] DEBUG: Querying LiteDB for keyword definitions.", "DEBUG");
+            try
             {
-                characterFileName = "context.txt";
-                LogToFile($"[AskGPTWebhook] DEBUG: Character file not set for {characterNumber}, defaulting to context.txt", "DEBUG");
+                keywordDocs = keywordsCol.FindAll().ToList();
+                keywordDict = keywordDocs
+                    .Where(k => k.ContainsKey("Keyword") && k.ContainsKey("Definition"))
+                    .ToDictionary(k => k["Keyword"].AsString.ToLowerInvariant(), k => k["Definition"].AsString);
+                var words = fullMessage.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                                  .Select(w => w.TrimStart('@').ToLowerInvariant())
+                                  .Distinct()
+                                  .ToList();
+                foreach (var word in words)
+                {
+                    if (keywordDict.TryGetValue(word, out var def))
+                    {
+                        LogToFile($"[AskGPTWebhook] DEBUG: Found keyword match for '{word}' -> {def}", "DEBUG");
+                        messages.Add(new chatMessage { role = "user", content = $"Context update: Something you remember about {word} is {def}." });
+                        messages.Add(new chatMessage { role = "assistant", content = "OK" });
+                        keywordDefCount++;
+                        keywordSummaryList.Add(word);
+                    }
+                }
+                LogToFile($"[AskGPTWebhook] DEBUG: Finished querying LiteDB for keyword definitions.", "DEBUG");
             }
-            ContextFilePath = Path.Combine(databasePath, characterFileName);
-            context = File.Exists(ContextFilePath) ? File.ReadAllText(ContextFilePath) : "";
-            broadcaster = CPH.GetGlobalVar<string>("broadcaster", false);
-            currentTitle = CPH.GetGlobalVar<string>("currentTitle", false);
-            currentGame = CPH.GetGlobalVar<string>("currentGame", false);
-            allUserProfiles = userCollection.FindAll().ToList();
-            keywordDocs = keywordsCol.FindAll().ToList();
-            pronounSubject = CPH.GetGlobalVar<string>("pronounSubject", false);
-            pronounObject = CPH.GetGlobalVar<string>("pronounObject", false);
-            pronounPossessive = CPH.GetGlobalVar<string>("pronounPossessive", false);
-            pronounReflexive = CPH.GetGlobalVar<string>("pronounReflexive", false);
-            if (!string.IsNullOrWhiteSpace(pronounSubject) && !string.IsNullOrWhiteSpace(pronounObject))
+            catch (Exception exKey)
             {
-                pronounDescription = $"({pronounSubject}/{pronounObject}";
-                if (!string.IsNullOrWhiteSpace(pronounPossessive)) pronounDescription += $"/{pronounPossessive}";
-                if (!string.IsNullOrWhiteSpace(pronounReflexive)) pronounDescription += $"/{pronounReflexive}";
-                pronounDescription += ")";
+                LogToFile($"[AskGPTWebhook] ERROR: Failed to retrieve keyword definitions: {exKey.Message}", "ERROR");
+                LogToFile($"[AskGPTWebhook] Stack: {exKey.StackTrace}", "DEBUG");
             }
-            if (!string.IsNullOrWhiteSpace(pronounDescription))
-                userToSpeak = $"User {pronounDescription}";
+            LogToFile($"[AskGPTWebhook] INFO: Added {keywordDefCount} keyword definitions to dynamic context.", "INFO");
+
+            // PHASE 4: User knowledge
+            int userKnowledgeCount = 0;
+            LogToFile("[AskGPTWebhook] DEBUG: Querying LiteDB for user knowledge.", "DEBUG");
+            try
+            {
+                allUserProfiles = userCollection.FindAll().ToList();
+                foreach (var profile in allUserProfiles)
+                {
+                    if (profile.Knowledge != null && profile.Knowledge.Count > 0)
+                    {
+                        string displayName = !string.IsNullOrWhiteSpace(profile.PreferredName) ? profile.PreferredName : profile.UserName;
+                        string knowledge = string.Join("; ", profile.Knowledge);
+                        LogToFile($"[AskGPTWebhook] DEBUG: Found user knowledge for '{profile.UserName}' ({displayName}) -> {knowledge}", "DEBUG");
+                        messages.Add(new chatMessage { role = "user", content = $"Context update: Something you remember about {profile.UserName} who goes by {displayName} is {knowledge}." });
+                        messages.Add(new chatMessage { role = "assistant", content = "OK" });
+                        userKnowledgeCount++;
+                    }
+                }
+            }
+            catch (Exception exUser)
+            {
+                LogToFile($"[AskGPTWebhook] ERROR: Failed to retrieve user knowledge: {exUser.Message}", "ERROR");
+                LogToFile($"[AskGPTWebhook] Stack: {exUser.StackTrace}", "DEBUG");
+            }
+            LogToFile($"[AskGPTWebhook] INFO: Added user knowledge for {userKnowledgeCount} users to dynamic context.", "INFO");
+
+            // PHASE 5: Pronoun coaching
+            LogToFile("[AskGPTWebhook] DEBUG: Adding pronoun awareness coaching.", "DEBUG");
+            pronounContextEntries = new List<string>();
+            // Re-gather pronoun context for all users mentioned/broadcaster/asker
+            mentionedUsers = new List<string>();
+            if (!mentionedUsers.Contains(userToSpeak, StringComparer.OrdinalIgnoreCase))
+                mentionedUsers.Add(userToSpeak);
             if (!string.IsNullOrWhiteSpace(broadcaster))
             {
                 if (fullMessage.IndexOf(broadcaster, StringComparison.OrdinalIgnoreCase) >= 0 ||
@@ -3767,154 +3731,39 @@ public class CPHInline
                 if (!mentionedUsers.Contains(muser, StringComparer.OrdinalIgnoreCase))
                     mentionedUsers.Add(muser);
             }
-            var broadcasterProfile = allUserProfiles.FirstOrDefault(x => x.UserName != null && x.UserName.Equals(broadcaster, StringComparison.OrdinalIgnoreCase));
+            var askerProfile = allUserProfiles?.FirstOrDefault(x => x.UserName != null && x.UserName.Equals(userToSpeak, StringComparison.OrdinalIgnoreCase));
+            if (askerProfile != null && !string.IsNullOrWhiteSpace(askerProfile.Pronouns))
+                pronounContextEntries.Add($"{askerProfile.PreferredName} uses pronouns {askerProfile.Pronouns}.");
+            var broadcasterProfile = allUserProfiles?.FirstOrDefault(x => x.UserName != null && x.UserName.Equals(broadcaster, StringComparison.OrdinalIgnoreCase));
             if (broadcasterProfile != null && !string.IsNullOrWhiteSpace(broadcasterProfile.Pronouns))
                 pronounContextEntries.Add($"{broadcasterProfile.PreferredName} uses pronouns {broadcasterProfile.Pronouns}.");
             foreach (var uname in mentionedUsers.Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                var mentionedProfile = allUserProfiles.FirstOrDefault(x => x.UserName != null && x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
+                var mentionedProfile = allUserProfiles?.FirstOrDefault(x => x.UserName != null && x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
                 if (mentionedProfile != null && !string.IsNullOrWhiteSpace(mentionedProfile.Pronouns))
                     pronounContextEntries.Add($"{mentionedProfile.PreferredName} uses pronouns {mentionedProfile.Pronouns}.");
             }
-            if (pronounContextEntries.Count > 0)
-            {
-                string pronounContext = "Known pronouns for participants: " + string.Join(" ", pronounContextEntries);
-                enrichmentSections.Add(pronounContext);
-                LogToFile($"[AskGPTWebhook] DEBUG: Pronoun context: {pronounContext}", "DEBUG");
-            }
-            enrichmentSections.Add($"{context}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}");
-            foreach (string uname in mentionedUsers.Distinct(StringComparer.OrdinalIgnoreCase))
-            {
-                var mentionedProfile = allUserProfiles.FirstOrDefault(x => x.UserName != null && x.UserName.Equals(uname, StringComparison.OrdinalIgnoreCase));
-                if (mentionedProfile != null)
-                {
-                    string preferred = mentionedProfile.PreferredName;
-                    string pronouns = "";
-                    if (!string.IsNullOrWhiteSpace(mentionedProfile.Pronouns))
-                        pronouns = $" (pronouns: {mentionedProfile.Pronouns})";
-                    enrichmentSections.Add($"User: {preferred}{pronouns}");
-                    if (mentionedProfile.Knowledge != null && mentionedProfile.Knowledge.Count > 0)
-                        enrichmentSections.Add($"Memories about {preferred}: {string.Join("; ", mentionedProfile.Knowledge)}");
-                }
-            }
-            foreach (var doc in keywordDocs)
-            {
-                string keyword = doc["Keyword"]?.AsString;
-                string definition = doc["Definition"]?.AsString;
-                if (!string.IsNullOrWhiteSpace(keyword) && !string.IsNullOrWhiteSpace(definition))
-                {
-                    if (fullMessage.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0)
-                        enrichmentSections.Add($"Something you know about {keyword}: {definition}");
-                }
-            }
-            foreach (var doc in keywordDocs)
-            {
-                string keyword = doc["Keyword"]?.AsString;
-                string definition = doc["Definition"]?.AsString;
-                if (!string.IsNullOrWhiteSpace(keyword) && !string.IsNullOrWhiteSpace(definition))
-                {
-                    if (mentionedUsers.Any(n => n.Equals(keyword, StringComparison.OrdinalIgnoreCase)))
-                        enrichmentSections.Add($"Something you know about {keyword}: {definition}");
-                }
-            }
-            contextBody = string.Join("\n", enrichmentSections);
-            prompt = $"{userToSpeak} asks: {fullMessage}";
-            LogToFile($"[AskGPTWebhook] DEBUG: Assembled enriched context for webhook:\n{contextBody}", "DEBUG");
+            string pronounBehavior = "It is important to remain context-aware of participants' self-identified pronouns and to use them correctly and respectfully in all responses.";
+            string pronounData = "Known pronouns for participants: " + string.Join("; ", pronounContextEntries) + ".";
+            messages.Add(new chatMessage { role = "user", content = $"{pronounBehavior} {pronounData}" });
+            messages.Add(new chatMessage { role = "assistant", content = "OK" });
+            LogToFile($"[AskGPTWebhook] INFO: Added {pronounContextEntries.Count} pronoun entries to context.", "INFO");
+
+            // PHASE 6: Hand-off and final prompt
+            LogToFile("[AskGPTWebhook] DEBUG: Finishing context transmission and resuming normal conversation mode.", "DEBUG");
+            messages.Add(new chatMessage { role = "system", content = "All context updates received. Resume normal conversation mode." });
+            messages.Add(new chatMessage { role = "assistant", content = "OK" });
+            string finalPrompt = $"{userToSpeak} asks: {fullMessage} You must respond in less than 500 characters.";
+            messages.Add(new chatMessage { role = "user", content = finalPrompt });
         }
-        catch (Exception ex)
+        catch (Exception exDB)
         {
-            LogToFile($"[AskGPTWebhook] ERROR: Context/database setup failed: {ex.Message}", "ERROR");
-            LogToFile($"[AskGPTWebhook] Stack: {ex.StackTrace}", "DEBUG");
+            LogToFile($"[AskGPTWebhook] ERROR: Database/context gathering failed: {exDB.Message}", "ERROR");
+            LogToFile($"[AskGPTWebhook] Stack: {exDB.StackTrace}", "DEBUG");
             LogToFile($"[AskGPTWebhook] Context: databasePath='{databasePath}', characterFileName='{characterFileName}', characterNumber={characterNumber}", "ERROR");
             return false;
         }
-
-        // --- Dynamic Context Assembly (Keywords + User Knowledge) ---
-        // --- Dynamic Context Assembly (Keywords + User Knowledge) ---
-        List<BsonDocument> keywordDocs_web = null;
-        List<BsonDocument> profileDocs_web = null;
-        Dictionary<string, string> keywordDict_web = null;
-        Dictionary<string, BsonDocument> userDict_web = null;
-        try
-        {
-            LogToFile("[AskGPTWebhook] DEBUG: Starting dynamic context assembly.", "DEBUG");
-
-            keywordDocs_web = _db.GetCollection<BsonDocument>("keywords").FindAll().ToList();
-            profileDocs_web = _db.GetCollection<BsonDocument>("user_profiles").FindAll().ToList();
-
-            // Null safety for ToDictionary
-            keywordDict_web = keywordDocs_web
-                .Where(k => k.ContainsKey("Keyword") && k.ContainsKey("Definition"))
-                .ToDictionary(k => k["Keyword"].AsString.ToLowerInvariant(), k => k["Definition"].AsString);
-
-            userDict_web = profileDocs_web
-                .Where(u => u.ContainsKey("UserName"))
-                .ToDictionary(u => u["UserName"].AsString.ToLowerInvariant(), u => u);
-
-            var contextSb_web = new StringBuilder();
-            if (!string.IsNullOrEmpty(contextBody))
-                contextSb_web.AppendLine(contextBody);
-
-            var words = prompt.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
-                              .Select(w => w.TrimStart('@').ToLowerInvariant())
-                              .Distinct()
-                              .ToList();
-
-            int insertedCount = 0;
-            foreach (var w in words)
-            {
-                if (keywordDict_web.TryGetValue(w, out var def))
-                {
-                    var line = $"Something you remember about {w} is {def}.";
-                    contextSb_web.AppendLine(line);
-                    insertedCount++;
-                    LogToFile($"[AskGPTWebhook] INFO: Inserted context for keyword '{w}' -> \"{def}\"", "INFO");
-                }
-
-                if (userDict_web.TryGetValue(w, out var profile))
-                {
-                    if (profile["Knowledge"].IsArray && profile["Knowledge"].AsArray.Count > 0)
-                    {
-                        var know = string.Join(", ", profile["Knowledge"].AsArray.Select(k => k.AsString));
-                        var line = $"Something I remember about {w} is {know}.";
-                        contextSb_web.AppendLine(line);
-                        insertedCount++;
-                        LogToFile($"[AskGPTWebhook] INFO: Inserted context for user '{w}' -> \"{know}\"", "INFO");
-                    }
-                }
-            }
-
-            contextBody = contextSb_web.ToString();
-            LogToFile($"[AskGPTWebhook] DEBUG: Dynamic context assembly complete. Inserted {insertedCount} entries.", "DEBUG");
-
-            // --- Begin INFO-level summary of dynamic context detection (keywords/mentions) ---
-            try
-            {
-                var detectedKeywords = keywordDict_web?.Keys?.Where(k => fullMessage.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0).ToList() ?? new List<string>();
-                var detectedMentions = mentionedUsers?.Distinct(StringComparer.OrdinalIgnoreCase).ToList() ?? new List<string>();
-
-                if (detectedKeywords.Count > 0 || detectedMentions.Count > 0)
-                {
-                    LogToFile($"[AskGPTWebhook] INFO: Dynamic context updated. Keywords detected: [{string.Join(", ", detectedKeywords)}]; User mentions detected: [{string.Join(", ", detectedMentions)}].", "INFO");
-                }
-                else
-                {
-                    LogToFile("[AskGPTWebhook] INFO: No dynamic context keywords or user mentions detected.", "INFO");
-                }
-            }
-            catch (Exception ex)
-            {
-                LogToFile($"[AskGPTWebhook] WARN: Failed to log dynamic context detection: {ex.Message}", "WARN");
-            }
-            // --- End INFO-level summary of dynamic context detection ---
-        }
-        catch (Exception ex)
-        {
-            LogToFile($"[AskGPTWebhook] ERROR: Context assembly failed: {ex.Message}", "ERROR");
-            LogToFile($"[AskGPTWebhook] Stack: {ex.StackTrace}", "DEBUG");
-        }
-        // --- End Dynamic Context Assembly ---
-        // --- End Dynamic Context Assembly ---
+        // ==== End 6-phase Coaching Mode Context Assembly ====
 
         string completionsRequestJSON = null;
         string completionsResponseContent = null;
@@ -3937,9 +3786,6 @@ public class CPHInline
             if (string.IsNullOrWhiteSpace(completionsUrl))
                 completionsUrl = "https://api.openai.com/v1/chat/completions";
             LogToFile($"[AskGPTWebhook] DEBUG: Using completions endpoint: {completionsUrl}", "DEBUG");
-            var messages = new List<chatMessage>();
-            messages.Add(new chatMessage { role = "system", content = contextBody });
-            messages.Add(new chatMessage { role = "user", content = $"{prompt} You must respond in less than 500 characters." });
             completionsRequestJSON = JsonConvert.SerializeObject(new { model = AIModel, messages = messages }, Formatting.Indented);
             LogToFile($"[AskGPTWebhook] DEBUG: Request JSON: {completionsRequestJSON}", "DEBUG");
             for (int attempt = 0; attempt < maxAttempts && !apiSuccess; attempt++)
