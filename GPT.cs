@@ -2907,7 +2907,7 @@ public class CPHInline
         string broadcaster = null, currentTitle = null, currentGame = null;
         var userCollection = _db.GetCollection<UserProfile>("user_profiles");
         var allUserProfiles = (List<UserProfile>)null;
-        var keywordsCol = _db.GetCollection<BsonDocument>("Keywords");
+        var keywordsCol = _db.GetCollection<BsonDocument>("keywords");
         var keywordDocs = (List<BsonDocument>)null;
         List<string> mentionedUsers = null;
         var pronounContextEntries = (List<string>)null;
@@ -3127,69 +3127,53 @@ public class CPHInline
                     {
                         LogToFile("[AskGPT] DEBUG: Starting dynamic context assembly.", "DEBUG");
 
-                        // Declare variables in scope for finally block
                         List<BsonDocument> profileDocs = null;
                         Dictionary<string, string> keywordDict = null;
                         Dictionary<string, BsonDocument> userDict = null;
-                        try
+                        // Use the existing keywordDocs variable already declared
+                        profileDocs = _db.GetCollection<BsonDocument>("user_profiles").FindAll().ToList();
+
+                        // Null safety for ToDictionary()
+                        keywordDict = keywordDocs
+                            .Where(k => k.ContainsKey("Keyword") && k.ContainsKey("Definition"))
+                            .ToDictionary(k => k["Keyword"].AsString.ToLowerInvariant(), k => k["Definition"].AsString);
+
+                        userDict = profileDocs
+                            .Where(u => u.ContainsKey("UserName"))
+                            .ToDictionary(u => u["UserName"].AsString.ToLowerInvariant(), u => u);
+
+                        var words = prompt.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                                          .Select(w => w.TrimStart('@').ToLowerInvariant())
+                                          .Distinct()
+                                          .ToList();
+
+                        var insertedCount = 0;
+
+                        foreach (var word in words)
                         {
-                            // Use the existing keywordDocs variable already declared
-                            profileDocs = _db.GetCollection<BsonDocument>("user_profiles").FindAll().ToList();
-
-                            keywordDict = keywordDocs.ToDictionary(
-                                k => k["Keyword"].AsString.ToLowerInvariant(),
-                                k => k["Definition"].AsString);
-
-                            userDict = profileDocs.ToDictionary(
-                                u => u["UserName"].AsString.ToLowerInvariant(),
-                                u => u);
-
-                            var words = prompt.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
-                                              .Select(w => w.TrimStart('@').ToLowerInvariant())
-                                              .Distinct()
-                                              .ToList();
-
-                            var insertedCount = 0;
-
-                            foreach (var word in words)
+                            if (keywordDict.TryGetValue(word, out var def))
                             {
-                                if (keywordDict.TryGetValue(word, out var def))
-                                {
-                                    var line = $"Something you remember about {word} is {def}.";
-                                    contextBody.AppendLine(line);
-                                    insertedCount++;
-                                    LogToFile($"[AskGPT] INFO: Inserted context for keyword '{word}' -> \"{def}\"", "INFO");
-                                }
-
-                                if (userDict.TryGetValue(word, out var profile))
-                                {
-                                    if (profile["Knowledge"].IsArray && profile["Knowledge"].AsArray.Count > 0)
-                                    {
-                                        var know = string.Join(", ", profile["Knowledge"].AsArray.Select(k => k.AsString));
-                                        var line = $"Something I remember about {word} is {know}.";
-                                        contextBody.AppendLine(line);
-                                        insertedCount++;
-                                        LogToFile($"[AskGPT] INFO: Inserted context for user '{word}' -> \"{know}\"", "INFO");
-                                    }
-                                }
+                                var line = $"Something you remember about {word} is {def}.";
+                                contextBody.AppendLine(line);
+                                insertedCount++;
+                                LogToFile($"[AskGPT] INFO: Inserted context for keyword '{word}' -> \"{def}\"", "INFO");
                             }
 
-                            LogToFile($"[AskGPT] DEBUG: Dynamic context assembly complete. Inserted {insertedCount} entries.", "DEBUG");
+                            if (userDict.TryGetValue(word, out var profile))
+                            {
+                                if (profile["Knowledge"].IsArray && profile["Knowledge"].AsArray.Count > 0)
+                                {
+                                    var know = string.Join(", ", profile["Knowledge"].AsArray.Select(k => k.AsString));
+                                    var line = $"Something I remember about {word} is {know}.";
+                                    contextBody.AppendLine(line);
+                                    insertedCount++;
+                                    LogToFile($"[AskGPT] INFO: Inserted context for user '{word}' -> \"{know}\"", "INFO");
+                                }
+                            }
                         }
-                        finally
-                        {
-                            // Explicit cleanup
-                            LogToFile("[AskGPT] DEBUG: Clearing context dictionaries from memory.", "DEBUG");
-                            keywordDocs?.Clear();
-                            profileDocs?.Clear();
-                            keywordDict?.Clear();
-                            userDict?.Clear();
-                            keywordDocs = null;
-                            profileDocs = null;
-                            keywordDict = null;
-                            userDict = null;
-                            LogToFile("[AskGPT] DEBUG: Context dictionaries cleared from memory.", "DEBUG");
-                        }
+
+                        LogToFile($"[AskGPT] DEBUG: Dynamic context assembly complete. Inserted {insertedCount} entries.", "DEBUG");
+                        // No finally block here; cleanup moved to end of AskGPT
                     }
                     catch (Exception ex)
                     {
@@ -3235,6 +3219,9 @@ public class CPHInline
                             enrichmentSections.Add($"Something you know about {keyword}: {definition}");
                     }
                 }
+                // Null safety for contextBody
+                if (contextBody == null)
+                    contextBody = new System.Text.StringBuilder();
                 // Append enrichment sections to contextBody
                 foreach (var section in enrichmentSections)
                 {
@@ -3550,6 +3537,7 @@ public class CPHInline
                 LogToFile($"[AskGPT] Context: voiceEnabled={voiceEnabled}, postToChat={postToChat}, characterNumber={characterNumber}, voiceAlias='{voiceAlias}'", "ERROR");
                 return false;
             }
+            // Cleanup keywordDocs and allUserProfiles at the end
             if (allUserProfiles != null)
             {
                 allUserProfiles.Clear();
@@ -3574,6 +3562,17 @@ public class CPHInline
                 CPH.SendMessage("An internal error occurred in AskGPT.", true);
             else
                 LogToFile("[AskGPT] [Skipped Chat Output] Post To Chat disabled. Message: An internal error occurred in AskGPT.", "WARN");
+            // Cleanup keywordDocs and allUserProfiles at the end (also on fatal error)
+            if (allUserProfiles != null)
+            {
+                allUserProfiles.Clear();
+                allUserProfiles = null;
+            }
+            if (keywordDocs != null)
+            {
+                keywordDocs.Clear();
+                keywordDocs = null;
+            }
             LogToFile("==== End AskGPT Execution ====", "DEBUG");
             return false;
         }
@@ -3676,7 +3675,7 @@ public class CPHInline
         var allUserProfiles = new List<UserProfile>();
         var keywordDocs = new List<BsonDocument>();
         var userCollection = _db.GetCollection<UserProfile>("user_profiles");
-        var keywordsCol = _db.GetCollection<BsonDocument>("Keywords");
+        var keywordsCol = _db.GetCollection<BsonDocument>("keywords");
         string pronounSubject = null, pronounObject = null, pronounPossessive = null, pronounReflexive = null, pronounDescription = "";
         string userToSpeak = "User";
         List<string> mentionedUsers = new List<string>();
@@ -3799,24 +3798,30 @@ public class CPHInline
         }
 
         // --- Dynamic Context Assembly (Keywords + User Knowledge) ---
+        // --- Dynamic Context Assembly (Keywords + User Knowledge) ---
+        List<BsonDocument> keywordDocs_web = null;
+        List<BsonDocument> profileDocs_web = null;
+        Dictionary<string, string> keywordDict_web = null;
+        Dictionary<string, BsonDocument> userDict_web = null;
         try
         {
             LogToFile("[AskGPTWebhook] DEBUG: Starting dynamic context assembly.", "DEBUG");
 
-            var keywordDocs_web = _db.GetCollection<BsonDocument>("keywords").FindAll().ToList();
-            var profileDocs_web = _db.GetCollection<BsonDocument>("user_profiles").FindAll().ToList();
+            keywordDocs_web = _db.GetCollection<BsonDocument>("keywords").FindAll().ToList();
+            profileDocs_web = _db.GetCollection<BsonDocument>("user_profiles").FindAll().ToList();
 
-            var keywordDict_web = keywordDocs_web.ToDictionary(
-                k => k["Keyword"].AsString.ToLowerInvariant(),
-                k => k["Definition"].AsString);
+            // Null safety for ToDictionary
+            keywordDict_web = keywordDocs_web
+                .Where(k => k.ContainsKey("Keyword") && k.ContainsKey("Definition"))
+                .ToDictionary(k => k["Keyword"].AsString.ToLowerInvariant(), k => k["Definition"].AsString);
 
-            var userDict_web = profileDocs_web.ToDictionary(
-                u => u["UserName"].AsString.ToLowerInvariant(),
-                u => u);
+            userDict_web = profileDocs_web
+                .Where(u => u.ContainsKey("UserName"))
+                .ToDictionary(u => u["UserName"].AsString.ToLowerInvariant(), u => u);
 
-            var contextSb = new StringBuilder();
+            var contextSb_web = new StringBuilder();
             if (!string.IsNullOrEmpty(contextBody))
-                contextSb.AppendLine(contextBody);
+                contextSb_web.AppendLine(contextBody);
 
             var words = prompt.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
                               .Select(w => w.TrimStart('@').ToLowerInvariant())
@@ -3829,7 +3834,7 @@ public class CPHInline
                 if (keywordDict_web.TryGetValue(w, out var def))
                 {
                     var line = $"Something you remember about {w} is {def}.";
-                    contextSb.AppendLine(line);
+                    contextSb_web.AppendLine(line);
                     insertedCount++;
                     LogToFile($"[AskGPTWebhook] INFO: Inserted context for keyword '{w}' -> \"{def}\"", "INFO");
                 }
@@ -3840,14 +3845,14 @@ public class CPHInline
                     {
                         var know = string.Join(", ", profile["Knowledge"].AsArray.Select(k => k.AsString));
                         var line = $"Something I remember about {w} is {know}.";
-                        contextSb.AppendLine(line);
+                        contextSb_web.AppendLine(line);
                         insertedCount++;
                         LogToFile($"[AskGPTWebhook] INFO: Inserted context for user '{w}' -> \"{know}\"", "INFO");
                     }
                 }
             }
 
-            contextBody = contextSb.ToString();
+            contextBody = contextSb_web.ToString();
             LogToFile($"[AskGPTWebhook] DEBUG: Dynamic context assembly complete. Inserted {insertedCount} entries.", "DEBUG");
         }
         catch (Exception ex)
@@ -3855,23 +3860,7 @@ public class CPHInline
             LogToFile($"[AskGPTWebhook] ERROR: Context assembly failed: {ex.Message}", "ERROR");
             LogToFile($"[AskGPTWebhook] Stack: {ex.StackTrace}", "DEBUG");
         }
-        finally
-        {
-            LogToFile("[AskGPTWebhook] DEBUG: Clearing context dictionaries from memory.", "DEBUG");
-            // Defensive null checks
-            try {
-                var keywordDocs_web = _db.GetCollection<BsonDocument>("keywords")?.FindAll()?.ToList();
-                var profileDocs_web = _db.GetCollection<BsonDocument>("user_profiles")?.FindAll()?.ToList();
-                if (keywordDocs_web != null) keywordDocs_web.Clear();
-                if (profileDocs_web != null) profileDocs_web.Clear();
-            } catch { }
-            try {
-                var keywordDict_web = new Dictionary<string, string>();
-                var userDict_web = new Dictionary<string, BsonDocument>();
-                keywordDict_web.Clear();
-                userDict_web.Clear();
-            } catch { }
-        }
+        // --- End Dynamic Context Assembly ---
         // --- End Dynamic Context Assembly ---
 
         string completionsRequestJSON = null;
@@ -4246,6 +4235,17 @@ public class CPHInline
         {
             keywordDocs.Clear();
             keywordDocs = null;
+        }
+        // Cleanup for dynamic context assembly collections
+        if (profileDocs_web != null)
+        {
+            profileDocs_web.Clear();
+            profileDocs_web = null;
+        }
+        if (keywordDocs_web != null)
+        {
+            keywordDocs_web.Clear();
+            keywordDocs_web = null;
         }
         LogToFile("[AskGPTWebhook] DEBUG: Cleared user and keyword collections from memory.", "DEBUG");
         LogToFile("==== End AskGPTWebhook Execution ====", "DEBUG");
