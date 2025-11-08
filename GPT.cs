@@ -3293,9 +3293,13 @@ public class CPHInline
                         using (StreamReader responseReader = new StreamReader(completionsWebResponse.GetResponseStream()))
                         {
                             completionsResponseContent = responseReader.ReadToEnd();
+                            // Log raw model output before any parsing or cleaning
+                            LogToFile($"[AskGPT] INFO: Raw model output: {completionsResponseContent}", "INFO");
                             LogToFile($"[AskGPT] DEBUG: Response JSON: {completionsResponseContent}", "DEBUG");
                             completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
                             GPTResponse = completionsJsonResponse?.Choices?.FirstOrDefault()?.Message?.content ?? string.Empty;
+                            // Log parsed model output (uncleaned)
+                            LogToFile($"[AskGPT] INFO: Parsed model output (uncleaned): {GPTResponse}", "INFO");
                             apiSuccess = true;
                         }
                     }
@@ -3368,9 +3372,11 @@ public class CPHInline
                 LogToFile($"[AskGPT] Stack: {exScore.StackTrace}", "DEBUG");
                 LogToFile($"[AskGPT] Context: AIModel='{AIModel}', userName='{userName}'", "ERROR");
             }
-
+            
             GPTResponse = CleanAIText(GPTResponse);
             LogToFile("[AskGPT] DEBUG: Applied CleanAIText() to GPT response.", "DEBUG");
+            // Log cleaned model output
+            LogToFile($"[AskGPT] INFO: Cleaned model output: {GPTResponse}", "INFO");
             LogToFile($"[AskGPT] INFO: Model response: {GPTResponse}", "INFO");
             if (!apiSuccess || string.IsNullOrWhiteSpace(GPTResponse))
             {
@@ -3906,9 +3912,13 @@ public class CPHInline
                     using (StreamReader responseReader = new StreamReader(completionsWebResponse.GetResponseStream()))
                     {
                         completionsResponseContent = responseReader.ReadToEnd();
+                        // Log raw model output before any parsing or cleaning
+                        LogToFile($"[AskGPTWebhook] INFO: Raw model output: {completionsResponseContent}", "INFO");
                         LogToFile($"[AskGPTWebhook] DEBUG: Response JSON: {completionsResponseContent}", "DEBUG");
                         var completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
                         GPTResponse = completionsJsonResponse?.Choices?.FirstOrDefault()?.Message?.content ?? string.Empty;
+                        // Log parsed model output (uncleaned)
+                        LogToFile($"[AskGPTWebhook] INFO: Parsed model output (uncleaned): {GPTResponse}", "INFO");
                         apiSuccess = true;
                     }
                 }
@@ -3980,6 +3990,8 @@ public class CPHInline
 
         GPTResponse = CleanAIText(GPTResponse);
         LogToFile("[AskGPTWebhook] DEBUG: Applied CleanAIText() to GPT response.", "DEBUG");
+        // Log cleaned model output before any output occurs
+        LogToFile($"[AskGPTWebhook] INFO: Cleaned model output: {GPTResponse}", "INFO");
         if (!apiSuccess || string.IsNullOrWhiteSpace(GPTResponse))
         {
             if (!apiSuccess)
