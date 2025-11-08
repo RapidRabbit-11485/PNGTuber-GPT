@@ -2912,7 +2912,9 @@ public class CPHInline
         List<string> mentionedUsers = null;
         var pronounContextEntries = (List<string>)null;
         var enrichmentSections = (List<string>)null;
-        string contextBody = null;
+        // Use StringBuilder for contextBody to support AppendLine()
+        var contextBody = new System.Text.StringBuilder();
+        string contextBodyString = null;
         System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
         string completionsRequestJSON = null;
         string completionsResponseContent = null;
@@ -3125,65 +3127,72 @@ public class CPHInline
                     {
                         LogToFile("[AskGPT] DEBUG: Starting dynamic context assembly.", "DEBUG");
 
-                        var keywordDocs = _db.GetCollection<BsonDocument>("keywords").FindAll().ToList();
-                        var profileDocs = _db.GetCollection<BsonDocument>("user_profiles").FindAll().ToList();
-
-                        var keywordDict = keywordDocs.ToDictionary(
-                            k => k["Keyword"].AsString.ToLowerInvariant(),
-                            k => k["Definition"].AsString);
-
-                        var userDict = profileDocs.ToDictionary(
-                            u => u["UserName"].AsString.ToLowerInvariant(),
-                            u => u);
-
-                        var words = prompt.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                                          .Select(w => w.TrimStart('@').ToLowerInvariant())
-                                          .Distinct()
-                                          .ToList();
-
-                        var insertedCount = 0;
-
-                        foreach (var word in words)
+                        // Declare variables in scope for finally block
+                        List<BsonDocument> profileDocs = null;
+                        Dictionary<string, string> keywordDict = null;
+                        Dictionary<string, BsonDocument> userDict = null;
+                        try
                         {
-                            if (keywordDict.TryGetValue(word, out var def))
-                            {
-                                var line = $"Something you remember about {word} is {def}.";
-                                contextBody.AppendLine(line);
-                                insertedCount++;
-                                LogToFile($"[AskGPT] INFO: Inserted context for keyword '{word}' -> \"{def}\"", "INFO");
-                            }
+                            // Use the existing keywordDocs variable already declared
+                            profileDocs = _db.GetCollection<BsonDocument>("user_profiles").FindAll().ToList();
 
-                            if (userDict.TryGetValue(word, out var profile))
+                            keywordDict = keywordDocs.ToDictionary(
+                                k => k["Keyword"].AsString.ToLowerInvariant(),
+                                k => k["Definition"].AsString);
+
+                            userDict = profileDocs.ToDictionary(
+                                u => u["UserName"].AsString.ToLowerInvariant(),
+                                u => u);
+
+                            var words = prompt.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                                              .Select(w => w.TrimStart('@').ToLowerInvariant())
+                                              .Distinct()
+                                              .ToList();
+
+                            var insertedCount = 0;
+
+                            foreach (var word in words)
                             {
-                                if (profile["Knowledge"].IsArray && profile["Knowledge"].AsArray.Count > 0)
+                                if (keywordDict.TryGetValue(word, out var def))
                                 {
-                                    var know = string.Join(", ", profile["Knowledge"].AsArray.Select(k => k.AsString));
-                                    var line = $"Something I remember about {word} is {know}.";
+                                    var line = $"Something you remember about {word} is {def}.";
                                     contextBody.AppendLine(line);
                                     insertedCount++;
-                                    LogToFile($"[AskGPT] INFO: Inserted context for user '{word}' -> \"{know}\"", "INFO");
+                                    LogToFile($"[AskGPT] INFO: Inserted context for keyword '{word}' -> \"{def}\"", "INFO");
+                                }
+
+                                if (userDict.TryGetValue(word, out var profile))
+                                {
+                                    if (profile["Knowledge"].IsArray && profile["Knowledge"].AsArray.Count > 0)
+                                    {
+                                        var know = string.Join(", ", profile["Knowledge"].AsArray.Select(k => k.AsString));
+                                        var line = $"Something I remember about {word} is {know}.";
+                                        contextBody.AppendLine(line);
+                                        insertedCount++;
+                                        LogToFile($"[AskGPT] INFO: Inserted context for user '{word}' -> \"{know}\"", "INFO");
+                                    }
                                 }
                             }
-                        }
 
-                        LogToFile($"[AskGPT] DEBUG: Dynamic context assembly complete. Inserted {insertedCount} entries.", "DEBUG");
+                            LogToFile($"[AskGPT] DEBUG: Dynamic context assembly complete. Inserted {insertedCount} entries.", "DEBUG");
+                        }
+                        finally
+                        {
+                            // Explicit cleanup
+                            LogToFile("[AskGPT] DEBUG: Clearing context dictionaries from memory.", "DEBUG");
+                            keywordDocs?.Clear();
+                            profileDocs?.Clear();
+                            keywordDict?.Clear();
+                            userDict?.Clear();
+                            keywordDocs = profileDocs = null;
+                            keywordDict = userDict = null;
+                            LogToFile("[AskGPT] DEBUG: Context dictionaries cleared from memory.", "DEBUG");
+                        }
                     }
                     catch (Exception ex)
                     {
                         LogToFile($"[AskGPT] ERROR: Context assembly failed: {ex.Message}", "ERROR");
                         LogToFile($"[AskGPT] Stack: {ex.StackTrace}", "DEBUG");
-                    }
-                    finally
-                    {
-                        // Explicit cleanup
-                        LogToFile("[AskGPT] DEBUG: Clearing context dictionaries from memory.", "DEBUG");
-                        keywordDocs?.Clear();
-                        profileDocs?.Clear();
-                        keywordDict?.Clear();
-                        userDict?.Clear();
-                        keywordDocs = profileDocs = null;
-                        keywordDict = userDict = null;
-                        LogToFile("[AskGPT] DEBUG: Context dictionaries cleared from memory.", "DEBUG");
                     }
                     // --- End Dynamic Context Assembly ---
                 }
@@ -3224,8 +3233,13 @@ public class CPHInline
                             enrichmentSections.Add($"Something you know about {keyword}: {definition}");
                     }
                 }
-                contextBody = string.Join("\n", enrichmentSections);
-                LogToFile("Assembled dynamic context body for GPT prompt (LiteDB):\n" + contextBody, "DEBUG");
+                // Append enrichment sections to contextBody
+                foreach (var section in enrichmentSections)
+                {
+                    contextBody.AppendLine(section);
+                }
+                contextBodyString = contextBody.ToString();
+                LogToFile("Assembled dynamic context body for GPT prompt (LiteDB):\n" + contextBodyString, "DEBUG");
             }
             catch (Exception exDB)
             {
@@ -3246,7 +3260,7 @@ public class CPHInline
                 apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
                 AIModel = CPH.GetGlobalVar<string>("OpenAI Model", true);
                 messages = new List<chatMessage>();
-                messages.Add(new chatMessage { role = "system", content = contextBody });
+                messages.Add(new chatMessage { role = "system", content = contextBodyString });
                 messages.Add(new chatMessage
                 {
                     role = "user",
@@ -3436,7 +3450,7 @@ public class CPHInline
                         var fullPayloadObj = new
                         {
                             prompt = prompt,
-                            contextBody = contextBody,
+                            contextBody = contextBodyString,
                             completionsRequestJSON = completionsRequestJSON,
                             completionsResponseContent = completionsResponseContent
                         };
