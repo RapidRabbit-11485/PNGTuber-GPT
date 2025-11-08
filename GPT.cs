@@ -3640,11 +3640,11 @@ public class CPHInline
         try
         {
             characterNumber = CPH.GetGlobalVar<int>("character", true);
-            LogToFile($"Active character number set to {characterNumber}.", "DEBUG");
+            LogToFile($"[AskGPTWebhook] DEBUG: Active character number set to {characterNumber}.", "DEBUG");
         }
         catch (Exception ex)
         {
-            LogToFile("No active 'character' variable found. Defaulting to 1.", "WARN");
+            LogToFile("[AskGPTWebhook] DEBUG: No active 'character' variable found. Defaulting to 1.", "DEBUG");
             LogToFile($"[AskGPTWebhook] Context: exception={ex.Message}", "DEBUG");
         }
 
@@ -3658,17 +3658,17 @@ public class CPHInline
             LogToFile($"[AskGPTWebhook] ERROR: Could not get voice alias for Character {characterNumber}: {ex.Message}", "ERROR");
             LogToFile($"[AskGPTWebhook] Stack: {ex.StackTrace}", "DEBUG");
         }
-            if (string.IsNullOrWhiteSpace(voiceAlias))
-            {
-                string err = $"No voice alias configured for Character {characterNumber}. Please set 'character_voice_alias_{characterNumber}'.";
-                LogToFile(err, "ERROR");
-                if (postToChat)
-                    CPH.SendMessage(err, true);
-                else
-                    LogToFile($"[AskGPTWebhook] [Skipped Chat Output] Post To Chat disabled. Message: {err}", "DEBUG");
-                LogToFile("==== End AskGPTWebhook Execution ====", "DEBUG");
-                return false;
-            }
+        if (string.IsNullOrWhiteSpace(voiceAlias))
+        {
+            string err = $"No voice alias configured for Character {characterNumber}. Please set 'character_voice_alias_{characterNumber}'.";
+            LogToFile(err, "ERROR");
+            if (postToChat)
+                CPH.SendMessage(err, true);
+            else
+                LogToFile($"[AskGPTWebhook] [Skipped Chat Output] Post To Chat disabled. Message: {err}", "DEBUG");
+            LogToFile("==== End AskGPTWebhook Execution ====", "DEBUG");
+            return false;
+        }
 
         string databasePath = null, characterFileName = null, ContextFilePath = null, context = null, broadcaster = null, currentTitle = null, currentGame = null;
         var allUserProfiles = new List<UserProfile>();
@@ -3688,14 +3688,14 @@ public class CPHInline
             if (string.IsNullOrWhiteSpace(databasePath))
             {
                 LogToFile("'Database Path' global variable is not found or not a valid string.", "ERROR");
-                LogToFile("==== End AskGPTWebhook Execution ====", "INFO");
+                LogToFile("==== End AskGPTWebhook Execution ====", "DEBUG");
                 return false;
             }
             characterFileName = CPH.GetGlobalVar<string>($"character_file_{characterNumber}", true);
             if (string.IsNullOrWhiteSpace(characterFileName))
             {
                 characterFileName = "context.txt";
-                LogToFile($"Character file not set for {characterNumber}, defaulting to context.txt", "WARN");
+                LogToFile($"[AskGPTWebhook] DEBUG: Character file not set for {characterNumber}, defaulting to context.txt", "DEBUG");
             }
             ContextFilePath = Path.Combine(databasePath, characterFileName);
             context = File.Exists(ContextFilePath) ? File.ReadAllText(ContextFilePath) : "";
@@ -3746,7 +3746,7 @@ public class CPHInline
             {
                 string pronounContext = "Known pronouns for participants: " + string.Join(" ", pronounContextEntries);
                 enrichmentSections.Add(pronounContext);
-                LogToFile($"[AskGPTWebhook] INFO: Pronoun context: {pronounContext}", "INFO");
+                LogToFile($"[AskGPTWebhook] DEBUG: Pronoun context: {pronounContext}", "DEBUG");
             }
             enrichmentSections.Add($"{context}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}");
             foreach (string uname in mentionedUsers.Distinct(StringComparer.OrdinalIgnoreCase))
@@ -3795,6 +3795,82 @@ public class CPHInline
             LogToFile($"[AskGPTWebhook] Context: databasePath='{databasePath}', characterFileName='{characterFileName}', characterNumber={characterNumber}", "ERROR");
             return false;
         }
+
+        // --- Dynamic Context Assembly (Keywords + User Knowledge) ---
+        try
+        {
+            LogToFile("[AskGPTWebhook] DEBUG: Starting dynamic context assembly.", "DEBUG");
+
+            var keywordDocs_web = _db.GetCollection<BsonDocument>("keywords").FindAll().ToList();
+            var profileDocs_web = _db.GetCollection<BsonDocument>("user_profiles").FindAll().ToList();
+
+            var keywordDict_web = keywordDocs_web.ToDictionary(
+                k => k["Keyword"].AsString.ToLowerInvariant(),
+                k => k["Definition"].AsString);
+
+            var userDict_web = profileDocs_web.ToDictionary(
+                u => u["UserName"].AsString.ToLowerInvariant(),
+                u => u);
+
+            var contextSb = new StringBuilder();
+            if (!string.IsNullOrEmpty(contextBody))
+                contextSb.AppendLine(contextBody);
+
+            var words = prompt.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                              .Select(w => w.TrimStart('@').ToLowerInvariant())
+                              .Distinct()
+                              .ToList();
+
+            int insertedCount = 0;
+            foreach (var w in words)
+            {
+                if (keywordDict_web.TryGetValue(w, out var def))
+                {
+                    var line = $"Something you remember about {w} is {def}.";
+                    contextSb.AppendLine(line);
+                    insertedCount++;
+                    LogToFile($"[AskGPTWebhook] INFO: Inserted context for keyword '{w}' -> \"{def}\"", "INFO");
+                }
+
+                if (userDict_web.TryGetValue(w, out var profile))
+                {
+                    if (profile["Knowledge"].IsArray && profile["Knowledge"].AsArray.Count > 0)
+                    {
+                        var know = string.Join(", ", profile["Knowledge"].AsArray.Select(k => k.AsString));
+                        var line = $"Something I remember about {w} is {know}.";
+                        contextSb.AppendLine(line);
+                        insertedCount++;
+                        LogToFile($"[AskGPTWebhook] INFO: Inserted context for user '{w}' -> \"{know}\"", "INFO");
+                    }
+                }
+            }
+
+            contextBody = contextSb.ToString();
+            LogToFile($"[AskGPTWebhook] DEBUG: Dynamic context assembly complete. Inserted {insertedCount} entries.", "DEBUG");
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"[AskGPTWebhook] ERROR: Context assembly failed: {ex.Message}", "ERROR");
+            LogToFile($"[AskGPTWebhook] Stack: {ex.StackTrace}", "DEBUG");
+        }
+        finally
+        {
+            LogToFile("[AskGPTWebhook] DEBUG: Clearing context dictionaries from memory.", "DEBUG");
+            // Defensive null checks
+            try {
+                var keywordDocs_web = _db.GetCollection<BsonDocument>("keywords")?.FindAll()?.ToList();
+                var profileDocs_web = _db.GetCollection<BsonDocument>("user_profiles")?.FindAll()?.ToList();
+                if (keywordDocs_web != null) keywordDocs_web.Clear();
+                if (profileDocs_web != null) profileDocs_web.Clear();
+            } catch { }
+            try {
+                var keywordDict_web = new Dictionary<string, string>();
+                var userDict_web = new Dictionary<string, BsonDocument>();
+                keywordDict_web.Clear();
+                userDict_web.Clear();
+            } catch { }
+        }
+        // --- End Dynamic Context Assembly ---
 
         string completionsRequestJSON = null;
         string completionsResponseContent = null;
@@ -4141,7 +4217,7 @@ public class CPHInline
             }
             catch (Exception ex)
             {
-                LogToFile($"[AskGPTWebhook] WARN: Could not get 'Log GPT Questions to Discord' global: {ex.Message}", "WARN");
+                LogToFile($"[AskGPTWebhook] DEBUG: Could not get 'Log GPT Questions to Discord' global: {ex.Message}", "DEBUG");
             }
             if (logDiscord)
             {
@@ -4169,6 +4245,7 @@ public class CPHInline
             keywordDocs.Clear();
             keywordDocs = null;
         }
+        LogToFile("[AskGPTWebhook] DEBUG: Cleared user and keyword collections from memory.", "DEBUG");
         LogToFile("==== End AskGPTWebhook Execution ====", "DEBUG");
         return true;
     }
