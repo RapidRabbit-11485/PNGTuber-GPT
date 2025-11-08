@@ -393,15 +393,13 @@ public class CPHInline
     {
         LogToFile($">>> [GetOrCreateUserProfile] Entry: userName='{userName}'", "DEBUG");
         UserProfile profile = null;
-        var userCollection = (LiteCollection<UserProfile>)null;
+        var userCollection = _db.GetCollection<UserProfile>("user_profiles");
         bool profileExisted = false;
         try
         {
-
             try
             {
                 LogToFile($"[GetOrCreateUserProfile] Retrieving collection 'user_profiles' for userName='{userName}'", "DEBUG");
-                userCollection = _db.GetCollection<UserProfile>("user_profiles");
                 userCollection.EnsureIndex(x => x.UserName, true);
             }
             catch (Exception exDb)
@@ -426,7 +424,7 @@ public class CPHInline
                         Pronouns = ""
                     };
                     userCollection.Insert(profile);
-                    LogToFile($"[UserProfile] Created new profile for userName='{userName}'", "INFO");
+                    LogToFile($"[UserProfile] Created new profile for userName='{userName}'", "DEBUG");
                 }
             }
             catch (Exception exFind)
@@ -508,7 +506,7 @@ public class CPHInline
                     var oldPronouns = profile.Pronouns;
                     profile.Pronouns = pronouns;
                     userCollection.Update(profile);
-                    LogToFile($"[UserProfile] Updated pronouns for userName='{userName}' from '{oldPronouns}' to '{pronouns}'.", "INFO");
+                    LogToFile($"[UserProfile] Updated pronouns for userName='{userName}' from '{oldPronouns}' to '{pronouns}'.", "DEBUG");
                 }
                 else if (string.IsNullOrWhiteSpace(pronouns))
                 {
@@ -724,7 +722,7 @@ public class CPHInline
         string preferredName = null;
         bool postToChat = false;
         UserProfile profile = null;
-        LiteCollection<UserProfile> userCollection = null;
+        var userCollection = _db.GetCollection<UserProfile>("user_profiles");
         bool success = false;
 
         try
@@ -772,21 +770,20 @@ public class CPHInline
         try
         {
             LogToFile("[UpdateUserPreferredName] Retrieving user_profiles collection from LiteDB.", "DEBUG");
-            userCollection = _db.GetCollection<UserProfile>("user_profiles");
             LogToFile("[UpdateUserPreferredName] Searching for existing profile.", "DEBUG");
             profile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
             if (profile == null)
             {
                 profile = new UserProfile { UserName = userName, PreferredName = preferredName, Pronouns = "" };
                 userCollection.Insert(profile);
-                LogToFile($"[UpdateUserPreferredName] Created new profile: userName='{userName}', preferredName='{preferredName}'.", "INFO");
+                LogToFile($"[UpdateUserPreferredName] Created new profile: userName='{userName}', preferredName='{preferredName}'.", "DEBUG");
             }
             else
             {
                 string oldPreferred = profile.PreferredName;
                 profile.PreferredName = preferredName;
                 userCollection.Update(profile);
-                LogToFile($"[UpdateUserPreferredName] Updated preferred name for userName='{userName}': '{oldPreferred}' => '{preferredName}'.", "INFO");
+                LogToFile($"[UpdateUserPreferredName] Updated preferred name for userName='{userName}': '{oldPreferred}' => '{preferredName}'.", "DEBUG");
             }
         }
         catch (Exception exDb)
@@ -808,7 +805,6 @@ public class CPHInline
         catch (Exception exChat)
         {
             LogToFile($"[UpdateUserPreferredName] WARN: Failed to retrieve 'Post To Chat': {exChat.Message}", "WARN");
-
             postToChat = false;
         }
         if (postToChat)
@@ -817,12 +813,11 @@ public class CPHInline
             {
                 LogToFile($"[UpdateUserPreferredName] Sending nickname confirmation message to chat: {message}", "DEBUG");
                 CPH.SendMessage(message, true);
-                LogToFile($"[UpdateUserPreferredName] Nickname confirmation message sent for userName='{userName}'.", "INFO");
+                LogToFile($"[UpdateUserPreferredName] Nickname confirmation message sent for userName='{userName}'.", "DEBUG");
             }
             catch (Exception exSend)
             {
                 LogToFile($"[UpdateUserPreferredName] WARN: Exception sending chat message: {exSend.Message}", "WARN");
-
             }
         }
         else
@@ -843,7 +838,7 @@ public class CPHInline
         bool profileReset = false;
         bool result = false;
         UserProfile profile = null;
-        LiteCollection<UserProfile> userCollection = null;
+        var userCollection = _db.GetCollection<UserProfile>("user_profiles");
 
         try
         {
@@ -867,14 +862,13 @@ public class CPHInline
         try
         {
             LogToFile("[DeleteUserProfile] Retrieving user_profiles collection from LiteDB.", "DEBUG");
-            userCollection = _db.GetCollection<UserProfile>("user_profiles");
             LogToFile("[DeleteUserProfile] Searching for existing profile.", "DEBUG");
             profile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
             profileExisted = (profile != null);
             if (!profileExisted)
             {
                 string message = $"{userName}, you don't have a custom nickname set.";
-                LogToFile($"[DeleteUserProfile] No profile found for userName='{userName}'.", "INFO");
+                LogToFile($"[DeleteUserProfile] No profile found for userName='{userName}'.", "DEBUG");
 
                 try
                 {
@@ -894,7 +888,7 @@ public class CPHInline
                     {
                         LogToFile($"[DeleteUserProfile] Sending 'no nickname' message to chat: {message}", "DEBUG");
                         CPH.SendMessage(message, true);
-                        LogToFile($"[DeleteUserProfile] 'No nickname' message sent for userName='{userName}'.", "INFO");
+                        LogToFile($"[DeleteUserProfile] 'No nickname' message sent for userName='{userName}'.", "DEBUG");
                     }
                     catch (Exception exSend)
                     {
@@ -915,7 +909,7 @@ public class CPHInline
             profile.PreferredName = userName;
             userCollection.Update(profile);
             profileReset = true;
-            LogToFile($"[DeleteUserProfile] Reset preferred name for userName='{userName}' from '{oldPreferredName}' to '{userName}'.", "INFO");
+            LogToFile($"[DeleteUserProfile] Reset preferred name for userName='{userName}' from '{oldPreferredName}' to '{userName}'.", "DEBUG");
         }
         catch (Exception exDb)
         {
@@ -973,7 +967,7 @@ public class CPHInline
             {
                 LogToFile($"[DeleteUserProfile] Sending nickname reset message to chat: {resetMessage}", "DEBUG");
                 CPH.SendMessage(resetMessage, true);
-                LogToFile($"[DeleteUserProfile] Nickname reset message sent for userName='{userName}'.", "INFO");
+                LogToFile($"[DeleteUserProfile] Nickname reset message sent for userName='{userName}'.", "DEBUG");
             }
             catch (Exception exSend)
             {
@@ -996,13 +990,12 @@ public class CPHInline
         string userName = null;
         bool postToChat = false;
         UserProfile profile = null;
-        LiteCollection<UserProfile> userCollection = null;
+        var userCollection = _db.GetCollection<UserProfile>("user_profiles");
         string displayName = null;
         string message = null;
         bool profileFound = false;
         try
         {
-
             try
             {
                 LogToFile("[ShowCurrentUserProfile] Attempting to retrieve 'userName' argument via TryGetArg.", "DEBUG");
@@ -1027,7 +1020,6 @@ public class CPHInline
             try
             {
                 LogToFile("[ShowCurrentUserProfile] Retrieving user_profiles collection from LiteDB.", "DEBUG");
-                userCollection = _db.GetCollection<UserProfile>("user_profiles");
                 LogToFile("[ShowCurrentUserProfile] Searching for existing profile.", "DEBUG");
                 profile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
                 profileFound = (profile != null);
@@ -1082,9 +1074,9 @@ public class CPHInline
                     LogToFile($"[ShowCurrentUserProfile] Sending profile message to chat: {message}", "DEBUG");
                     CPH.SendMessage(message, true);
                     if (profileFound)
-                        LogToFile($"[ShowCurrentUserProfile] Profile displayed for userName='{userName}': {message}", "INFO");
+                        LogToFile($"[ShowCurrentUserProfile] Profile displayed for userName='{userName}': {message}", "DEBUG");
                     else
-                        LogToFile($"[ShowCurrentUserProfile] No profile to display for userName='{userName}'. Message sent: {message}", "INFO");
+                        LogToFile($"[ShowCurrentUserProfile] No profile to display for userName='{userName}'. Message sent: {message}", "DEBUG");
                 }
                 catch (Exception exSend)
                 {
@@ -1303,7 +1295,7 @@ public class CPHInline
         bool postToChat = false;
         int memoryCount = -1;
         UserProfile profile = null;
-        LiteCollection<UserProfile> userCollection = null;
+        var userCollection = _db.GetCollection<UserProfile>("user_profiles");
         bool success = false;
 
         try
@@ -1330,18 +1322,17 @@ public class CPHInline
         try
         {
             LogToFile("[ForgetThisAboutMe] Retrieving user_profiles collection from LiteDB.", "DEBUG");
-            userCollection = _db.GetCollection<UserProfile>("user_profiles");
             LogToFile("[ForgetThisAboutMe] Searching for existing profile.", "DEBUG");
             profile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
             if (profile == null)
             {
-                LogToFile($"[ForgetThisAboutMe] No profile found for userName='{userName}'.", "INFO");
+                LogToFile($"[ForgetThisAboutMe] No profile found for userName='{userName}'.", "DEBUG");
                 memoryCount = 0;
             }
             else if (profile.Knowledge == null || profile.Knowledge.Count == 0)
             {
                 memoryCount = 0;
-                LogToFile($"[ForgetThisAboutMe] No memories found for userName='{userName}'.", "INFO");
+                LogToFile($"[ForgetThisAboutMe] No memories found for userName='{userName}'.", "DEBUG");
             }
             else
             {
@@ -1367,20 +1358,19 @@ public class CPHInline
         catch (Exception exChat)
         {
             LogToFile($"[ForgetThisAboutMe] WARN: Failed to retrieve 'Post To Chat': {exChat.Message}", "WARN");
-
             postToChat = false;
         }
 
         if (profile == null || memoryCount == 0)
         {
-            LogToFile($"[ForgetThisAboutMe] No memories to clear for userName='{userName}'.", "INFO");
+            LogToFile($"[ForgetThisAboutMe] No memories to clear for userName='{userName}'.", "DEBUG");
             try
             {
                 if (postToChat)
                 {
                     LogToFile($"[ForgetThisAboutMe] Sending 'no memories' message to chat.", "DEBUG");
                     CPH.SendMessage($"{userName}, I don't have any memories stored for you.", true);
-                    LogToFile($"[ForgetThisAboutMe] Confirmation message sent: no memories for '{userName}'.", "INFO");
+                    LogToFile($"[ForgetThisAboutMe] Confirmation message sent: no memories for '{userName}'.", "DEBUG");
                 }
                 else
                 {
@@ -1390,7 +1380,6 @@ public class CPHInline
             catch (Exception exMsg)
             {
                 LogToFile($"[ForgetThisAboutMe] ERROR: Exception sending 'no memories' chat message: {exMsg.Message}", "ERROR");
-
             }
             success = true;
             LogToFile($@"<<< [ForgetThisAboutMe] Exit: userName='{userName}', postToChat={postToChat}, memoryCount=0, success={success}", "DEBUG");
@@ -1402,7 +1391,7 @@ public class CPHInline
             LogToFile($"[ForgetThisAboutMe] Clearing all {memoryCount} memories for userName='{userName}'.", "DEBUG");
             profile.Knowledge.Clear();
             userCollection.Update(profile);
-            LogToFile($"[ForgetThisAboutMe] Cleared all memories for userName='{userName}'.", "INFO");
+            LogToFile($"[ForgetThisAboutMe] Cleared all memories for userName='{userName}'.", "DEBUG");
         }
         catch (Exception exUpdate)
         {
@@ -1419,7 +1408,6 @@ public class CPHInline
             catch (Exception exSend)
             {
                 LogToFile($"[ForgetThisAboutMe] ERROR: Exception sending error chat message: {exSend.Message}", "ERROR");
-
             }
             LogToFile($@"<<< [ForgetThisAboutMe] Exit: userName='{userName}', postToChat={postToChat}, memoryCount={memoryCount}, success=false", "DEBUG");
             return false;
@@ -1431,7 +1419,7 @@ public class CPHInline
             {
                 LogToFile($"[ForgetThisAboutMe] Sending 'memories cleared' message to chat.", "DEBUG");
                 CPH.SendMessage($"{userName}, all your memories have been cleared.", true);
-                LogToFile($"[ForgetThisAboutMe] Confirmation message sent: all memories cleared for '{userName}'.", "INFO");
+                LogToFile($"[ForgetThisAboutMe] Confirmation message sent: all memories cleared for '{userName}'.", "DEBUG");
             }
             else
             {
@@ -1441,7 +1429,6 @@ public class CPHInline
         catch (Exception exSend)
         {
             LogToFile($"[ForgetThisAboutMe] ERROR: Exception sending 'memories cleared' chat message: {exSend.Message}", "ERROR");
-
         }
 
         success = true;
@@ -1456,13 +1443,12 @@ public class CPHInline
         bool postToChat = false;
         int memoryCount = -1;
         UserProfile profile = null;
-        LiteCollection<UserProfile> userCollection = null;
+        var userCollection = _db.GetCollection<UserProfile>("user_profiles");
         string combinedMemory = null;
         string message = null;
         bool memoryFound = false;
         try
         {
-
             try
             {
                 LogToFile("[GetMemory] Attempting to retrieve 'userName' argument via TryGetArg.", "DEBUG");
@@ -1486,14 +1472,13 @@ public class CPHInline
             try
             {
                 LogToFile("[GetMemory] Retrieving user_profiles collection from LiteDB.", "DEBUG");
-                userCollection = _db.GetCollection<UserProfile>("user_profiles");
                 LogToFile("[GetMemory] Searching for existing profile.", "DEBUG");
                 profile = userCollection.FindOne(x => x.UserName.Equals(userName, StringComparison.OrdinalIgnoreCase));
                 if (profile == null || profile.Knowledge == null || profile.Knowledge.Count == 0)
                 {
                     memoryCount = 0;
                     memoryFound = false;
-                    LogToFile($"[GetMemory] No profile or memories found for userName='{userName}'.", "INFO");
+                    LogToFile($"[GetMemory] No profile or memories found for userName='{userName}'.", "DEBUG");
                 }
                 else
                 {
@@ -1531,7 +1516,6 @@ public class CPHInline
             catch (Exception exChat)
             {
                 LogToFile($"[GetMemory] WARN: Failed to retrieve 'Post To Chat': {exChat.Message}", "WARN");
-
                 postToChat = false;
             }
 
@@ -1542,9 +1526,9 @@ public class CPHInline
                     LogToFile($"[GetMemory] Sending memory message to chat: {message}", "DEBUG");
                     CPH.SendMessage(message, true);
                     if (memoryCount == 0)
-                        LogToFile($"[GetMemory] No memory found for userName='{userName}'. Message sent: {message}", "INFO");
+                        LogToFile($"[GetMemory] No memory found for userName='{userName}'. Message sent: {message}", "DEBUG");
                     else
-                        LogToFile($"[GetMemory] Memory output sent for userName='{userName}': {combinedMemory}", "INFO");
+                        LogToFile($"[GetMemory] Memory output sent for userName='{userName}': {combinedMemory}", "DEBUG");
                 }
                 else
                 {
@@ -1554,7 +1538,6 @@ public class CPHInline
             catch (Exception exSend)
             {
                 LogToFile($"[GetMemory] WARN: Exception sending chat message: {exSend.Message}", "WARN");
-
             }
 
             LogToFile($@"<<< [GetMemory] Exit: userName='{userName}', postToChat={postToChat}, memoryFound={memoryFound}, success=true", "DEBUG");
@@ -1955,7 +1938,7 @@ public class CPHInline
                 return false;
             }
 
-            ModerationResult result = null;
+            Result result = null;
             Dictionary<string, double> scores = null;
             try
             {
