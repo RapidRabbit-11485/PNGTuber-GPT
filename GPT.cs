@@ -3324,8 +3324,7 @@ public class CPHInline
                     }
                 }
                 catch (Exception exCtx)
-                {
-                    LogToFile($"[AskGPT] WARN: Exception while injecting GPTLog near final prompt: {exCtx.Message}", "WARN");
+                {                    LogToFile($"[AskGPT] WARN: Exception while injecting GPTLog near final prompt: {exCtx.Message}", "WARN");
                     LogToFile($"[AskGPT] Stack: {exCtx.StackTrace}", "DEBUG");
                 }
                 // ---- End GPTLog injection ----
@@ -3624,6 +3623,19 @@ public class CPHInline
                     PostToDiscord(prompt, GPTResponse);
                     LogToFile("[AskGPT] DEBUG: Posted GPT result to Discord.", "DEBUG");
                 }
+
+                // ---- Enqueue user/assistant turn into GPTLog ----
+                try
+                {
+                    QueueGPTMessage(fullMessage, GPTResponse);
+                    LogToFile("[AskGPT] DEBUG: Enqueued user/assistant turn into GPTLog.", "DEBUG");
+                }
+                catch (Exception ex)
+                {
+                    LogToFile($"[AskGPT] WARN: Failed to enqueue GPT turn: {ex.Message}", "WARN");
+                    LogToFile($"[AskGPT] Stack: {ex.StackTrace}", "DEBUG");
+                }
+                // ---- End GPTLog enqueue ----
             }
             catch (Exception exOut)
             {
@@ -4406,6 +4418,20 @@ public class CPHInline
                 PostToDiscord(prompt, GPTResponse);
                 LogToFile("[AskGPTWebhook] DEBUG: Posted GPT result to Discord.", "DEBUG");
             }
+
+            // ---- Enqueue user/assistant turn into GPTLog ----
+            try
+            {
+                QueueGPTMessage(fullMessage, GPTResponse);
+                LogToFile("[AskGPTWebhook] DEBUG: Enqueued user/assistant turn into GPTLog.", "DEBUG");
+            }
+            catch (Exception ex)
+            {
+                LogToFile($"[AskGPTWebhook] WARN: Failed to enqueue GPT turn: {ex.Message}", "WARN");
+                LogToFile($"[AskGPTWebhook] Stack: {ex.StackTrace}", "DEBUG");
+            }
+            // ---- End GPTLog enqueue ----
+
             CPH.SetGlobalVar("character", 1, true);
             LogToFile("[AskGPTWebhook] DEBUG: Reset 'character' global to 1 after AskGPTWebhook.", "DEBUG");
         }
