@@ -1105,11 +1105,10 @@ public class CPHInline
     {
         LogToFile(">>> [ForgetThis] Entry: Starting forget keyword operation.", "DEBUG");
         bool postToChat = false;
-        string keywordToRemove = null;
         bool success = false;
+        string rawInput = null;
         try
         {
-
             try
             {
                 postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
@@ -1118,182 +1117,158 @@ public class CPHInline
             catch (Exception exChat)
             {
                 LogToFile($"[ForgetThis] WARN: Failed to retrieve 'Post To Chat': {exChat.Message}", "WARN");
-
                 postToChat = false;
             }
 
-            try
+            if (!CPH.TryGetArg("rawInput", out rawInput) || string.IsNullOrWhiteSpace(rawInput))
             {
-                if (!CPH.TryGetArg("rawInput", out keywordToRemove) || string.IsNullOrWhiteSpace(keywordToRemove))
-                {
-                    LogToFile("[ForgetThis] WARN: 'rawInput' argument missing or empty.", "WARN");
-                    if (postToChat)
-                    {
-                        try
-                        {
-                            CPH.SendMessage("You need to tell me what to forget.", true);
-                            LogToFile("[ForgetThis] User notified of missing input via chat.", "DEBUG");
-                        }
-                        catch (Exception exSend)
-                        {
-                            LogToFile($"[ForgetThis] ERROR: Exception sending missing input chat message: {exSend.Message}", "ERROR");
-
-                        }
-                    }
-                    else
-                    {
-                        LogToFile("[ForgetThis] [Skipped Chat Output] Post To Chat disabled. Message: You need to tell me what to forget.", "WARN");
-                    }
-                    LogToFile("<<< [ForgetThis] Exit (failure: missing input)", "DEBUG");
-                    success = false;
-                    LogToFile($@"<<< [ForgetThis] Summary: keywordToRemove='{keywordToRemove}', postToChat={postToChat}, success={success}", "DEBUG");
-                    return false;
-                }
-                else
-                {
-                    LogToFile($"[ForgetThis] Successfully retrieved 'rawInput': '{keywordToRemove}'", "DEBUG");
-                }
-            }
-            catch (Exception exArg)
-            {
-                LogToFile($"[ForgetThis] ERROR: Exception retrieving 'rawInput' argument: {exArg.Message}", "ERROR");
-
+                LogToFile("[ForgetThis] ERROR: 'rawInput' argument missing or empty.", "ERROR");
                 if (postToChat)
                 {
                     try
                     {
-                        CPH.SendMessage("You need to tell me what to forget.", true);
-                        LogToFile("[ForgetThis] User notified of missing input via chat (exception case).", "DEBUG");
+                        CPH.SendMessage("You need to tell me what keyword to forget.", true);
+                        LogToFile("[ForgetThis] Chat output: Missing keyword input.", "DEBUG");
                     }
                     catch (Exception exSend)
                     {
-                        LogToFile($"[ForgetThis] ERROR: Exception sending missing input chat message: {exSend.Message}", "ERROR");
-
+                        LogToFile($"[ForgetThis] ERROR: Exception sending missing keyword chat message: {exSend.Message}", "ERROR");
                     }
                 }
                 else
                 {
-                    LogToFile("[ForgetThis] [Skipped Chat Output] Post To Chat disabled. Message: You need to tell me what to forget.", "WARN");
+                    LogToFile("[ForgetThis] [Skipped Chat Output] Post To Chat disabled. Message: You need to tell me what keyword to forget.", "WARN");
                 }
-                LogToFile("<<< [ForgetThis] Exit (failure: exception retrieving argument)", "DEBUG");
+                LogToFile("<<< [ForgetThis] Exit (failure: missing keyword input)", "DEBUG");
                 success = false;
-                LogToFile($@"<<< [ForgetThis] Summary: keywordToRemove='{keywordToRemove}', postToChat={postToChat}, success={success}", "DEBUG");
                 return false;
             }
 
-            BsonDocument existing = null;
-            try
+            // Extract the keyword (first word)
+            var keyword = rawInput.Trim().Split(' ', '\t', '\r', '\n').FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(keyword))
             {
-                LogToFile($"[ForgetThis] Attempting to retrieve 'Keywords' collection and search for keyword '{keywordToRemove}'.", "DEBUG");
-                var keywordsCol = _db.GetCollection<BsonDocument>("Keywords");
-                existing = keywordsCol.FindAll().FirstOrDefault(doc =>
-                    string.Equals(doc["Keyword"]?.AsString, keywordToRemove, StringComparison.OrdinalIgnoreCase));
-                if (existing != null)
+                LogToFile("[ForgetThis] ERROR: Unable to extract keyword from input.", "ERROR");
+                if (postToChat)
                 {
-                    keywordsCol.Delete(existing["_id"]);
-                    LogToFile($"[ForgetThis] Removed keyword '{keywordToRemove}' from LiteDB.", "INFO");
-
                     try
                     {
-                        if (postToChat)
-                        {
-                            CPH.SendMessage($"The definition for '{keywordToRemove}' has been removed.", true);
-                            LogToFile($"[ForgetThis] Chat output: The definition for '{keywordToRemove}' has been removed.", "DEBUG");
-                        }
-                        else
-                        {
-                            LogToFile($"[ForgetThis] [Skipped Chat Output] Post To Chat disabled. Message: The definition for '{keywordToRemove}' has been removed.", "WARN");
-                        }
+                        CPH.SendMessage("You need to tell me what keyword to forget.", true);
+                        LogToFile("[ForgetThis] Chat output: Unable to extract keyword.", "DEBUG");
                     }
-                    catch (Exception exChatSend)
+                    catch (Exception exSend)
                     {
-                        LogToFile($"[ForgetThis] ERROR: Exception sending chat output for removal: {exChatSend.Message}", "ERROR");
-
-                        LogToFile($"[ForgetThis] Context: keywordToRemove='{keywordToRemove}', postToChat={postToChat}", "ERROR");
+                        LogToFile($"[ForgetThis] ERROR: Exception sending missing keyword chat message: {exSend.Message}", "ERROR");
                     }
                 }
                 else
                 {
-                    LogToFile($"[ForgetThis] No definition found for keyword '{keywordToRemove}'.", "INFO");
+                    LogToFile("[ForgetThis] [Skipped Chat Output] Post To Chat disabled. Message: You need to tell me what keyword to forget.", "WARN");
+                }
+                LogToFile("<<< [ForgetThis] Exit (failure: empty keyword)", "DEBUG");
+                success = false;
+                return false;
+            }
 
-                    try
+            LogToFile($"[ForgetThis] Parsed keyword to forget: '{keyword}'", "DEBUG");
+
+            var col = _db.GetCollection<BsonDocument>("keywords");
+            BsonDocument foundDoc = null;
+            try
+            {
+                foundDoc = col.FindAll().FirstOrDefault(doc =>
+                    string.Equals(doc["Keyword"]?.AsString, keyword, StringComparison.OrdinalIgnoreCase));
+                if (foundDoc != null)
+                {
+                    col.Delete(foundDoc["_id"]);
+                    LogToFile($"[ForgetThis] DEBUG: Keyword '{keyword}' deleted.", "DEBUG");
+                    if (postToChat)
                     {
-                        if (postToChat)
+                        try
                         {
-                            CPH.SendMessage($"I don't have a definition stored for '{keywordToRemove}'.", true);
-                            LogToFile($"[ForgetThis] Chat output: I don't have a definition stored for '{keywordToRemove}'.", "DEBUG");
+                            CPH.SendMessage($"Forgot keyword '{keyword}'", true);
                         }
-                        else
+                        catch (Exception exSend)
                         {
-                            LogToFile($"[ForgetThis] [Skipped Chat Output] Post To Chat disabled. Message: I don't have a definition stored for '{keywordToRemove}'.", "WARN");
+                            LogToFile($"[ForgetThis] WARN: Exception sending chat confirmation: {exSend.Message}", "WARN");
                         }
                     }
-                    catch (Exception exChatSend)
+                }
+                else
+                {
+                    LogToFile($"[ForgetThis] WARN: No keyword found for '{keyword}'.", "WARN");
+                    if (postToChat)
                     {
-                        LogToFile($"[ForgetThis] ERROR: Exception sending chat output for not found: {exChatSend.Message}", "ERROR");
-
-                        LogToFile($"[ForgetThis] Context: keywordToRemove='{keywordToRemove}', postToChat={postToChat}", "ERROR");
+                        try
+                        {
+                            CPH.SendMessage($"No keyword found for '{keyword}'", true);
+                        }
+                        catch (Exception exSend)
+                        {
+                            LogToFile($"[ForgetThis] WARN: Exception sending chat not-found message: {exSend.Message}", "WARN");
+                        }
                     }
                 }
             }
             catch (Exception exDb)
             {
-                LogToFile($"[ForgetThis] ERROR: Exception during DB keyword removal: {exDb.Message}", "ERROR");
-
-                LogToFile($"[ForgetThis] Context: keywordToRemove='{keywordToRemove}'", "ERROR");
-
-                try
+                LogToFile($"[ForgetThis] ERROR: Exception during keyword deletion: {exDb.Message}", "ERROR");
+                if (postToChat)
                 {
-                    if (postToChat)
-                        CPH.SendMessage("An error occurred while attempting to forget that. Please try again later.", true);
-                    else
-                        LogToFile("[ForgetThis] [Skipped Chat Output] Post To Chat disabled. Message: An error occurred while attempting to forget that. Please try again later.", "WARN");
+                    try
+                    {
+                        CPH.SendMessage("An error occurred while attempting to forget that keyword. Please try again later.", true);
+                    }
+                    catch (Exception exSend)
+                    {
+                        LogToFile($"[ForgetThis] ERROR: Exception sending error chat message: {exSend.Message}", "ERROR");
+                    }
                 }
-                catch (Exception exSend)
+                else
                 {
-                    LogToFile($"[ForgetThis] ERROR: Exception sending error chat message: {exSend.Message}", "ERROR");
-
+                    LogToFile("[ForgetThis] [Skipped Chat Output] Post To Chat disabled. Message: An error occurred while attempting to forget that keyword. Please try again later.", "WARN");
                 }
                 LogToFile("<<< [ForgetThis] Exit (failure: exception during DB operation)", "DEBUG");
                 success = false;
-                LogToFile($@"<<< [ForgetThis] Summary: keywordToRemove='{keywordToRemove}', postToChat={postToChat}, success={success}", "DEBUG");
                 return false;
             }
 
             success = true;
-            LogToFile($@"<<< [ForgetThis] Exit: keywordToRemove='{keywordToRemove}', postToChat={postToChat}, success={success}", "DEBUG");
+            LogToFile($@"<<< [ForgetThis] Exit: keyword='{keyword}', postToChat={postToChat}, success={success}", "DEBUG");
             return true;
         }
         catch (Exception ex)
         {
             LogToFile($"[ForgetThis] ERROR: Unexpected error: {ex.Message}", "ERROR");
             LogToFile($"[ForgetThis] Stack: {ex.StackTrace}", "DEBUG");
-            LogToFile($"[ForgetThis] Context: keywordToRemove='{keywordToRemove}', postToChat={postToChat}", "ERROR");
-
-            try
+            LogToFile($"[ForgetThis] Context: postToChat={postToChat}", "ERROR");
+            if (postToChat)
             {
-                if (postToChat)
-                    CPH.SendMessage("An error occurred while attempting to forget that. Please try again later.", true);
-                else
-                    LogToFile("[ForgetThis] [Skipped Chat Output] Post To Chat disabled. Message: An error occurred while attempting to forget that. Please try again later.", "WARN");
+                try
+                {
+                    CPH.SendMessage("An error occurred while attempting to forget that keyword. Please try again later.", true);
+                }
+                catch (Exception exSend)
+                {
+                    LogToFile($"[ForgetThis] ERROR: Exception sending error chat message: {exSend.Message}", "ERROR");
+                    LogToFile($"[ForgetThis] Stack: {exSend.StackTrace}", "DEBUG");
+                }
             }
-            catch (Exception exSend)
+            else
             {
-                LogToFile($"[ForgetThis] ERROR: Exception sending error chat message: {exSend.Message}", "ERROR");
-                LogToFile($"[ForgetThis] Stack: {exSend.StackTrace}", "DEBUG");
+                LogToFile("[ForgetThis] [Skipped Chat Output] Post To Chat disabled. Message: An error occurred while attempting to forget that keyword. Please try again later.", "WARN");
             }
             LogToFile("<<< [ForgetThis] Exit (failure: unexpected error)", "DEBUG");
-            LogToFile($@"<<< [ForgetThis] Summary: keywordToRemove='{keywordToRemove}', postToChat={postToChat}, success={false}", "DEBUG");
             return false;
         }
     }
 
     public bool ForgetThisAboutMe()
     {
-        LogToFile(">>> [ForgetThisAboutMe] Entry: Starting forget-all-memories operation.", "DEBUG");
+        LogToFile(">>> [ForgetThisAboutMe] Entry: Starting forget-all-knowledge operation.", "DEBUG");
         string userName = null;
         bool postToChat = false;
-        int memoryCount = -1;
+        int knowledgeCount = -1;
         UserProfile profile = null;
         var userCollection = _db.GetCollection<UserProfile>("user_profiles");
         bool success = false;
@@ -1305,7 +1280,7 @@ public class CPHInline
             {
                 LogToFile("[ForgetThisAboutMe] WARN: 'userName' argument missing or empty.", "WARN");
                 LogToFile("[ForgetThisAboutMe] Context: userName=null or empty.", "WARN");
-                LogToFile($@"<<< [ForgetThisAboutMe] Exit: userName='null', postToChat={postToChat}, memoryCount={memoryCount}, success=false", "DEBUG");
+                LogToFile($@"<<< [ForgetThisAboutMe] Exit: userName='null', postToChat={postToChat}, knowledgeCount={knowledgeCount}, success=false", "DEBUG");
                 return false;
             }
             LogToFile($"[ForgetThisAboutMe] Successfully retrieved userName='{userName}'", "DEBUG");
@@ -1315,7 +1290,7 @@ public class CPHInline
             LogToFile($"[ForgetThisAboutMe] ERROR: Exception retrieving 'userName' argument: {exArg.Message}", "ERROR");
             LogToFile($"[ForgetThisAboutMe] Stack: {exArg.StackTrace}", "DEBUG");
             LogToFile("[ForgetThisAboutMe] Context: retrieving userName", "ERROR");
-            LogToFile($@"<<< [ForgetThisAboutMe] Exit: userName='null', postToChat={postToChat}, memoryCount={memoryCount}, success=false", "DEBUG");
+            LogToFile($@"<<< [ForgetThisAboutMe] Exit: userName='null', postToChat={postToChat}, knowledgeCount={knowledgeCount}, success=false", "DEBUG");
             return false;
         }
 
@@ -1327,17 +1302,17 @@ public class CPHInline
             if (profile == null)
             {
                 LogToFile($"[ForgetThisAboutMe] No profile found for userName='{userName}'.", "DEBUG");
-                memoryCount = 0;
+                knowledgeCount = 0;
             }
             else if (profile.Knowledge == null || profile.Knowledge.Count == 0)
             {
-                memoryCount = 0;
-                LogToFile($"[ForgetThisAboutMe] No memories found for userName='{userName}'.", "DEBUG");
+                knowledgeCount = 0;
+                LogToFile($"[ForgetThisAboutMe] No knowledge found for userName='{userName}'.", "DEBUG");
             }
             else
             {
-                memoryCount = profile.Knowledge.Count;
-                LogToFile($"[ForgetThisAboutMe] Found {memoryCount} memories for userName='{userName}'.", "DEBUG");
+                knowledgeCount = profile.Knowledge.Count;
+                LogToFile($"[ForgetThisAboutMe] Found {knowledgeCount} knowledge items for userName='{userName}'.", "DEBUG");
             }
         }
         catch (Exception exDb)
@@ -1345,7 +1320,7 @@ public class CPHInline
             LogToFile($"[ForgetThisAboutMe] ERROR: Exception accessing user_profiles: {exDb.Message}", "ERROR");
             LogToFile($"[ForgetThisAboutMe] Stack: {exDb.StackTrace}", "DEBUG");
             LogToFile($"[ForgetThisAboutMe] Context: userName='{userName}'", "ERROR");
-            LogToFile($@"<<< [ForgetThisAboutMe] Exit: userName='{userName}', postToChat={postToChat}, memoryCount={memoryCount}, success=false", "DEBUG");
+            LogToFile($@"<<< [ForgetThisAboutMe] Exit: userName='{userName}', postToChat={postToChat}, knowledgeCount={knowledgeCount}, success=false", "DEBUG");
             return false;
         }
 
@@ -1361,55 +1336,57 @@ public class CPHInline
             postToChat = false;
         }
 
-        if (profile == null || memoryCount == 0)
+        if (profile == null || knowledgeCount == 0)
         {
-            LogToFile($"[ForgetThisAboutMe] No memories to clear for userName='{userName}'.", "DEBUG");
+            LogToFile($"[ForgetThisAboutMe] No knowledge to clear for userName='{userName}'.", "DEBUG");
             try
             {
                 if (postToChat)
                 {
-                    LogToFile($"[ForgetThisAboutMe] Sending 'no memories' message to chat.", "DEBUG");
-                    CPH.SendMessage($"{userName}, I don't have any memories stored for you.", true);
-                    LogToFile($"[ForgetThisAboutMe] Confirmation message sent: no memories for '{userName}'.", "DEBUG");
+                    LogToFile($"[ForgetThisAboutMe] Sending 'no knowledge' message to chat.", "DEBUG");
+                    CPH.SendMessage($"{userName}, I don't have any knowledge stored for you.", true);
+                    LogToFile($"[ForgetThisAboutMe] Confirmation message sent: no knowledge for '{userName}'.", "DEBUG");
                 }
                 else
                 {
-                    LogToFile($"[ForgetThisAboutMe] [Skipped Chat Output] Post To Chat disabled. Message: {userName}, I don't have any memories stored for you.", "WARN");
+                    LogToFile($"[ForgetThisAboutMe] [Skipped Chat Output] Post To Chat disabled. Message: {userName}, I don't have any knowledge stored for you.", "WARN");
                 }
             }
             catch (Exception exMsg)
             {
-                LogToFile($"[ForgetThisAboutMe] ERROR: Exception sending 'no memories' chat message: {exMsg.Message}", "ERROR");
+                LogToFile($"[ForgetThisAboutMe] ERROR: Exception sending 'no knowledge' chat message: {exMsg.Message}", "ERROR");
             }
             success = true;
-            LogToFile($@"<<< [ForgetThisAboutMe] Exit: userName='{userName}', postToChat={postToChat}, memoryCount=0, success={success}", "DEBUG");
+            LogToFile($@"<<< [ForgetThisAboutMe] Exit: userName='{userName}', postToChat={postToChat}, knowledgeCount=0, success={success}", "DEBUG");
             return true;
         }
 
         try
         {
-            LogToFile($"[ForgetThisAboutMe] Clearing all {memoryCount} memories for userName='{userName}'.", "DEBUG");
+            LogToFile($"[ForgetThisAboutMe] Clearing all {knowledgeCount} knowledge items for userName='{userName}'.", "DEBUG");
+            if (profile.Knowledge == null)
+                profile.Knowledge = new List<string>();
             profile.Knowledge.Clear();
             userCollection.Update(profile);
-            LogToFile($"[ForgetThisAboutMe] Cleared all memories for userName='{userName}'.", "DEBUG");
+            LogToFile($"[ForgetThisAboutMe] Cleared all knowledge for userName='{userName}'.", "DEBUG");
         }
         catch (Exception exUpdate)
         {
-            LogToFile($"[ForgetThisAboutMe] ERROR: Exception clearing/updating memories: {exUpdate.Message}", "ERROR");
+            LogToFile($"[ForgetThisAboutMe] ERROR: Exception clearing/updating knowledge: {exUpdate.Message}", "ERROR");
             LogToFile($"[ForgetThisAboutMe] Stack: {exUpdate.StackTrace}", "DEBUG");
-            LogToFile($"[ForgetThisAboutMe] Context: userName='{userName}', memoryCount={memoryCount}", "ERROR");
+            LogToFile($"[ForgetThisAboutMe] Context: userName='{userName}', knowledgeCount={knowledgeCount}", "ERROR");
             try
             {
                 if (postToChat)
-                    CPH.SendMessage("An error occurred while attempting to clear your memories. Please try again later.", true);
+                    CPH.SendMessage("An error occurred while attempting to clear your knowledge. Please try again later.", true);
                 else
-                    LogToFile("[ForgetThisAboutMe] [Skipped Chat Output] Post To Chat disabled. Message: An error occurred while attempting to clear your memories. Please try again later.", "WARN");
+                    LogToFile("[ForgetThisAboutMe] [Skipped Chat Output] Post To Chat disabled. Message: An error occurred while attempting to clear your knowledge. Please try again later.", "WARN");
             }
             catch (Exception exSend)
             {
                 LogToFile($"[ForgetThisAboutMe] ERROR: Exception sending error chat message: {exSend.Message}", "ERROR");
             }
-            LogToFile($@"<<< [ForgetThisAboutMe] Exit: userName='{userName}', postToChat={postToChat}, memoryCount={memoryCount}, success=false", "DEBUG");
+            LogToFile($@"<<< [ForgetThisAboutMe] Exit: userName='{userName}', postToChat={postToChat}, knowledgeCount={knowledgeCount}, success=false", "DEBUG");
             return false;
         }
 
@@ -1417,22 +1394,22 @@ public class CPHInline
         {
             if (postToChat)
             {
-                LogToFile($"[ForgetThisAboutMe] Sending 'memories cleared' message to chat.", "DEBUG");
-                CPH.SendMessage($"{userName}, all your memories have been cleared.", true);
-                LogToFile($"[ForgetThisAboutMe] Confirmation message sent: all memories cleared for '{userName}'.", "DEBUG");
+                LogToFile($"[ForgetThisAboutMe] Sending 'knowledge cleared' message to chat.", "DEBUG");
+                CPH.SendMessage($"{userName}, all your knowledge has been cleared.", true);
+                LogToFile($"[ForgetThisAboutMe] Confirmation message sent: all knowledge cleared for '{userName}'.", "DEBUG");
             }
             else
             {
-                LogToFile($"[ForgetThisAboutMe] [Skipped Chat Output] Post To Chat disabled. Message: {userName}, all your memories have been cleared.", "WARN");
+                LogToFile($"[ForgetThisAboutMe] [Skipped Chat Output] Post To Chat disabled. Message: {userName}, all your knowledge has been cleared.", "WARN");
             }
         }
         catch (Exception exSend)
         {
-            LogToFile($"[ForgetThisAboutMe] ERROR: Exception sending 'memories cleared' chat message: {exSend.Message}", "ERROR");
+            LogToFile($"[ForgetThisAboutMe] ERROR: Exception sending 'knowledge cleared' chat message: {exSend.Message}", "ERROR");
         }
 
         success = true;
-        LogToFile($@"<<< [ForgetThisAboutMe] Exit: userName='{userName}', postToChat={postToChat}, memoryCount={memoryCount}, success={success}", "DEBUG");
+        LogToFile($@"<<< [ForgetThisAboutMe] Exit: userName='{userName}', postToChat={postToChat}, knowledgeCount={knowledgeCount}, success={success}", "DEBUG");
         return true;
     }
 
@@ -2429,19 +2406,21 @@ public class CPHInline
 
     public bool RememberThis()
     {
-        LogToFile(">>> [RememberThis] Entry: Starting user memory save operation.", "DEBUG");
-        string userName = null;
-        string memory = null;
+        LogToFile(">>> [RememberThis] Entry: Starting glossary keyword save operation.", "DEBUG");
         bool postToChat = false;
-
+        string rawInput = null;
         try
         {
-
+            // Retrieve rawInput argument
             try
             {
-                userName = CPH.GetArg<string>("userName");
-                memory = CPH.GetArg<string>("memory");
-                LogToFile($"[RememberThis] Retrieved args: userName='{userName}', memory='{memory}'", "DEBUG");
+                if (!CPH.TryGetArg("rawInput", out rawInput) || string.IsNullOrWhiteSpace(rawInput))
+                {
+                    LogToFile("[RememberThis] ERROR: Missing or empty 'rawInput' argument.", "ERROR");
+                    LogToFile("<<< [RememberThis] Exit: success=false (missing rawInput)", "DEBUG");
+                    return false;
+                }
+                LogToFile($"[RememberThis] Retrieved rawInput: '{rawInput}'", "DEBUG");
             }
             catch (Exception exArgs)
             {
@@ -2451,10 +2430,27 @@ public class CPHInline
                 return false;
             }
 
-            if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(memory))
+            // Parse keyword and definition
+            string keyword = null;
+            string definition = null;
+            try
             {
-                LogToFile($"[RememberThis] ERROR: Missing required parameters. userName='{userName}', memory='{memory}'", "ERROR");
-                LogToFile("<<< [RememberThis] Exit: success=false (missing parameters)", "DEBUG");
+                var parts = rawInput.Trim().Split(new[] { ' ' }, 2, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length < 2)
+                {
+                    LogToFile("[RememberThis] ERROR: Input must include a keyword and a definition.", "ERROR");
+                    LogToFile("<<< [RememberThis] Exit: success=false (not enough words)", "DEBUG");
+                    return false;
+                }
+                keyword = parts[0].Trim();
+                definition = parts[1].Trim();
+                LogToFile($"[RememberThis] Parsed keyword='{keyword}', definition='{definition}'", "DEBUG");
+            }
+            catch (Exception exParse)
+            {
+                LogToFile($"[RememberThis] ERROR: Failed to parse keyword/definition: {exParse.Message}", "ERROR");
+                LogToFile($"[RememberThis] Stack: {exParse.StackTrace}", "DEBUG");
+                LogToFile("<<< [RememberThis] Exit: success=false (parse failure)", "DEBUG");
                 return false;
             }
 
@@ -2469,33 +2465,33 @@ public class CPHInline
                 postToChat = false;
             }
 
+            // Database upsert for keywords collection
             try
             {
-                using (var db = new LiteDatabase(DB_PATH))
+                var col = _db.GetCollection<BsonDocument>("keywords");
+                var existing = col.FindOne(Query.EQ("Keyword", keyword));
+                if (existing != null)
                 {
-                    var col = db.GetCollection<UserProfile>("userprofiles");
-                    var profile = col.FindOne(x => x.UserName == userName);
-
-                    if (profile == null)
+                    existing["Definition"] = definition;
+                    col.Update(existing);
+                    LogToFile($"[RememberThis] DEBUG: Updated definition for keyword '{keyword}'.", "DEBUG");
+                }
+                else
+                {
+                    var doc = new BsonDocument
                     {
-                        LogToFile($"[RememberThis] INFO: No profile found for '{userName}', creating new profile.", "INFO");
-                        profile = new UserProfile { UserName = userName, Memory = new List<string>() };
-                    }
-
-                    if (profile.Memory == null)
-                        profile.Memory = new List<string>();
-
-                    profile.Memory.Add(memory);
-                    col.Upsert(profile);
-
-                    LogToFile($"[RememberThis] INFO: Memory entry added for '{userName}'. Entry='{memory}'", "INFO");
+                        ["Keyword"] = keyword,
+                        ["Definition"] = definition
+                    };
+                    col.Insert(doc);
+                    LogToFile($"[RememberThis] DEBUG: Inserted new keyword '{keyword}' with definition.", "DEBUG");
                 }
             }
             catch (Exception exDb)
             {
                 LogToFile($"[RememberThis] ERROR: Database operation failed: {exDb.Message}", "ERROR");
                 LogToFile($"[RememberThis] Stack: {exDb.StackTrace}", "DEBUG");
-                LogToFile($"[RememberThis] Context: userName='{userName}', memory='{memory}'", "ERROR");
+                LogToFile($"[RememberThis] Context: keyword='{keyword}', definition='{definition}'", "ERROR");
                 LogToFile("<<< [RememberThis] Exit: success=false (DB error)", "DEBUG");
                 return false;
             }
@@ -2504,13 +2500,13 @@ public class CPHInline
             {
                 if (postToChat)
                 {
-                    string confirmation = $"Remembered that {userName} {memory}";
+                    string confirmation = $"Added keyword '{keyword}' with definition: {definition}";
                     CPH.SendMessage(confirmation, true);
-                    LogToFile($"[RememberThis] INFO: Sent confirmation to chat: {confirmation}", "INFO");
+                    LogToFile($"[RememberThis] DEBUG: Sent confirmation to chat: {confirmation}", "DEBUG");
                 }
                 else
                 {
-                    LogToFile($"[RememberThis] [Skipped Chat Output] Post To Chat disabled. Memory='{memory}'", "WARN");
+                    LogToFile($"[RememberThis] [Skipped Chat Output] Post To Chat disabled. Keyword='{keyword}', Definition='{definition}'", "WARN");
                 }
             }
             catch (Exception exChat)
@@ -2518,14 +2514,13 @@ public class CPHInline
                 LogToFile($"[RememberThis] ERROR: Exception while sending chat message: {exChat.Message}", "ERROR");
             }
 
-            LogToFile($@"<<< [RememberThis] Exit: success=true, userName='{userName}', postToChat={postToChat}", "DEBUG");
+            LogToFile($@"<<< [RememberThis] Exit: success=true, keyword='{keyword}', postToChat={postToChat}", "DEBUG");
             return true;
         }
         catch (Exception ex)
         {
             LogToFile($"[RememberThis] ERROR: Fatal exception encountered: {ex.Message}", "ERROR");
             LogToFile($"[RememberThis] Stack: {ex.StackTrace}", "DEBUG");
-            LogToFile($"[RememberThis] Context: userName='{userName}', memory='{memory}', postToChat={postToChat}", "ERROR");
             LogToFile("<<< [RememberThis] Exit: success=false (fatal exception)", "DEBUG");
             return false;
         }
@@ -2540,7 +2535,6 @@ public class CPHInline
 
         try
         {
-
             try
             {
                 postToChat = CPH.GetGlobalVar<bool>("Post To Chat", true);
@@ -2559,9 +2553,13 @@ public class CPHInline
                     LogToFile("[RememberThisAboutMe] ERROR: 'userName' argument is missing or invalid.", "ERROR");
                     string errMsg = "I'm sorry, but I can't remember that right now. Please try again later.";
                     if (postToChat)
+                    {
                         CPH.SendMessage(errMsg, true);
+                    }
                     else
+                    {
                         LogToFile($"[RememberThisAboutMe] [Skipped Chat Output] Post To Chat disabled. Message: {errMsg}", "WARN");
+                    }
                     LogToFile("<<< [RememberThisAboutMe] Exit: success=false (missing username)", "DEBUG");
                     return false;
                 }
@@ -2591,9 +2589,13 @@ public class CPHInline
                     LogToFile("[RememberThisAboutMe] ERROR: No valid input provided to remember.", "ERROR");
                     string errMsg = "I'm sorry, but I can't remember that right now. Please try again later.";
                     if (postToChat)
+                    {
                         CPH.SendMessage(errMsg, true);
+                    }
                     else
+                    {
                         LogToFile($"[RememberThisAboutMe] [Skipped Chat Output] Post To Chat disabled. Message: {errMsg}", "WARN");
+                    }
                     LogToFile("<<< [RememberThisAboutMe] Exit: success=false (missing message)", "DEBUG");
                     return false;
                 }
@@ -2614,20 +2616,26 @@ public class CPHInline
                     LogToFile($"[RememberThisAboutMe] ERROR: Failed to retrieve or create profile for '{userName}'.", "ERROR");
                     string errMsg = "I'm sorry, but I can't remember that right now. Please try again later.";
                     if (postToChat)
+                    {
                         CPH.SendMessage(errMsg, true);
+                    }
                     else
+                    {
                         LogToFile($"[RememberThisAboutMe] [Skipped Chat Output] Post To Chat disabled. Message: {errMsg}", "WARN");
+                    }
                     LogToFile("<<< [RememberThisAboutMe] Exit: success=false (no profile)", "DEBUG");
                     return false;
                 }
 
                 if (profile.Knowledge == null)
+                {
                     profile.Knowledge = new List<string>();
+                }
 
                 if (!profile.Knowledge.Contains(messageToRemember))
                 {
                     profile.Knowledge.Add(messageToRemember);
-                    LogToFile($"[RememberThisAboutMe] INFO: Added new memory for '{userName}': {messageToRemember}", "INFO");
+                    LogToFile($"[RememberThisAboutMe] DEBUG: Added new memory for '{userName}': {messageToRemember}", "DEBUG");
                 }
                 else
                 {
@@ -2645,7 +2653,7 @@ public class CPHInline
             {
                 var userCollection = _db.GetCollection<UserProfile>("user_profiles");
                 userCollection.Update(profile);
-                LogToFile($"[RememberThisAboutMe] INFO: Updated user profile for '{userName}' in LiteDB.", "INFO");
+                LogToFile($"[RememberThisAboutMe] DEBUG: Updated user profile for '{userName}' in LiteDB.", "DEBUG");
             }
             catch (Exception exDb)
             {
@@ -2661,7 +2669,7 @@ public class CPHInline
                 if (postToChat)
                 {
                     CPH.SendMessage(confirmation, true);
-                    LogToFile($"[RememberThisAboutMe] INFO: Sent confirmation to chat: {confirmation}", "INFO");
+                    LogToFile($"[RememberThisAboutMe] DEBUG: Sent confirmation to chat: {confirmation}", "DEBUG");
                 }
                 else
                 {
