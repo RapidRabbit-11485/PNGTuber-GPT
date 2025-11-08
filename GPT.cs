@@ -3304,15 +3304,13 @@ public class CPHInline
                             {
                                 rawContent = "[Error parsing content from JSON]";
                             }
-                            LogToFile($"[AskGPT] INFO: Raw model output: {rawContent}", "INFO");
+                            // REMOVE: LogToFile($"[AskGPT] INFO: Raw model output: {rawContent}", "INFO");
                             LogToFile($"[AskGPT] DEBUG: Response JSON: {completionsResponseContent}", "DEBUG");
                             completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
                             GPTResponse = completionsJsonResponse?.Choices?.FirstOrDefault()?.Message?.content ?? string.Empty;
-                            // Log parsed model output (uncleaned)
-                            LogToFile($"[AskGPT] INFO: Parsed model output (uncleaned): {GPTResponse}", "INFO");
+                            // REMOVE: LogToFile($"[AskGPT] INFO: Parsed model output (uncleaned): {GPTResponse}", "INFO");
                             apiSuccess = true;
                         }
-                    }
                     catch (WebException webEx)
                     {
                         lastException = webEx;
@@ -3369,11 +3367,11 @@ public class CPHInline
             {
                 if (apiSuccess && completionsJsonResponse?.Usage != null)
                 {
-                LogPromptScorecard(
-                    "AskGPT",
-                    AIModel,
-                    completionsJsonResponse.Usage
-                );
+                    LogPromptScorecard(
+                        "AskGPT",
+                        AIModel,
+                        completionsJsonResponse.Usage
+                    );
                 }
             }
             catch (Exception exScore)
@@ -3382,12 +3380,14 @@ public class CPHInline
                 LogToFile($"[AskGPT] Stack: {exScore.StackTrace}", "DEBUG");
                 LogToFile($"[AskGPT] Context: AIModel='{AIModel}', userName='{userName}'", "ERROR");
             }
-            
+
+            // New INFO-level logs after scorecard, before cleaning
+            LogToFile($"[AskGPT] INFO: Prompt input: {prompt}", "INFO");
+            LogToFile($"[AskGPT] INFO: Model output (uncleaned): {GPTResponse}", "INFO");
+
             GPTResponse = CleanAIText(GPTResponse);
             LogToFile("[AskGPT] DEBUG: Applied CleanAIText() to GPT response.", "DEBUG");
-            // Log cleaned model output
-            LogToFile($"[AskGPT] INFO: Cleaned model output: {GPTResponse}", "INFO");
-            LogToFile($"[AskGPT] INFO: Model response: {GPTResponse}", "INFO");
+            LogToFile($"[AskGPT] INFO: Model output (cleaned): {GPTResponse}", "INFO");
             if (!apiSuccess || string.IsNullOrWhiteSpace(GPTResponse))
             {
                 if (!apiSuccess)
@@ -3994,8 +3994,13 @@ public class CPHInline
             LogToFile($"[AskGPTWebhook] DEBUG: OpenAI API call completed in {sw.ElapsedMilliseconds} ms.", "DEBUG");
         }
 
+        // INFO-level logs after scorecard, before cleaning (order matches AskGPT)
+        LogToFile($"[AskGPTWebhook] INFO: Prompt input: {prompt}", "INFO");
+        LogToFile($"[AskGPTWebhook] INFO: Model output (uncleaned): {GPTResponse}", "INFO");
+
         GPTResponse = CleanAIText(GPTResponse);
         LogToFile("[AskGPTWebhook] DEBUG: Applied CleanAIText() to GPT response.", "DEBUG");
+        LogToFile($"[AskGPTWebhook] INFO: Model output (cleaned): {GPTResponse}", "INFO");
         if (!apiSuccess || string.IsNullOrWhiteSpace(GPTResponse))
         {
             if (!apiSuccess)
@@ -4025,7 +4030,7 @@ public class CPHInline
             LogToFile("==== End AskGPTWebhook Execution ====", "DEBUG");
             return false;
         }
-        LogToFile($"[AskGPTWebhook] INFO: Model response: {GPTResponse}", "INFO");
+        // (Removed: LogToFile($"[AskGPTWebhook] INFO: Model response: {GPTResponse}", "INFO");)
         try
         {
             CPH.SetGlobalVar("Response", GPTResponse, true);
@@ -4047,6 +4052,7 @@ public class CPHInline
                     CPH.GetGlobalVar<string>("OpenAI Model", true),
                     completionsJsonResponse.Usage
                 );
+                LogToFile("[LogPromptScorecard] INFO: Prompt Scorecard (AskGPTWebhook)", "INFO");
             }
         }
         catch (Exception ex)
