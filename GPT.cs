@@ -3311,6 +3311,7 @@ public class CPHInline
                             // REMOVE: LogToFile($"[AskGPT] INFO: Parsed model output (uncleaned): {GPTResponse}", "INFO");
                             apiSuccess = true;
                         }
+                    }
                     catch (WebException webEx)
                     {
                         lastException = webEx;
