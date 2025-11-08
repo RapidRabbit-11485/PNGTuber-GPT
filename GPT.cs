@@ -3121,67 +3121,85 @@ public class CPHInline
                     string pronounContext = "Known pronouns for participants: " + string.Join(" ", pronounContextEntries);
                     enrichmentSections.Add(pronounContext);
                     LogToFile($"Added pronoun context system message: {pronounContext}", "DEBUG");
+                }
+                // --- Dynamic Context Assembly (Keywords + User Knowledge) ---
+                List<string> keywordMatches = new List<string>();
+                try
+                {
+                    LogToFile("[AskGPT] DEBUG: Starting dynamic context assembly.", "DEBUG");
 
-                    // --- Dynamic Context Assembly (Keywords + User Knowledge) ---
-                    try
+                    List<BsonDocument> profileDocs = null;
+                    Dictionary<string, string> keywordDict = null;
+                    Dictionary<string, BsonDocument> userDict = null;
+                    // Use the existing keywordDocs variable already declared
+                    profileDocs = _db.GetCollection<BsonDocument>("user_profiles").FindAll().ToList();
+
+                    // Null safety for ToDictionary()
+                    keywordDict = keywordDocs
+                        .Where(k => k.ContainsKey("Keyword") && k.ContainsKey("Definition"))
+                        .ToDictionary(k => k["Keyword"].AsString.ToLowerInvariant(), k => k["Definition"].AsString);
+
+                    userDict = profileDocs
+                        .Where(u => u.ContainsKey("UserName"))
+                        .ToDictionary(u => u["UserName"].AsString.ToLowerInvariant(), u => u);
+
+                    var words = prompt.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                                      .Select(w => w.TrimStart('@').ToLowerInvariant())
+                                      .Distinct()
+                                      .ToList();
+
+                    var insertedCount = 0;
+
+                    foreach (var word in words)
                     {
-                        LogToFile("[AskGPT] DEBUG: Starting dynamic context assembly.", "DEBUG");
-
-                        List<BsonDocument> profileDocs = null;
-                        Dictionary<string, string> keywordDict = null;
-                        Dictionary<string, BsonDocument> userDict = null;
-                        // Use the existing keywordDocs variable already declared
-                        profileDocs = _db.GetCollection<BsonDocument>("user_profiles").FindAll().ToList();
-
-                        // Null safety for ToDictionary()
-                        keywordDict = keywordDocs
-                            .Where(k => k.ContainsKey("Keyword") && k.ContainsKey("Definition"))
-                            .ToDictionary(k => k["Keyword"].AsString.ToLowerInvariant(), k => k["Definition"].AsString);
-
-                        userDict = profileDocs
-                            .Where(u => u.ContainsKey("UserName"))
-                            .ToDictionary(u => u["UserName"].AsString.ToLowerInvariant(), u => u);
-
-                        var words = prompt.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
-                                          .Select(w => w.TrimStart('@').ToLowerInvariant())
-                                          .Distinct()
-                                          .ToList();
-
-                        var insertedCount = 0;
-
-                        foreach (var word in words)
+                        if (keywordDict.TryGetValue(word, out var def))
                         {
-                            if (keywordDict.TryGetValue(word, out var def))
-                            {
-                                var line = $"Something you remember about {word} is {def}.";
-                                contextBody.AppendLine(line);
-                                insertedCount++;
-                                LogToFile($"[AskGPT] INFO: Inserted context for keyword '{word}' -> \"{def}\"", "INFO");
-                            }
-
-                            if (userDict.TryGetValue(word, out var profile))
-                            {
-                                if (profile["Knowledge"].IsArray && profile["Knowledge"].AsArray.Count > 0)
-                                {
-                                    var know = string.Join(", ", profile["Knowledge"].AsArray.Select(k => k.AsString));
-                                    var line = $"Something I remember about {word} is {know}.";
-                                    contextBody.AppendLine(line);
-                                    insertedCount++;
-                                    LogToFile($"[AskGPT] INFO: Inserted context for user '{word}' -> \"{know}\"", "INFO");
-                                }
-                            }
+                            var line = $"Something you remember about {word} is {def}.";
+                            contextBody.AppendLine(line);
+                            insertedCount++;
+                            LogToFile($"[AskGPT] INFO: Inserted context for keyword '{word}' -> \"{def}\"", "INFO");
+                            keywordMatches.Add(word);
                         }
 
-                        LogToFile($"[AskGPT] DEBUG: Dynamic context assembly complete. Inserted {insertedCount} entries.", "DEBUG");
-                        // No finally block here; cleanup moved to end of AskGPT
+                        if (userDict.TryGetValue(word, out var profile))
+                        {
+                            if (profile["Knowledge"].IsArray && profile["Knowledge"].AsArray.Count > 0)
+                            {
+                                var know = string.Join(", ", profile["Knowledge"].AsArray.Select(k => k.AsString));
+                                var line = $"Something I remember about {word} is {know}.";
+                                contextBody.AppendLine(line);
+                                insertedCount++;
+                                LogToFile($"[AskGPT] INFO: Inserted context for user '{word}' -> \"{know}\"", "INFO");
+                            }
+                        }
                     }
-                    catch (Exception ex)
-                    {
-                        LogToFile($"[AskGPT] ERROR: Context assembly failed: {ex.Message}", "ERROR");
-                        LogToFile($"[AskGPT] Stack: {ex.StackTrace}", "DEBUG");
-                    }
-                    // --- End Dynamic Context Assembly ---
+
+                    LogToFile($"[AskGPT] DEBUG: Dynamic context assembly complete. Inserted {insertedCount} entries.", "DEBUG");
                 }
+                catch (Exception ex)
+                {
+                    LogToFile($"[AskGPT] ERROR: Context assembly failed: {ex.Message}", "ERROR");
+                    LogToFile($"[AskGPT] Stack: {ex.StackTrace}", "DEBUG");
+                }
+                // --- End Dynamic Context Assembly ---
+                // --- Dynamic Context Detection INFO Log ---
+                try
+                {
+                    // mentionedUsers is already a List<string>
+                    if (keywordMatches.Count > 0 || (mentionedUsers != null && mentionedUsers.Count > 0))
+                    {
+                        LogToFile($"[AskGPT] INFO: Dynamic context updated. Keywords detected: [{string.Join(", ", keywordMatches)}]; User mentions detected: [{string.Join(", ", mentionedUsers)}].", "INFO");
+                    }
+                    else
+                    {
+                        LogToFile("[AskGPT] INFO: No dynamic context keywords or user mentions detected.", "INFO");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogToFile($"[AskGPT] WARN: Failed to log dynamic context detection: {ex.Message}", "WARN");
+                }
+                // --- End Dynamic Context Detection INFO Log ---
                 enrichmentSections.Add($"{context}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}");
                 foreach (string uname in mentionedUsers.Distinct(StringComparer.OrdinalIgnoreCase))
                 {
@@ -3868,6 +3886,27 @@ public class CPHInline
 
             contextBody = contextSb_web.ToString();
             LogToFile($"[AskGPTWebhook] DEBUG: Dynamic context assembly complete. Inserted {insertedCount} entries.", "DEBUG");
+
+            // --- Begin INFO-level summary of dynamic context detection (keywords/mentions) ---
+            try
+            {
+                var detectedKeywords = keywordDict_web?.Keys?.Where(k => fullMessage.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0).ToList() ?? new List<string>();
+                var detectedMentions = mentionedUsers?.Distinct(StringComparer.OrdinalIgnoreCase).ToList() ?? new List<string>();
+
+                if (detectedKeywords.Count > 0 || detectedMentions.Count > 0)
+                {
+                    LogToFile($"[AskGPTWebhook] INFO: Dynamic context updated. Keywords detected: [{string.Join(", ", detectedKeywords)}]; User mentions detected: [{string.Join(", ", detectedMentions)}].", "INFO");
+                }
+                else
+                {
+                    LogToFile("[AskGPTWebhook] INFO: No dynamic context keywords or user mentions detected.", "INFO");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogToFile($"[AskGPTWebhook] WARN: Failed to log dynamic context detection: {ex.Message}", "WARN");
+            }
+            // --- End INFO-level summary of dynamic context detection ---
         }
         catch (Exception ex)
         {
@@ -4491,20 +4530,46 @@ public class CPHInline
             return beforeFinal ?? text ?? string.Empty;
         }
 
+        try
+        {
+            // Defensive pass for all modes: remove stray spaces before punctuation.
+            cleaned = Regex.Replace(cleaned, @"\s+([.,!?;:])", "$1");
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"[CleanAIText] WARN: Minor punctuation spacing cleanup failed: {ex.Message}", "WARN");
+        }
+
         if ((mode ?? "").Trim() == "HumanFriendly")
         {
             try
             {
-                string beforeDashNorm = cleaned;
-                cleaned = cleaned.Replace(" - ", " ");
-                cleaned = Regex.Replace(cleaned, @"\s{2,}", " ");
-                LogToFile("Applied final dash/space normalization in CleanAIText().", "DEBUG");
+                string beforeHumanFinal = cleaned;
+
+                // 1) Collapse the exact " - " separator (common em-dash normalization case)
+                cleaned = Regex.Replace(cleaned, @"\s-\s", " ");
+
+                // 2) Remove space+dash when it starts an attached word (e.g., " -bam" -> " bam")
+                //    This avoids breaking true hyphenated words because those have no preceding space.
+                cleaned = Regex.Replace(cleaned, @"\s-\s*(?=[A-Za-z0-9])", " ");
+
+                // 3) Remove stray spaces before punctuation like " ." ","
+                cleaned = Regex.Replace(cleaned, @"\s+([.,!?;:])", "$1");
+
+                // 4) Remove spaces immediately inside brackets: "( text )" -> "(text)"
+                cleaned = Regex.Replace(cleaned, @"([\(\[\{])\s+", "$1");
+                cleaned = Regex.Replace(cleaned, @"\s+([\)\]\}])", "$1");
+
+                // 5) Collapse any multiple spaces created by removals
+                cleaned = Regex.Replace(cleaned, @"\s{2,}", " ").Trim();
+
+                LogToFile("Applied enhanced HumanFriendly punctuation/dash normalization.", "DEBUG");
+                LogToFile($"HumanFriendly normalization diff:\nBEFORE: {beforeHumanFinal}\nAFTER:  {cleaned}", "DEBUG");
             }
             catch (Exception ex)
             {
-                LogToFile($"[CleanAIText] ERROR: Exception during dash/space normalization (HumanFriendly): {ex.Message}", "ERROR");
+                LogToFile($"[CleanAIText] ERROR: Exception during enhanced HumanFriendly normalization: {ex.Message}", "ERROR");
                 LogToFile($"[CleanAIText] Context: mode='{mode}', inputLength={text?.Length ?? 0}", "ERROR");
-
             }
         }
 
